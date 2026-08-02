@@ -1,0 +1,454 @@
+/* ==========================================================================
+   FCG Operations Platform — Design Tokens
+   ==========================================================================
+   Three layers, strictly ordered. Components may ONLY reference layer 2 and
+   layer 3. Nothing in the app should ever reach for a layer-1 primitive.
+
+     Layer 1  primitives   raw values, no meaning       --burgundy-600
+     Layer 2  semantic     what the UI consumes         --action-primary
+     Layer 3  domain       FCG-specific meaning         --stage-awarded-solid
+
+   Dark mode re-maps layer 2 and 3 only. Layer 1 never changes.
+
+   Brand source of truth: the FCG logo mark is a single-colour glyph in
+   #7E2F3F, verified by sampling logo pixels on floorcoatingsgroup.com and
+   floorcoatingsfranchise.com. Supporting neutrals #2F0910, #323A45 and
+   #A4ABAC are lifted from the same sites.
+   ========================================================================== */
+
+/* ==========================================================================
+   LAYER 1 — PRIMITIVES
+   ========================================================================== */
+
+:root {
+  /* ---- Burgundy — the brand hue. hsl(348, 46%, 34%) at 600. ------------ */
+  --burgundy-50: #fbf4f6;
+  --burgundy-100: #f7e9ec;
+  --burgundy-200: #eecdd5;
+  --burgundy-300: #dfa3b1;
+  --burgundy-400: #c9697f;
+  --burgundy-500: #a8455b;
+  --burgundy-600: #7e2f3f; /* ← BRAND. The logo colour. */
+  --burgundy-700: #6a2735;
+  --burgundy-800: #531e29;
+  --burgundy-900: #3d151d;
+  --burgundy-950: #2f0910; /* ← from their site's deep background */
+
+  /* ---- Copper — secondary accent. Complementary to burgundy. ---------- */
+  --copper-50: #fdf6f0;
+  --copper-100: #fbede1;
+  --copper-200: #f5d6bd;
+  --copper-300: #eab68c;
+  --copper-400: #dc8f5a;
+  --copper-500: #c87338;
+  --copper-600: #b4622a; /* ← accent base */
+  --copper-700: #975921; /* ← the text-safe variant. AA on white. */
+  --copper-800: #7a4419;
+  --copper-900: #5e3414;
+  --copper-950: #381e0b;
+
+  /* ---- Steel — neutrals, interpolated through THEIR greys. ------------
+     Hue drifts 200° → 215° as it darkens, matching #A4ABAC (cyan-grey)
+     at the light end and #323A45 (blue-grey) at the dark end. A generic
+     cool slate would fight the warm burgundy; this does not.            */
+  --steel-50: #f8fafb;
+  --steel-100: #f1f4f5;
+  --steel-200: #e4e8ea;
+  --steel-300: #ced4d6;
+  --steel-400: #b3babc;
+  --steel-500: #a4abac; /* ← their silver */
+  --steel-600: #7c898d;
+  --steel-700: #56636c;
+  --steel-800: #323a45; /* ← their charcoal */
+  --steel-900: #1f2630;
+  --steel-950: #131820;
+
+  /* ---- Functional hues. Deliberately NOT derived from brand. ---------- */
+  --blue-100: #e8f0fe;
+  --blue-500: #2563eb;
+  --blue-700: #1d4ed8;
+
+  --violet-100: #f1eafe;
+  --violet-500: #7c3aed;
+  --violet-700: #6d28d9;
+
+  --amber-100: #fef3e2;
+  --amber-500: #d97706;
+  --amber-700: #b45309;
+
+  --teal-100: #e4f5f2;
+  --teal-500: #0d9488;
+  --teal-700: #0f766e;
+
+  /* Scarlet is intentionally far lighter and more chromatic than burgundy
+     so that "danger" can never be confused with "brand". */
+  --scarlet-100: #fdeaea;
+  --scarlet-500: #dc2626;
+  --scarlet-700: #b91c1c;
+
+  --white: #ffffff;
+
+  /* ---- Spacing ------------------------------------------------------- */
+  --space-0: 0px;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 20px;
+  --space-8: 24px;
+  --space-9: 32px;
+  --space-10: 40px;
+  --space-11: 48px;
+  --space-12: 64px;
+
+  /* ---- Radius. Tight. This is a tool, not a consumer app. ------------- */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 999px;
+
+  /* ---- Type ---------------------------------------------------------- */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
+  --font-display: 'Roboto Slab', ui-serif, Georgia, serif;
+
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+
+  /* ---- Motion -------------------------------------------------------- */
+  --duration-fast: 100ms;
+  --duration-base: 160ms;
+  --duration-slow: 260ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ==========================================================================
+   LAYER 2 — SEMANTIC  (light)
+   ========================================================================== */
+
+:root {
+  /* Surfaces separate by border, not by shadow. */
+  --surface-base: var(--white);
+  --surface-raised: var(--white);
+  --surface-sunken: var(--steel-100);
+  --surface-inset: var(--steel-50);
+  --surface-overlay: rgba(19, 24, 32, 0.5);
+  --surface-chrome: var(--burgundy-950);
+
+  --border-subtle: var(--steel-200);
+  --border-strong: var(--steel-300);
+  --border-focus: var(--burgundy-600);
+
+  --text-primary: var(--steel-900);
+  --text-secondary: var(--steel-700);
+  --text-muted: var(--steel-600);
+  --text-inverse: var(--white);
+  --text-brand: var(--burgundy-600);
+
+  /* Burgundy owns identity and commitment. */
+  --action-primary: var(--burgundy-600);
+  --action-primary-hover: var(--burgundy-700);
+  --action-primary-pressed: var(--burgundy-800);
+  --action-primary-fg: var(--white);
+  --action-primary-soft: var(--burgundy-100);
+
+  /* Copper owns attention: active stage, current step, "do this next". */
+  --accent-attention: var(--copper-600);
+  --accent-attention-text: var(--copper-700);
+  --accent-attention-soft: var(--copper-100);
+
+  --status-success: var(--teal-500);
+  --status-success-soft: var(--teal-100);
+  --status-success-text: var(--teal-700);
+
+  --status-warning: var(--amber-500);
+  --status-warning-soft: var(--amber-100);
+  --status-warning-text: var(--amber-700);
+
+  /* Never the brand hue. Always paired with an icon. */
+  --status-danger: var(--scarlet-500);
+  --status-danger-soft: var(--scarlet-100);
+  --status-danger-text: var(--scarlet-700);
+
+  --status-info: var(--blue-500);
+  --status-info-soft: var(--blue-100);
+  --status-info-text: var(--blue-700);
+
+  --ring-focus: 0 0 0 2px var(--surface-base), 0 0 0 4px var(--burgundy-500);
+}
+
+/* ==========================================================================
+   LAYER 2 — SEMANTIC  (dark re-map)
+   ========================================================================== */
+
+.dark {
+  --surface-base: var(--steel-950);
+  --surface-raised: var(--steel-900);
+  --surface-sunken: #0d1117;
+  --surface-inset: var(--steel-900);
+  --surface-overlay: rgba(0, 0, 0, 0.7);
+  --surface-chrome: #1a0508;
+
+  --border-subtle: #2a323d;
+  --border-strong: #3b444f;
+  --border-focus: var(--burgundy-400);
+
+  --text-primary: var(--steel-100);
+  --text-secondary: var(--steel-400);
+  --text-muted: var(--steel-600);
+  --text-inverse: var(--steel-950);
+  --text-brand: var(--burgundy-300);
+
+  /* Burgundy-600 is too dark to read on a dark surface, so actions lift. */
+  --action-primary: var(--burgundy-500);
+  --action-primary-hover: var(--burgundy-400);
+  --action-primary-pressed: var(--burgundy-600);
+  --action-primary-fg: var(--white);
+  --action-primary-soft: rgba(168, 69, 91, 0.16);
+
+  --accent-attention: var(--copper-500);
+  --accent-attention-text: var(--copper-300);
+  --accent-attention-soft: rgba(200, 115, 56, 0.16);
+
+  --status-success: #14b8a6;
+  --status-success-soft: rgba(20, 184, 166, 0.16);
+  --status-success-text: #5eead4;
+
+  --status-warning: #f59e0b;
+  --status-warning-soft: rgba(245, 158, 11, 0.16);
+  --status-warning-text: #fcd34d;
+
+  --status-danger: #ef4444;
+  --status-danger-soft: rgba(239, 68, 68, 0.16);
+  --status-danger-text: #fca5a5;
+
+  --status-info: #3b82f6;
+  --status-info-soft: rgba(59, 130, 246, 0.16);
+  --status-info-text: #93c5fd;
+
+  --ring-focus: 0 0 0 2px var(--surface-base), 0 0 0 4px var(--burgundy-400);
+}
+
+/* ==========================================================================
+   LAYER 3 — DOMAIN
+   ==========================================================================
+   Stage colour identity. One triad per pipeline stage GROUP, reused
+   verbatim by the board column, the card, the badge, the timeline and the
+   calendar — so a colour always means the same thing everywhere.
+
+   Note the two deliberate assignments:
+     · "won" is burgundy — the brand colour is reserved for the single
+       moment that matters most commercially, the awarded project.
+     · "execution" is copper — work in flight is the thing demanding
+       attention, which is exactly what copper signals everywhere else.
+   ========================================================================== */
+
+:root {
+  --stage-pre-solid: var(--steel-600);
+  --stage-pre-soft: var(--steel-100);
+  --stage-pre-text: var(--steel-700);
+
+  --stage-sales-solid: var(--blue-500);
+  --stage-sales-soft: var(--blue-100);
+  --stage-sales-text: var(--blue-700);
+
+  --stage-estimating-solid: var(--violet-500);
+  --stage-estimating-soft: var(--violet-100);
+  --stage-estimating-text: var(--violet-700);
+
+  --stage-won-solid: var(--burgundy-600);
+  --stage-won-soft: var(--burgundy-100);
+  --stage-won-text: var(--burgundy-600);
+
+  --stage-execution-solid: var(--copper-600);
+  --stage-execution-soft: var(--copper-100);
+  --stage-execution-text: var(--copper-700);
+
+  --stage-stalled-solid: var(--amber-500);
+  --stage-stalled-soft: var(--amber-100);
+  --stage-stalled-text: var(--amber-700);
+
+  --stage-closed-solid: var(--teal-500);
+  --stage-closed-soft: var(--teal-100);
+  --stage-closed-text: var(--teal-700);
+
+  --stage-lost-solid: var(--scarlet-500);
+  --stage-lost-soft: var(--scarlet-100);
+  --stage-lost-text: var(--scarlet-700);
+
+  /* Record category. Drives the record-type accent AND the vocabulary
+     swap between "sales call" (residential) and "site visit"
+     (commercial / industrial). */
+  --category-residential: #0891b2;
+  --category-commercial: #7c3aed;
+  --category-industrial: var(--steel-700);
+}
+
+.dark {
+  --stage-pre-soft: rgba(124, 137, 141, 0.16);
+  --stage-pre-text: var(--steel-400);
+  --stage-sales-soft: rgba(37, 99, 235, 0.18);
+  --stage-sales-text: #93c5fd;
+  --stage-estimating-soft: rgba(124, 58, 237, 0.18);
+  --stage-estimating-text: #c4b5fd;
+  --stage-won-solid: var(--burgundy-500);
+  --stage-won-soft: rgba(168, 69, 91, 0.2);
+  --stage-won-text: var(--burgundy-300);
+  --stage-execution-soft: rgba(180, 98, 42, 0.2);
+  --stage-execution-text: var(--copper-300);
+  --stage-stalled-soft: rgba(217, 119, 6, 0.18);
+  --stage-stalled-text: #fcd34d;
+  --stage-closed-soft: rgba(13, 148, 136, 0.18);
+  --stage-closed-text: #5eead4;
+  --stage-lost-soft: rgba(220, 38, 38, 0.18);
+  --stage-lost-text: #fca5a5;
+
+  --category-residential: #22d3ee;
+  --category-commercial: #a78bfa;
+  --category-industrial: var(--steel-400);
+}
+
+/* ==========================================================================
+   DENSITY
+   ==========================================================================
+   One switch, two ergonomics. `comfortable` is the dense desktop tool for
+   the office. `field` is the same components on a phone or iPad in a
+   warehouse, where a 32px row and a 4px gap are unusable with gloves on.
+   Set via  <html data-density="field">  or a wrapper element.
+   ========================================================================== */
+
+:root,
+[data-density='comfortable'] {
+  --row-h: 32px;
+  --control-h: 30px;
+  --touch-min: 30px;
+  --pad-x: var(--space-5);
+  --pad-y: var(--space-3);
+  --gap: var(--space-4);
+  --font-body: var(--text-base);
+}
+
+[data-density='field'] {
+  --row-h: 48px;
+  --control-h: 44px;
+  --touch-min: 44px;
+  --pad-x: var(--space-6);
+  --pad-y: var(--space-5);
+  --gap: var(--space-6);
+  --font-body: var(--text-md);
+}
+
+/* ==========================================================================
+   TAILWIND THEME BINDING
+   ==========================================================================
+   Utilities point at layer 2 / 3 variables rather than raw values, so the
+   dark re-map above works at runtime with no rebuild and no duplicated
+   `dark:` class on every element.
+   ========================================================================== */
+
+@theme inline {
+  --color-surface-base: var(--surface-base);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-inset: var(--surface-inset);
+  --color-surface-chrome: var(--surface-chrome);
+
+  --color-subtle: var(--border-subtle);
+  --color-strong: var(--border-strong);
+
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-inverse: var(--text-inverse);
+  --color-brand: var(--text-brand);
+
+  --color-action: var(--action-primary);
+  --color-action-hover: var(--action-primary-hover);
+  --color-action-pressed: var(--action-primary-pressed);
+  --color-action-fg: var(--action-primary-fg);
+  --color-action-soft: var(--action-primary-soft);
+
+  --color-attention: var(--accent-attention);
+  --color-attention-text: var(--accent-attention-text);
+  --color-attention-soft: var(--accent-attention-soft);
+
+  --color-success: var(--status-success);
+  --color-success-soft: var(--status-success-soft);
+  --color-success-text: var(--status-success-text);
+  --color-warning: var(--status-warning);
+  --color-warning-soft: var(--status-warning-soft);
+  --color-warning-text: var(--status-warning-text);
+  --color-danger: var(--status-danger);
+  --color-danger-soft: var(--status-danger-soft);
+  --color-danger-text: var(--status-danger-text);
+  --color-info: var(--status-info);
+  --color-info-soft: var(--status-info-soft);
+  --color-info-text: var(--status-info-text);
+
+  --color-burgundy-50: var(--burgundy-50);
+  --color-burgundy-100: var(--burgundy-100);
+  --color-burgundy-200: var(--burgundy-200);
+  --color-burgundy-300: var(--burgundy-300);
+  --color-burgundy-400: var(--burgundy-400);
+  --color-burgundy-500: var(--burgundy-500);
+  --color-burgundy-600: var(--burgundy-600);
+  --color-burgundy-700: var(--burgundy-700);
+  --color-burgundy-800: var(--burgundy-800);
+  --color-burgundy-900: var(--burgundy-900);
+  --color-burgundy-950: var(--burgundy-950);
+
+  --color-copper-100: var(--copper-100);
+  --color-copper-300: var(--copper-300);
+  --color-copper-500: var(--copper-500);
+  --color-copper-600: var(--copper-600);
+  --color-copper-700: var(--copper-700);
+
+  --color-steel-50: var(--steel-50);
+  --color-steel-100: var(--steel-100);
+  --color-steel-200: var(--steel-200);
+  --color-steel-300: var(--steel-300);
+  --color-steel-400: var(--steel-400);
+  --color-steel-500: var(--steel-500);
+  --color-steel-600: var(--steel-600);
+  --color-steel-700: var(--steel-700);
+  --color-steel-800: var(--steel-800);
+  --color-steel-900: var(--steel-900);
+  --color-steel-950: var(--steel-950);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
+
+  --text-2xs: var(--text-2xs);
+  --text-xs: var(--text-xs);
+  --text-sm: var(--text-sm);
+  --text-base: var(--text-base);
+  --text-md: var(--text-md);
+  --text-lg: var(--text-lg);
+  --text-xl: var(--text-xl);
+  --text-2xl: var(--text-2xl);
+  --text-3xl: var(--text-3xl);
+
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
+  --spacing-row: var(--row-h);
+  --spacing-control: var(--control-h);
+  --spacing-touch: var(--touch-min);
+
+  --ease-out: var(--ease-out);
+}

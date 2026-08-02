@@ -1,0 +1,1015 @@
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { format } from 'date-fns'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Banknote,
+  BellRing,
+  Boxes,
+  Camera,
+  CheckCircle2,
+  ClipboardCheck,
+  ClipboardList,
+  FileSignature,
+  FileText,
+  HardHat,
+  Image as ImageIcon,
+  Lock,
+  Mail,
+  Map as MapIcon,
+  MapPin,
+  PenLine,
+  Phone,
+  Plus,
+  Ruler,
+  StickyNote,
+  User as UserIcon,
+  XCircle,
+} from 'lucide-react'
+import type { ArtifactKind, StageId } from '@/domain/types'
+import { STAGE_BY_ID, stageIndex, stageLabel } from '@/domain/stages'
+import { CHECKLIST_BY_ID } from '@/data/checklists'
+import { formForCategory } from '@/data/siteVisitForms'
+import { ACCOUNT_BY_ID, LOCATION_BY_ID, USER_BY_ID } from '@/data/seed'
+import { PRICE_BOOK_BY_ID } from '@/data/priceBook'
+import { estimateTotal, money, optionTotal, useStore } from '@/store/useStore'
+import { useChangeOrdersFor, useChecks, useIssuesFor } from '@/store/selectors'
+import { StageGate } from '@/components/domain/StageGate'
+import { StageStepper } from '@/components/domain/StageStepper'
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  Checkbox,
+  EmptyState,
+  FieldRow,
+  Input,
+  KeyValue,
+  Meter,
+  Modal,
+  SectionTitle,
+  Select,
+  StageChip,
+  Textarea,
+} from '@/components/ui'
+import { cn } from '@/lib/cn'
+
+const SECTIONS = [
+  { id: 'summary', label: 'Summary', icon: ClipboardList },
+  { id: 'sitevisit', label: 'Site Visit', icon: MapPin },
+  { id: 'estimate', label: 'Estimate', icon: FileText },
+  { id: 'proposal', label: 'Proposal', icon: FileSignature },
+  { id: 'material', label: 'Material', icon: Boxes },
+  { id: 'prep', label: 'Preparation', icon: ClipboardCheck },
+  { id: 'job', label: 'Job & Crew', icon: HardHat },
+  { id: 'photos', label: 'Photos & Files', icon: Camera },
+  { id: 'changes', label: 'Changes & Issues', icon: AlertTriangle },
+  { id: 'closeout', label: 'Closeout', icon: CheckCircle2 },
+  { id: 'invoice', label: 'Invoice', icon: Banknote },
+  { id: 'activity', label: 'Activity', icon: StickyNote },
+]
+
+const ARTIFACT_ICON: Record<ArtifactKind, typeof FileText> = {
+  photo: ImageIcon,
+  doc: FileText,
+  plan: FileText,
+  note: StickyNote,
+  form: ClipboardList,
+  signature: PenLine,
+  map: MapIcon,
+}
+
+/**
+ * Deliberately ONE scrolling document with a sticky rail, not tabs.
+ *
+ * The complaint this answers is specific: "if I go and look for something in
+ * estimates, I don't see anything that happened after that, and I've got to
+ * look in the right spot." Tabs would reproduce exactly that. Everything a
+ * person needs about this project is on one surface, in pipeline order, and
+ * every downstream section shows what it INHERITED from the one before it.
+ */
+export function OpportunityRecord() {
+  const { id = '' } = useParams<{ id: string }>()
+  const s = useStore()
+
+  const [gateTo, setGateTo] = useState<StageId | null>(null)
+  const [active, setActive] = useState('summary')
+
+  const opp = s.opportunities.find((o) => o.id === id)
+
+  useEffect(() => {
+    const els = SECTIONS.map((sec) => document.getElementById(sec.id)).filter(Boolean) as HTMLElement[]
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+        if (visible[0]) setActive(visible[0].target.id)
+      },
+      { rootMargin: '-72px 0px -60% 0px' },
+    )
+    els.forEach((el) => obs.observe(el))
+    return () => obs.disconnect()
+  }, [opp?.id])
+
+  const est = useMemo(() => s.estimates.find((e) => e.opportunityId === id), [s.estimates, id])
+  const job = s.jobs.find((j) => j.opportunityId === id)
+  const materialOrder = s.materialOrders.find((m) => m.opportunityId === id)
+  const invoices = s.invoices.filter((i) => i.opportunityId === id)
+  const reminder = s.reminders.find((r) => r.opportunityId === id && !r.done)
+  const mine = s.artifacts.filter((a) => a.opportunityId === id)
+  const visit = s.siteVisits.find((v) => v.opportunityId === id)
+  const log = s.activity.filter((a) => a.opportunityId === id).slice().reverse()
+
+  if (!opp) {
+    return (
+      <EmptyState
+        className="h-full"
+        title="Opportunity not found"
+        description="It may have been reset with the demo data."
+        action={
+          <Link to="/pipeline">
+            <Button variant="primary">Back to pipeline</Button>
+          </Link>
+        }
+      />
+    )
+  }
+
+  const account = ACCOUNT_BY_ID[opp.accountId]
+  const location = LOCATION_BY_ID[opp.locationId]
+  const def = STAGE_BY_ID[opp.stage]
+  const reached = (stage: StageId) => stageIndex(opp.stage) >= stageIndex(stage)
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* ---- Header ---- */}
+      <header className="shrink-0 border-b border-subtle bg-surface-raised px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to="/pipeline" className="text-muted hover:text-primary">
+            <ArrowLeft size={16} />
+          </Link>
+          <div className="min-w-0">
+            <h1 className="truncate font-display text-lg leading-tight text-primary">{opp.name}</h1>
+            <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
+              <span className="font-mono">{opp.code}</span>
+              <span>·</span>
+              <Link to="/accounts" className="hover:text-primary hover:underline">
+                {account?.name}
+              </Link>
+              <span>·</span>
+              <span>{location?.name}</span>
+            </p>
+          </div>
+
+          <div className="flex-1" />
+
+          <StageChip group={def.group} label={stageLabel(opp.stage, opp.category)} />
+          <span className="font-mono text-lg font-semibold text-primary tabular">
+            {money(est ? estimateTotal(est) : opp.value)}
+          </span>
+        </div>
+
+        <div className="mt-2.5">
+          <StageStepper opportunity={opp} onPick={setGateTo} />
+        </div>
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        {/* ---- Sticky rail ---- */}
+        <nav className="hidden w-44 shrink-0 overflow-y-auto border-r border-subtle bg-surface-raised py-3 lg:block scrollbar-thin">
+          {SECTIONS.map((sec) => (
+            <a
+              key={sec.id}
+              href={`#${sec.id}`}
+              className={cn(
+                'flex items-center gap-2 px-4 py-1.5 text-sm',
+                'transition-colors duration-(--duration-fast)',
+                active === sec.id
+                  ? 'border-l-2 border-action bg-surface-inset font-medium text-primary'
+                  : 'border-l-2 border-transparent text-muted hover:text-primary',
+              )}
+            >
+              <sec.icon size={13} className="shrink-0" />
+              {sec.label}
+            </a>
+          ))}
+        </nav>
+
+        {/* ---- Document ---- */}
+        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+          <div className="mx-auto max-w-4xl space-y-6 p-5">
+            {/* == Summary == */}
+            <Section id="summary" title="Summary">
+              {reminder && (
+                <Card className="mb-3 border-(--status-warning) bg-warning-soft px-4 py-3">
+                  <div className="flex items-start gap-2.5">
+                    <BellRing size={15} className="mt-0.5 shrink-0 text-warning-text" />
+                    <div className="min-w-0">
+                      <p className="text-base font-medium text-primary">
+                        Follow-up scheduled for {format(new Date(reminder.dueAt), 'd MMMM yyyy')}
+                        {reminder.expectedPeriod && ` · customer expects ${reminder.expectedPeriod}`}
+                      </p>
+                      {reminder.reason && (
+                        <p className="mt-0.5 text-sm text-secondary">Reason: {reminder.reason}</p>
+                      )}
+                      {reminder.note && <p className="mt-0.5 text-sm text-secondary">{reminder.note}</p>}
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              <Card className="p-4">
+                <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  <KeyValue label="Category">
+                    <span className="capitalize">{opp.category}</span>
+                  </KeyValue>
+                  <KeyValue label="Area">{opp.sqft.toLocaleString()} sq ft</KeyValue>
+                  <KeyValue label="Cove">{opp.coveLf > 0 ? `${opp.coveLf} lin ft` : '—'}</KeyValue>
+                  <KeyValue label="Source">{opp.source}</KeyValue>
+                  <KeyValue label="Sales rep">{USER_BY_ID[opp.ownerId]?.name ?? 'Unassigned'}</KeyValue>
+                  <KeyValue label="Estimator">
+                    {opp.estimatorId ? USER_BY_ID[opp.estimatorId]?.name : '—'}
+                  </KeyValue>
+                  <KeyValue label="Project manager">
+                    {opp.pmId ? USER_BY_ID[opp.pmId]?.name : '—'}
+                  </KeyValue>
+                  <KeyValue label="Probability">{def.probability}%</KeyValue>
+                </dl>
+
+                <div className="mt-4 grid gap-3 border-t border-subtle pt-4 sm:grid-cols-2">
+                  <div className="flex items-start gap-2">
+                    <UserIcon size={14} className="mt-0.5 shrink-0 text-muted" />
+                    <div className="min-w-0 text-base">
+                      <p className="text-primary">{account?.contactName}</p>
+                      <p className="text-sm text-muted">{account?.contactTitle}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <MapPin size={14} className="mt-0.5 shrink-0 text-muted" />
+                    <p className="min-w-0 text-base text-primary">{opp.address}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Mail size={14} className="shrink-0 text-muted" />
+                    <p className="truncate text-base text-primary">{account?.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone size={14} className="shrink-0 text-muted" />
+                    <p className="text-base text-primary">{account?.phone}</p>
+                  </div>
+                </div>
+              </Card>
+            </Section>
+
+            {/* == Site visit == */}
+            <Section
+              id="sitevisit"
+              title="Site visit"
+              action={
+                <Link to={`/opportunities/${opp.id}/visit`}>
+                  <Button size="sm">
+                    <Ruler size={12} />
+                    {visit?.completedAt ? 'Review form' : 'Open guided form'}
+                  </Button>
+                </Link>
+              }
+            >
+              <SiteVisitSummary opportunityId={opp.id} />
+            </Section>
+
+            {/* == Estimate == */}
+            <Section
+              id="estimate"
+              title="Estimate"
+              action={
+                <Link to={`/estimate/${opp.id}`}>
+                  <Button size="sm">
+                    <FileText size={12} />
+                    {est ? 'Open estimate' : 'Start estimate'}
+                  </Button>
+                </Link>
+              }
+            >
+              {!est ? (
+                <Card>
+                  <EmptyState
+                    title="No estimate yet"
+                    description="The estimator works from the site visit data above — nothing gets re-keyed."
+                  />
+                </Card>
+              ) : (
+                <Card>
+                  <CardHeader
+                    title={`${est.options.length} option${est.options.length === 1 ? '' : 's'}`}
+                    subtitle={
+                      est.approvedById
+                        ? `Approved by ${USER_BY_ID[est.approvedById]?.name}`
+                        : 'Not yet approved'
+                    }
+                    actions={
+                      <Badge
+                        tone={
+                          est.status === 'signed'
+                            ? 'success'
+                            : est.status === 'pending_approval'
+                              ? 'warning'
+                              : 'neutral'
+                        }
+                      >
+                        {est.status.replace('_', ' ')}
+                      </Badge>
+                    }
+                  />
+                  <div className="divide-y divide-(--border-subtle)">
+                    {est.options.map((o) => (
+                      <div key={o.id} className="flex items-center gap-3 px-4 py-2.5">
+                        <Badge tone={o.kind === 'area' ? 'info' : 'attention'}>
+                          {o.kind === 'area' ? 'Area' : 'Alternative'}
+                        </Badge>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-base font-medium text-primary">{o.label}</p>
+                          <p className="truncate text-sm text-muted">
+                            {o.lineItems.map((l) => l.name).join(' · ')}
+                          </p>
+                        </div>
+                        {o.selectedByCustomer && (
+                          <Badge tone="success" icon={<CheckCircle2 size={9} />}>
+                            Chosen
+                          </Badge>
+                        )}
+                        <span className="font-mono text-base text-primary tabular">
+                          {money(optionTotal(o.lineItems))}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between border-t border-subtle bg-surface-inset px-4 py-2">
+                    <span className="text-base font-medium text-secondary">Contract total</span>
+                    <span className="font-mono text-md font-semibold text-primary tabular">
+                      {money(estimateTotal(est))}
+                    </span>
+                  </div>
+                  {est.internalNotes && (
+                    <div className="border-t border-subtle px-4 py-2.5">
+                      <p className="mb-1 flex items-center gap-1.5 text-2xs font-semibold tracking-wider text-muted uppercase">
+                        <Lock size={9} />
+                        Internal notes — never shown to the customer
+                      </p>
+                      <p className="text-sm leading-relaxed text-secondary">{est.internalNotes}</p>
+                    </div>
+                  )}
+                </Card>
+              )}
+            </Section>
+
+            {/* == Proposal == */}
+            <Section id="proposal" title="Proposal">
+              {!est || est.status === 'draft' ? (
+                <Card>
+                  <EmptyState title="No proposal sent" description="The estimate must be approved first." />
+                </Card>
+              ) : (
+                <Card className="p-4">
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    <KeyValue label="Sent">
+                      {est.sentAt ? format(new Date(est.sentAt), 'd MMM yyyy') : '—'}
+                    </KeyValue>
+                    <KeyValue label="Signed">
+                      {est.signedAt ? format(new Date(est.signedAt), 'd MMM yyyy') : 'Awaiting'}
+                    </KeyValue>
+                    <KeyValue label="Signed by">{est.signedBy ?? '—'}</KeyValue>
+                    <KeyValue label="Deposit">{est.depositPct}%</KeyValue>
+                  </div>
+                  <div className="mt-3 flex gap-2 border-t border-subtle pt-3">
+                    <Link to={`/proposal/${est.token}`} target="_blank">
+                      <Button size="sm">
+                        <FileSignature size={12} />
+                        Open the customer’s view
+                      </Button>
+                    </Link>
+                    <Link to={`/signoff/${opp.id}`} target="_blank">
+                      <Button size="sm">
+                        <PenLine size={12} />
+                        Completion sign-off link
+                      </Button>
+                    </Link>
+                  </div>
+                </Card>
+              )}
+            </Section>
+
+            {/* == Material == */}
+            <Section
+              id="material"
+              title="Material"
+              action={
+                <Link to={`/opportunities/${opp.id}/material`}>
+                  <Button size="sm">
+                    <Boxes size={12} />
+                    {materialOrder ? 'Open order' : 'Prepare order'}
+                  </Button>
+                </Link>
+              }
+            >
+              {!materialOrder ? (
+                <Card>
+                  <EmptyState
+                    title="No material order yet"
+                    description="Quantities are derived from the sold system, area, cove, coats and waste allowance."
+                  />
+                </Card>
+              ) : (
+                <Card>
+                  <CardHeader
+                    title={materialOrder.fmsOrderId ?? 'Draft order'}
+                    subtitle={`Needed by ${format(new Date(materialOrder.neededBy), 'd MMM yyyy')}`}
+                    icon={<Boxes size={14} />}
+                    actions={
+                      <Badge tone={materialOrder.status === 'delivered' ? 'success' : 'attention'}>
+                        {materialOrder.status}
+                      </Badge>
+                    }
+                  />
+                  <div className="divide-y divide-(--border-subtle)">
+                    {materialOrder.lines.map((l) => (
+                      <div key={l.id} className="flex items-center gap-3 px-4 py-2">
+                        <span
+                          className="h-5 w-5 shrink-0 rounded-xs border border-subtle"
+                          style={{ background: PRICE_BOOK_BY_ID[l.priceBookId]?.swatch }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-base text-primary">{l.product}</p>
+                          <p className="truncate text-sm text-muted">{l.derivation}</p>
+                        </div>
+                        <span className="font-mono text-sm text-primary tabular">
+                          {l.qty} {l.unit}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+            </Section>
+
+            {/* == Preparation == */}
+            <Section id="prep" title="Project preparation">
+              <ChecklistCard
+                opportunityId={opp.id}
+                templateId="cl_prep"
+                subtitle="Everything the crew needs, verified before they leave the yard."
+              />
+            </Section>
+
+            {/* == Job & crew == */}
+            <Section id="job" title="Job and crew">
+              {!job ? (
+                <Card>
+                  <EmptyState title="Not scheduled" description="Awarded work appears on the schedule board." />
+                </Card>
+              ) : (
+                <Card className="p-4">
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    <KeyValue label="Start">{format(new Date(job.start), 'd MMM')}</KeyValue>
+                    <KeyValue label="Finish">{format(new Date(job.end), 'd MMM')}</KeyValue>
+                    <KeyValue label="Project manager">
+                      {job.pmId ? USER_BY_ID[job.pmId]?.name : '—'}
+                    </KeyValue>
+                    <KeyValue label="Crew leader">
+                      {job.crewLeaderId ? USER_BY_ID[job.crewLeaderId]?.name : '—'}
+                    </KeyValue>
+                  </div>
+
+                  {job.crewIds.length > 0 && (
+                    <div className="mt-3 flex items-center gap-2 border-t border-subtle pt-3">
+                      <span className="text-sm text-muted">Crew</span>
+                      {job.crewIds.map((cid) => (
+                        <span key={cid} className="flex items-center gap-1.5">
+                          <Avatar name={USER_BY_ID[cid]?.name ?? ''} size={20} />
+                          <span className="text-sm text-secondary">{USER_BY_ID[cid]?.name}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-3 border-t border-subtle pt-3">
+                    <div className="mb-1.5 flex items-center justify-between text-sm">
+                      <span className="text-muted">Progress</span>
+                      <span className="font-mono text-primary tabular">{job.progress}%</span>
+                    </div>
+                    <Meter value={job.progress} max={100} tone={job.progress === 100 ? 'success' : 'action'} />
+                  </div>
+
+                  {job.dailyLogs.length > 0 && (
+                    <div className="mt-3 border-t border-subtle pt-3">
+                      <p className="mb-1.5 text-2xs font-semibold tracking-wider text-muted uppercase">
+                        Daily log
+                      </p>
+                      {job.dailyLogs.map((d) => (
+                        <div key={d.id} className="mb-1.5 flex gap-2 text-sm">
+                          <span className="w-14 shrink-0 font-mono text-muted">
+                            {format(new Date(d.date), 'd MMM')}
+                          </span>
+                          <span className="min-w-0 text-secondary">
+                            {d.note}
+                            <span className="text-muted"> — {USER_BY_ID[d.byId]?.name}</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              )}
+            </Section>
+
+            {/* == Photos & files == */}
+            <Section id="photos" title="Photos and files">
+              {mine.length === 0 ? (
+                <Card>
+                  <EmptyState title="Nothing attached yet" />
+                </Card>
+              ) : (
+                <Card>
+                  {(['before', 'progress', 'after'] as const).map((phase) => {
+                    const set = mine.filter((a) => a.photoPhase === phase)
+                    if (set.length === 0) return null
+                    return (
+                      <div key={phase} className="border-b border-subtle last:border-0">
+                        <p className="bg-surface-inset px-4 py-1.5 text-2xs font-semibold tracking-wider text-muted uppercase">
+                          {phase} photos · {set.length}
+                        </p>
+                        {set.map((a) => (
+                          <ArtifactRow key={a.id} artifact={a} category={opp.category} />
+                        ))}
+                      </div>
+                    )
+                  })}
+                  {mine
+                    .filter((a) => !a.photoPhase)
+                    .map((a) => (
+                      <ArtifactRow key={a.id} artifact={a} category={opp.category} />
+                    ))}
+                </Card>
+              )}
+            </Section>
+
+            {/* == Changes & issues == */}
+            <Section id="changes" title="Change orders and issues">
+              <ChangeOrders opportunityId={opp.id} />
+              <Issues opportunityId={opp.id} />
+            </Section>
+
+            {/* == Closeout == */}
+            <Section id="closeout" title="Completion and closeout">
+              <ChecklistCard
+                opportunityId={opp.id}
+                templateId="cl_closeout"
+                subtitle="The system asks these questions so nobody has to remember them."
+              />
+              {reached('completion_review') && (
+                <Card className="mt-3 p-4">
+                  <p className="text-base text-secondary">
+                    Customer sign-off is captured on a link sent to {account?.contactName}. It is the
+                    last thing accounting needs before the final invoice.
+                  </p>
+                  <Link to={`/signoff/${opp.id}`} target="_blank">
+                    <Button size="sm" className="mt-2">
+                      <PenLine size={12} />
+                      Open the sign-off link
+                    </Button>
+                  </Link>
+                </Card>
+              )}
+            </Section>
+
+            {/* == Invoice == */}
+            <Section id="invoice" title="Invoice and payment">
+              {invoices.length === 0 ? (
+                <Card>
+                  <EmptyState title="Not invoiced" description="Raised after closeout is confirmed." />
+                </Card>
+              ) : (
+                <Card>
+                  {invoices.map((inv) => {
+                    const paid = inv.payments.reduce((a, p) => a + p.amount, 0)
+                    return (
+                      <div key={inv.id} className="border-b border-subtle p-4 last:border-0">
+                        <div className="flex items-center gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-mono text-base text-primary">{inv.number}</p>
+                            <p className="text-sm text-muted capitalize">
+                              {inv.kind} · QuickBooks {inv.quickbooksId ?? 'not synced'}
+                            </p>
+                          </div>
+                          <Badge
+                            tone={inv.status === 'paid' ? 'success' : inv.status === 'partial' ? 'warning' : 'neutral'}
+                          >
+                            {inv.status}
+                          </Badge>
+                          <span className="font-mono text-base text-primary tabular">
+                            {money(inv.amount)}
+                          </span>
+                        </div>
+                        {paid > 0 && paid < inv.amount && (
+                          <p className="mt-1.5 text-sm text-muted">
+                            {money(paid)} received · {money(inv.amount - paid)} outstanding
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </Card>
+              )}
+            </Section>
+
+            {/* == Activity == */}
+            <Section id="activity" title="Activity">
+              <Card className="p-4">
+                <ol className="space-y-3">
+                  {log.map((a) => (
+                    <li key={a.id} className="flex gap-2.5">
+                      <Avatar name={USER_BY_ID[a.actorId]?.name ?? 'System'} size={22} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-base leading-snug text-secondary">{a.text}</p>
+                        <p className="mt-0.5 text-sm text-muted">
+                          {USER_BY_ID[a.actorId]?.name ?? 'System'} ·{' '}
+                          {format(new Date(a.at), 'd MMM yyyy, HH:mm')}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </Card>
+            </Section>
+          </div>
+        </div>
+      </div>
+
+      <StageGate
+        opportunity={opp}
+        targetStage={gateTo}
+        open={Boolean(gateTo)}
+        onClose={() => setGateTo(null)}
+      />
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------------ */
+
+function Section({
+  id,
+  title,
+  action,
+  children,
+}: {
+  id: string
+  title: string
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <section id={id} className="scroll-mt-4">
+      <SectionTitle actions={action}>{title}</SectionTitle>
+      {children}
+    </section>
+  )
+}
+
+function ArtifactRow({ artifact, category }: { artifact: ReturnType<typeof Object> & any; category: string }) {
+  const Icon = ARTIFACT_ICON[artifact.kind as ArtifactKind] ?? FileText
+  return (
+    <div className="flex items-start gap-2.5 border-b border-subtle px-4 py-2.5 last:border-0">
+      <Icon size={14} className="mt-0.5 shrink-0 text-muted" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-base text-primary">{artifact.name}</p>
+          {artifact.internal && (
+            <Badge tone="neutral" icon={<Lock size={9} />}>
+              Internal
+            </Badge>
+          )}
+        </div>
+        {artifact.body && (
+          <p className="mt-1 text-sm leading-relaxed text-secondary">{artifact.body}</p>
+        )}
+        <p className="mt-0.5 text-sm text-muted">
+          Added at {stageLabel(artifact.stageAdded, category as never)} by{' '}
+          {USER_BY_ID[artifact.addedById]?.name ?? 'the customer'}
+          {artifact.meta && ` · ${artifact.meta}`}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+/* ---- Site visit summary ------------------------------------------------- */
+
+function SiteVisitSummary({ opportunityId }: { opportunityId: string }) {
+  const opp = useStore((s) => s.opportunities.find((o) => o.id === opportunityId))!
+  const visit = useStore((s) => s.siteVisits.find((v) => v.opportunityId === opportunityId))
+  const checks = useChecks(opportunityId, 'site_visit_complete')
+  const form = formForCategory(opp.category)
+
+  if (!visit || !form) {
+    return (
+      <Card>
+        <EmptyState
+          title="Site visit not started"
+          description="The guided form is generated automatically when the visit is scheduled."
+        />
+      </Card>
+    )
+  }
+
+  const answered = Object.entries(visit.values).filter(([, v]) => v !== '' && v !== undefined)
+
+  return (
+    <Card>
+      <CardHeader
+        title={form.name}
+        subtitle={
+          visit.completedAt
+            ? `Completed on site by ${USER_BY_ID[visit.completedById ?? '']?.name} on ${format(new Date(visit.completedAt), 'd MMM yyyy')}`
+            : 'In progress'
+        }
+        icon={<ClipboardList size={14} />}
+        actions={
+          <Badge tone={visit.completedAt ? 'success' : 'warning'}>
+            {checks.filter((c) => c.ok).length}/{checks.length} checks
+          </Badge>
+        }
+      />
+      <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 p-4 sm:grid-cols-2">
+        {form.sections.flatMap((sec) =>
+          sec.fields
+            .filter((f) => answered.some(([k]) => k === f.id))
+            .map((f) => {
+              const raw = visit.values[f.id]
+              const value = typeof raw === 'boolean' ? (raw ? 'Yes' : 'No') : String(raw)
+              return (
+                <KeyValue
+                  key={f.id}
+                  label={f.label}
+                  className={f.type === 'longtext' ? 'sm:col-span-2' : undefined}
+                >
+                  <span className={cn(f.type === 'longtext' && 'whitespace-normal')}>
+                    {value}
+                    {f.unit && ` ${f.unit}`}
+                  </span>
+                </KeyValue>
+              )
+            }),
+        )}
+      </dl>
+    </Card>
+  )
+}
+
+/* ---- Checklist ---------------------------------------------------------- */
+
+function ChecklistCard({
+  opportunityId,
+  templateId,
+  subtitle,
+}: {
+  opportunityId: string
+  templateId: string
+  subtitle: string
+}) {
+  const tpl = CHECKLIST_BY_ID[templateId]
+  const instance = useStore((s) =>
+    s.checklists.find((c) => c.opportunityId === opportunityId && c.templateId === templateId),
+  )
+  const toggle = useStore((s) => s.toggleChecklistItem)
+  if (!tpl) return null
+
+  const done = instance?.done.length ?? 0
+
+  return (
+    <Card>
+      <CardHeader
+        title={tpl.name}
+        subtitle={subtitle}
+        icon={<ClipboardCheck size={14} />}
+        actions={
+          <>
+            {tpl.managedByFranchisor && <Badge tone="info">Network standard</Badge>}
+            <Badge tone={done === tpl.items.length ? 'success' : 'neutral'}>
+              {done}/{tpl.items.length}
+            </Badge>
+          </>
+        }
+      />
+      <div className="space-y-2 p-4">
+        {tpl.items.map((item) => (
+          <Checkbox
+            key={item.id}
+            checked={instance?.done.includes(item.id) ?? false}
+            onChange={() => toggle(opportunityId, tpl.id, item.id)}
+            label={item.label}
+            description={item.helper}
+          />
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+/* ---- Change orders ------------------------------------------------------ */
+
+function ChangeOrders({ opportunityId }: { opportunityId: string }) {
+  const orders = useChangeOrdersFor(opportunityId)
+  const add = useStore((s) => s.addChangeOrder)
+  const setStatus = useStore((s) => s.setChangeOrderStatus)
+  const viewerId = useStore((s) => s.viewerId)
+  const [open, setOpen] = useState(false)
+  const [description, setDescription] = useState('')
+  const [qty, setQty] = useState(0)
+  const [unit, setUnit] = useState('sq ft')
+  const [amount, setAmount] = useState(0)
+  const [days, setDays] = useState(0)
+  const [note, setNote] = useState('')
+
+  return (
+    <>
+      <Card className="mb-3">
+        <CardHeader
+          title="Change orders"
+          subtitle="Approved changes update the final invoice automatically."
+          icon={<Plus size={14} />}
+          actions={
+            <Button size="sm" onClick={() => setOpen(true)}>
+              <Plus size={12} />
+              Raise change order
+            </Button>
+          }
+        />
+        {orders.length === 0 ? (
+          <p className="px-4 py-5 text-center text-base text-muted">No change orders raised.</p>
+        ) : (
+          orders.map((c) => (
+            <div key={c.id} className="border-b border-subtle px-4 py-3 last:border-0">
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-base text-primary">{c.description}</p>
+                  <p className="mt-0.5 text-sm text-muted">
+                    {c.qty} {c.unit} · raised by {USER_BY_ID[c.raisedById]?.name} on{' '}
+                    {format(new Date(c.raisedAt), 'd MMM')}
+                    {c.scheduleImpactDays > 0 && ` · +${c.scheduleImpactDays} day to the schedule`}
+                  </p>
+                  {c.internalNote && (
+                    <p className="mt-1 text-sm text-secondary">{c.internalNote}</p>
+                  )}
+                </div>
+                <span className="shrink-0 font-mono text-base text-primary tabular">
+                  {money(c.amount)}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                {c.status === 'pending' ? (
+                  <>
+                    <Badge tone="warning">Awaiting customer approval</Badge>
+                    <Button size="sm" onClick={() => setStatus(c.id, 'customer_approved')}>
+                      <CheckCircle2 size={11} />
+                      Mark approved
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setStatus(c.id, 'rejected')}>
+                      <XCircle size={11} />
+                      Reject
+                    </Button>
+                  </>
+                ) : c.status === 'customer_approved' ? (
+                  <Badge tone="success" icon={<CheckCircle2 size={9} />}>
+                    Approved — will be added to the final invoice
+                  </Badge>
+                ) : (
+                  <Badge tone="danger">Rejected</Badge>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </Card>
+
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        icon={<Plus size={17} />}
+        title="Raise a change order"
+        subtitle="Additional work requested by the customer, or an unexpected condition found on site."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!description || amount <= 0}
+              onClick={() => {
+                add({
+                  opportunityId,
+                  description,
+                  qty,
+                  unit,
+                  amount,
+                  raisedById: viewerId,
+                  raisedAt: new Date().toISOString(),
+                  status: 'pending',
+                  scheduleImpactDays: days,
+                  internalNote: note,
+                  photoIds: [],
+                })
+                setDescription('')
+                setAmount(0)
+                setQty(0)
+                setNote('')
+                setOpen(false)
+              }}
+            >
+              Raise change order
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FieldRow label="Description" className="sm:col-span-2">
+            <Textarea
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g. additional spall repair at the filler line beyond the contract allowance"
+            />
+          </FieldRow>
+          <FieldRow label="Additional quantity">
+            <Input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} />
+          </FieldRow>
+          <FieldRow label="Unit">
+            <Select value={unit} onChange={(e) => setUnit(e.target.value)}>
+              <option value="sq ft">sq ft</option>
+              <option value="lin ft">lin ft</option>
+              <option value="ea">ea</option>
+            </Select>
+          </FieldRow>
+          <FieldRow label="Additional price">
+            <Input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
+          </FieldRow>
+          <FieldRow label="Schedule impact (days)">
+            <Input type="number" value={days} onChange={(e) => setDays(Number(e.target.value))} />
+          </FieldRow>
+          <FieldRow label="Internal note" className="sm:col-span-2">
+            <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+          </FieldRow>
+        </div>
+      </Modal>
+    </>
+  )
+}
+
+/* ---- Issues ------------------------------------------------------------- */
+
+function Issues({ opportunityId }: { opportunityId: string }) {
+  const issues = useIssuesFor(opportunityId)
+  const resolve = useStore((s) => s.resolveIssue)
+
+  if (issues.length === 0) return null
+
+  return (
+    <Card id="issues">
+      <CardHeader title="Issues reported from site" icon={<AlertTriangle size={14} />} />
+      {issues.map((i) => (
+        <div key={i.id} className="flex items-start gap-3 border-b border-subtle px-4 py-3 last:border-0">
+          <AlertTriangle
+            size={15}
+            className={cn(
+              'mt-0.5 shrink-0',
+              i.severity === 'high'
+                ? 'text-danger-text'
+                : i.severity === 'medium'
+                  ? 'text-warning-text'
+                  : 'text-muted',
+            )}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-base font-medium text-primary">{i.title}</p>
+            <p className="mt-0.5 text-sm leading-relaxed text-secondary">{i.detail}</p>
+            <p className="mt-0.5 text-sm text-muted">
+              {USER_BY_ID[i.raisedById]?.name} · {format(new Date(i.raisedAt), 'd MMM yyyy')}
+            </p>
+          </div>
+          {i.status === 'open' ? (
+            <Button size="sm" onClick={() => resolve(i.id)}>
+              Resolve
+            </Button>
+          ) : (
+            <Badge tone="success" icon={<CheckCircle2 size={9} />}>
+              Resolved
+            </Badge>
+          )}
+        </div>
+      ))}
+    </Card>
+  )
+}
