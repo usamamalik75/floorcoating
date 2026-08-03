@@ -7,7 +7,7 @@
 
    So there is ONE spine —
 
-     Location → Account → Opportunity → { Estimate, Job, Material, Invoice }
+    Location → Account → Opportunity → { Estimate, Job, Procurement, Invoice }
 
    — and Prospect/Contact are not separate tables, they are simply the first
    two STAGES an Account-backed record can occupy. Residential collapses
@@ -86,8 +86,8 @@ export type StageId =
 export type JobStatus =
   | 'scheduling_required'
   | 'scheduled'
-  | 'material_required'
-  | 'material_ordered'
+  | 'procurement_required'
+  | 'procurement_ordered'
   | 'ready_to_start'
   | 'in_progress'
   | 'on_hold'
@@ -100,8 +100,8 @@ export type JobStatus =
 export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
   scheduling_required: 'Scheduling Required',
   scheduled: 'Scheduled',
-  material_required: 'Purchasing Required',
-  material_ordered: 'Resources Ordered',
+  procurement_required: 'Procurement Required',
+  procurement_ordered: 'Resources Ordered',
   ready_to_start: 'Ready to Start',
   in_progress: 'In Progress',
   on_hold: 'On Hold',
@@ -405,7 +405,7 @@ export interface ScopeExtraction {
 
 /* ---- Operations -------------------------------------------------------- */
 
-export interface MaterialLine {
+export interface ProcurementLine {
   id: string
   priceBookId: string
   product: string
@@ -415,10 +415,10 @@ export interface MaterialLine {
   adjusted: boolean
 }
 
-export interface MaterialOrder {
+export interface ProcurementOrder {
   id: string
   opportunityId: string
-  lines: MaterialLine[]
+  lines: ProcurementLine[]
   status: 'draft' | 'submitted' | 'approved' | 'shipped' | 'delivered'
   submittedAt: string | null
   neededBy: string
@@ -426,6 +426,9 @@ export interface MaterialOrder {
   purchaseOrderId: string | null
   trackingRef: string | null
 }
+
+export type MaterialLine = ProcurementLine
+export type MaterialOrder = ProcurementOrder
 
 export interface Job {
   id: string

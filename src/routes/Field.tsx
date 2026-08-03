@@ -85,7 +85,7 @@ export function FieldToday() {
   const viewerId = useStore((s) => s.viewerId)
   const jobs = useStore((s) => s.jobs)
   const opportunities = useStore((s) => s.opportunities)
-  const materialOrders = useStore((s) => s.materialOrders)
+  const procurementOrders = useStore((s) => s.procurementOrders)
   const viewer = useViewer()
 
   const isField = viewer?.role === 'tech' || viewer?.role === 'crew_leader'
@@ -151,7 +151,7 @@ export function FieldToday() {
               {myJobs.map((j) => {
                 const opp = opportunities.find((o) => o.id === j.opportunityId)
                 if (!opp) return null
-                const mo = materialOrders.find((m) => m.opportunityId === opp.id)
+                const mo = procurementOrders.find((m) => m.opportunityId === opp.id)
                 return (
                   <Link key={j.id} to={`/field/job/${opp.id}`}>
                     <Card className="p-4 transition-colors hover:border-strong hover:shadow-sm">
@@ -319,7 +319,7 @@ export function FieldJob() {
   const plans = artifacts.filter((a) => a.kind === 'plan' || a.kind === 'map')
   const photos = artifacts.filter((a) => a.kind === 'photo')
   const account = ACCOUNT_BY_ID[opp.accountId]
-  const materialOrder = useStore((s) => s.materialOrders.find((m) => m.opportunityId === id))
+  const procurementOrder = useStore((s) => s.procurementOrders.find((m) => m.opportunityId === id))
 
   const scope = est?.options
     .filter((o) => o.kind === 'scope' || o.selectedByCustomer || o.recommended)
@@ -439,13 +439,13 @@ export function FieldJob() {
 
         <Card className="p-3">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-md font-semibold text-primary">Equipment and materials</p>
-            <Badge tone={materialOrder?.status === 'delivered' ? 'success' : materialOrder ? 'attention' : 'warning'}>
-              {materialOrder ? materialOrder.status : 'not ordered'}
+            <p className="text-md font-semibold text-primary">Equipment and resources</p>
+            <Badge tone={procurementOrder?.status === 'delivered' ? 'success' : procurementOrder ? 'attention' : 'warning'}>
+              {procurementOrder ? procurementOrder.status : 'not ordered'}
             </Badge>
           </div>
           <p className="mt-1 text-base text-muted">
-            Confirm the trailer load, material drop, and any missing items before work starts.
+            Confirm the trailer load, resource drop, and any missing items before work starts.
           </p>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <Button

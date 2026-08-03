@@ -10,9 +10,9 @@ import type {
   Job,
   JobStatus,
   Location,
-  MaterialLine,
-  MaterialOrder,
   Opportunity,
+  ProcurementLine,
+  ProcurementOrder,
   Reminder,
   SiteVisitResponse,
   StageId,
@@ -1099,7 +1099,7 @@ const photo = (
 const SEEDED_JOB_STATUS: Record<string, JobStatus> = {
   op_peachtree_kitchen: 'scheduling_required',
   op_atl_scheduled: 'scheduled',
-  op_continental_freezer: 'material_required',
+  op_continental_freezer: 'procurement_required',
   op_den_ready: 'ready_to_start',
   op_midwest_plant2: 'in_progress',
   op_chi_completion: 'completion_review',
@@ -1385,7 +1385,7 @@ export const ESTIMATE_BY_OPP = Object.fromEntries(ESTIMATES.map((e) => [e.opport
  * calculation shown on screen.
  */
 let mlSeq = 0
-function line(priceBookId: string, qty: number): MaterialLine {
+function line(priceBookId: string, qty: number): ProcurementLine {
   const d = deriveMaterial(priceBookId, qty)!
   return {
     id: `ml_${++mlSeq}`,
@@ -1398,7 +1398,7 @@ function line(priceBookId: string, qty: number): MaterialLine {
   }
 }
 
-export const MATERIAL_ORDERS: MaterialOrder[] = [
+export const PROCUREMENT_ORDERS: ProcurementOrder[] = [
   {
     id: 'mo_1',
     opportunityId: 'op_den_ready',
@@ -1430,6 +1430,8 @@ export const MATERIAL_ORDERS: MaterialOrder[] = [
     lines: [line('svc_plumbing_repair', 3_900)],
   },
 ]
+
+export const MATERIAL_ORDERS = PROCUREMENT_ORDERS
 
 export const JOBS: Job[] = [
   {
@@ -1534,7 +1536,7 @@ export const JOBS: Job[] = [
   {
     id: 'job_5',
     opportunityId: 'op_continental_freezer',
-    status: 'material_required',
+    status: 'procurement_required',
     start: iso(9),
     end: iso(15),
     crewLeaderId: 'u_keith',

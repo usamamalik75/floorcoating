@@ -470,7 +470,7 @@ function NetworkStandards() {
         <Card>
           <CardHeader
             title="Service Area systems"
-            subtitle="Selecting one of these in an estimate pulls its spec sheet, material requirement, labour assumption, install checklist, load list and exclusions automatically."
+            subtitle="Selecting one of these in an estimate pulls its spec sheet, resource requirement, labour assumption, install checklist, load list and exclusions automatically."
             icon={<BookOpen size={14} />}
           />
           <div className="divide-y divide-(--border-subtle)">

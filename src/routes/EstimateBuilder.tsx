@@ -43,7 +43,7 @@ const uid = (p: string) => `${p}_${Date.now()}_${++n}`
    Estimate builder
    ==========================================================================
    Replaces the split between a Google Sheet and Housecall Pro. Selecting a
-   catalogue item pulls its description, unit, price, spec sheet, material
+   catalogue item pulls its description, unit, price, spec sheet, resource
    requirement, install checklist, load list and exclusions in one action.
 
    Supports both shapes the client needs at once: multiple AREAS within a

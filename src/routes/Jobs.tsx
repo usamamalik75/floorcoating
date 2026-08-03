@@ -252,7 +252,7 @@ function JobCard({
   const s = useStore()
   const userById = useUserDirectory()
   const job = s.jobs.find((j) => j.opportunityId === opp.id)
-  const material = s.materialOrders.find((m) => m.opportunityId === opp.id)
+  const procurement = s.procurementOrders.find((m) => m.opportunityId === opp.id)
   const issues = s.issues.filter((i) => i.opportunityId === opp.id && i.status === 'open')
   const photos = s.artifacts.filter((a) => a.opportunityId === opp.id && a.kind === 'photo')
   const next = nextJobStatus(status)
@@ -284,9 +284,9 @@ function JobCard({
             </Badge>
           )}
           {job?.syncStatus === 'pending' && <Badge tone="warning">Pending sync</Badge>}
-          {material && (
+          {procurement && (
             <Badge tone="info" icon={<Boxes size={9} />}>
-              {material.status}
+              {procurement.status}
             </Badge>
           )}
           {issues.length > 0 && (

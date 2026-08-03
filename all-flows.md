@@ -37,7 +37,7 @@ Use these labels when speaking about the platform as a generic product:
 - `Products & Services` -> `Catalogue`
 - `Purchasing` -> `Procurement`
 - `Site Visit` -> `Assessment`
-- `Material Order` -> `Resource Order` or `Procurement Request`
+- `Material Order` -> `Procurement Order`
 - `Installer` -> `Technician`
 - `Crew Leader` -> `Field Lead`
 - `Proposal acceptance` -> `Customer approval`
@@ -92,7 +92,7 @@ Use these labels when speaking about the platform as a generic product:
 3. Platform owner clicks `New team member`.
 4. Platform owner enters name, role, title, and location.
 5. Platform owner clicks `Add team member`.
-6. The team member appears in the territory staffing design list.
+6. The team member appears in the territory staffing design list, the live demo user switcher, and assignment pickers that use the shared user directory.
 
 ### 1.7 Configure platform standards
 
@@ -191,12 +191,12 @@ Use these labels when speaking about the platform as a generic product:
 2. Operations manager clicks `Schedule next job` or `Schedule` on unscheduled awarded work.
 3. The scheduling sheet opens for team assignment, dispatch controls, and rescheduling.
 
-### 4.4 Prepare a material order
+### 4.4 Prepare a procurement order
 
 1. Operations manager goes to `Procurement`.
 2. Operations manager clicks `Prepare order`.
-3. Operations manager selects the job needing materials.
-4. The purchase-order screen opens with the derived lines.
+3. Operations manager selects the job needing procurement.
+4. The procurement-order screen opens with the derived resource lines.
 5. Operations manager creates the order and moves it into fulfilment.
 
 ### 4.5 Run field execution
@@ -283,7 +283,7 @@ This section explains each page by role: who uses it, why they open it, and what
 ### 8.3 `Prospecting`
 
 - **Primary roles:** admin, owner, sales.
-- **Journey:** platform owner or sales user goes to `Prospecting`, clicks `New prospecting request`, imports matched prospect accounts, then clicks `Create lead` to push a prospect into the sales flow.
+- **Journey:** platform owner or sales user goes to `Prospecting`, clicks `New prospecting request`, creates a shared prospecting request, imports matched prospect accounts, then clicks `Create lead` to push a prospect into the sales flow.
 
 ### 8.4 `Customers`
 
@@ -368,17 +368,17 @@ This section explains each page by role: who uses it, why they open it, and what
 ### 8.20 `Admin`
 
 - **Primary roles:** admin, owner.
-- **Journey:** platform owner goes to `Admin` to design locations, team setup, forms, catalogue, templates, checklists, stages, and workspace configuration.
+- **Journey:** platform owner goes to `Admin` to add team members, design locations, and manage forms, catalogue, templates, checklists, stages, and workspace configuration.
 
 ### 8.21 `Opportunity Record`
 
 - **Primary roles:** depends on the user’s function.
-- **Journey:** the user opens an opportunity from any list page and uses it as the central record hub for visits, messages, quotes, jobs, purchasing, and invoicing context.
+- **Journey:** the user opens an opportunity from any list page and uses it as the central record hub for visits, messages, quotes, jobs, procurement, and invoicing context.
 
-### 8.22 `Material Order`
+### 8.22 `Procurement Order`
 
 - **Primary roles:** PM, admin, owner, accounting.
-- **Journey:** the user opens the job-specific purchasing record, reviews derived lines, creates the order, and advances the fulfilment tracker.
+- **Journey:** the user opens the job-specific procurement record, reviews derived resource lines, creates the order, and advances the fulfilment tracker.
 
 ### 8.23 `Customer Proposal`
 
@@ -397,10 +397,10 @@ This section explains each page by role: who uses it, why they open it, and what
 
 ## 9. Design Notes
 
-- Some journeys are fully backed by store state.
-- Some newer journeys are intentionally UI-first, especially:
-  - team setup
-  - prospecting request design
-  - certain manual creation flows
+- The main journeys in this prototype are now backed by shared store state, including team setup, prospecting requests, procurement orders, communications, payment links, and location-driven routing.
+- A few integrations are still mocked even though the workflow state persists in-app:
+  - external prospect-data providers
+  - identity / authentication systems
+  - hosted payment processors and accounting syncs
 - Reporting pages remain intentionally read-only.
 

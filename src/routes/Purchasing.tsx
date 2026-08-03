@@ -5,16 +5,16 @@ import { ArrowRight, Boxes, Plus, Truck } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useViewer } from '@/store/selectors'
 import { LOCATION_BY_ID } from '@/data/seed'
-import type { MaterialOrder } from '@/domain/types'
+import type { ProcurementOrder } from '@/domain/types'
 import { Badge, Button, Card, EmptyState, Modal, Table, Td, Th, Tr } from '@/components/ui'
 import { cn } from '@/lib/cn'
 
-const FLOW: MaterialOrder['status'][] = ['draft', 'submitted', 'approved', 'shipped', 'delivered']
+const FLOW: ProcurementOrder['status'][] = ['draft', 'submitted', 'approved', 'shipped', 'delivered']
 
 export function PurchasingOrders() {
-  const orders = useStore((state) => state.materialOrders)
+  const orders = useStore((state) => state.procurementOrders)
   const opportunities = useStore((state) => state.opportunities)
-  const advance = useStore((state) => state.advanceMaterialOrder)
+  const advance = useStore((state) => state.advanceProcurementOrder)
   const locationFilter = useStore((state) => state.locationFilter)
   const viewer = useViewer()
 
@@ -88,7 +88,7 @@ export function PurchasingOrders() {
 
 export function Purchasing() {
   const [creating, setCreating] = useState(false)
-  const orders = useStore((state) => state.materialOrders)
+  const orders = useStore((state) => state.procurementOrders)
   const opportunities = useStore((state) => state.opportunities)
   const jobs = useStore((state) => state.jobs)
   const locationFilter = useStore((state) => state.locationFilter)
@@ -97,7 +97,7 @@ export function Purchasing() {
     if (locationFilter !== 'all' && opportunity.locationId !== locationFilter) return false
     if (orders.some((order) => order.opportunityId === opportunity.id)) return false
     const job = jobs.find((candidate) => candidate.opportunityId === opportunity.id)
-    return job?.status === 'material_required'
+    return job?.status === 'procurement_required'
   })
 
   return (
@@ -120,16 +120,16 @@ export function Purchasing() {
           open={creating}
           onClose={() => setCreating(false)}
           title="Prepare order"
-          subtitle="Open a job that needs purchasing and create its material order."
+          subtitle="Open a job that needs purchasing and create its procurement order."
         >
           <div className="space-y-2">
             {candidates.length === 0 ? (
-              <EmptyState title="No jobs need ordering" description="Jobs move here when the workflow marks materials as required." />
+              <EmptyState title="No jobs need ordering" description="Jobs move here when the workflow marks procurement as required." />
             ) : (
               candidates.map((opportunity) => (
                 <Link
                   key={opportunity.id}
-                  to={`/opportunities/${opportunity.id}/purchasing`}
+                  to={`/opportunities/${opportunity.id}/procurement`}
                   onClick={() => setCreating(false)}
                   className="flex items-start justify-between gap-3 rounded-md border border-subtle bg-surface-raised px-3 py-2.5 hover:border-strong"
                 >
@@ -137,7 +137,7 @@ export function Purchasing() {
                     <p className="font-medium text-primary">{opportunity.name}</p>
                     <p className="text-sm text-muted">{LOCATION_BY_ID[opportunity.locationId]?.name}</p>
                   </div>
-                  <Badge tone="warning">Materials required</Badge>
+                  <Badge tone="warning">Procurement required</Badge>
                 </Link>
               ))
             )}

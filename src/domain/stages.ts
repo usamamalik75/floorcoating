@@ -308,8 +308,8 @@ export const BOARD_STAGES: StageId[] = STAGES.map((s) => s.id)
 export const JOB_STATUSES: JobStatus[] = [
   'scheduling_required',
   'scheduled',
-  'material_required',
-  'material_ordered',
+  'procurement_required',
+  'procurement_ordered',
   'ready_to_start',
   'in_progress',
   'on_hold',

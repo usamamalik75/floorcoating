@@ -103,7 +103,7 @@ export function OpportunityRecord() {
 
   const est = useMemo(() => s.estimates.find((e) => e.opportunityId === id), [s.estimates, id])
   const job = s.jobs.find((j) => j.opportunityId === id)
-  const materialOrder = s.materialOrders.find((m) => m.opportunityId === id)
+  const procurementOrder = s.procurementOrders.find((m) => m.opportunityId === id)
   const invoices = s.invoices.filter((i) => i.opportunityId === id)
   const reminder = s.reminders.find((r) => r.opportunityId === id && !r.done)
   const threads = useMessageThreads(id)
@@ -419,18 +419,18 @@ export function OpportunityRecord() {
             {/* == Documents tab == */}
             <div className={tab === 'documents' ? 'space-y-6' : 'hidden'}>
             <Section
-              id="material"
+              id="procurement"
               title="Purchasing"
               action={
-                <Link to={`/opportunities/${opp.id}/purchasing`}>
+                <Link to={`/opportunities/${opp.id}/procurement`}>
                   <Button size="sm">
                     <Boxes size={12} />
-                    {materialOrder ? 'Open order' : 'Prepare order'}
+                    {procurementOrder ? 'Open order' : 'Prepare order'}
                   </Button>
                 </Link>
               }
             >
-              {!materialOrder ? (
+              {!procurementOrder ? (
                 <Card>
                   <EmptyState
                     title="No purchase order yet"
@@ -440,17 +440,17 @@ export function OpportunityRecord() {
               ) : (
                 <Card>
                   <CardHeader
-                    title={materialOrder.purchaseOrderId ?? 'Draft order'}
-                    subtitle={`Needed by ${format(new Date(materialOrder.neededBy), 'd MMM yyyy')}`}
+                    title={procurementOrder.purchaseOrderId ?? 'Draft order'}
+                    subtitle={`Needed by ${format(new Date(procurementOrder.neededBy), 'd MMM yyyy')}`}
                     icon={<Boxes size={14} />}
                     actions={
-                      <Badge tone={materialOrder.status === 'delivered' ? 'success' : 'attention'}>
-                        {materialOrder.status}
+                      <Badge tone={procurementOrder.status === 'delivered' ? 'success' : 'attention'}>
+                        {procurementOrder.status}
                       </Badge>
                     }
                   />
                   <div className="divide-y divide-(--border-subtle)">
-                    {materialOrder.lines.map((l) => (
+                    {procurementOrder.lines.map((l) => (
                       <div key={l.id} className="flex items-center gap-3 px-4 py-2">
                         <span
                           className="h-5 w-5 shrink-0 rounded-xs border border-subtle"

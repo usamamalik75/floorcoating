@@ -39,7 +39,7 @@ export interface ReadinessInput {
     templateId: string
   }
   checklists: { templateId: string; done: string[] }[]
-  materialOrder?: { status: string }
+  procurementOrder?: { status: string }
   job?: { status?: JobStatus; crewLeaderId: string | null; start: string; team?: { userId: string; role: JobRole }[] }
   invoices: { kind: string; amount: number; payments: { amount: number }[] }[]
   changeOrders: { status: string }[]
@@ -159,17 +159,17 @@ export function checksForStage(stage: StageId, input: ReadinessInput): Check[] {
 
 export function checksForJobStatus(status: JobStatus, input: ReadinessInput): Check[] {
   switch (status) {
-    case 'material_required':
-    case 'material_ordered':
+    case 'procurement_required':
+    case 'procurement_ordered':
       return [
         {
-          id: 'mo',
-          label: 'Purchase order submitted',
-          ok: Boolean(input.materialOrder && input.materialOrder.status !== 'draft'),
-          detail: input.materialOrder
-            ? `Order is ${input.materialOrder.status}`
+          id: 'po',
+          label: 'Procurement order submitted',
+          ok: Boolean(input.procurementOrder && input.procurementOrder.status !== 'draft'),
+          detail: input.procurementOrder
+            ? `Order is ${input.procurementOrder.status}`
             : 'No purchase order created',
-          href: `/opportunities/${input.opportunity.id}/purchasing`,
+          href: `/opportunities/${input.opportunity.id}/procurement`,
         },
       ]
 
@@ -184,11 +184,11 @@ export function checksForJobStatus(status: JobStatus, input: ReadinessInput): Ch
           href: `/opportunities/${input.opportunity.id}?tab=job`,
         },
         {
-          id: 'material',
+          id: 'procurement',
           label: 'Required resources delivered',
-          ok: input.materialOrder?.status === 'delivered',
-          detail: input.materialOrder ? `Order is ${input.materialOrder.status}` : 'Not ordered',
-          href: `/opportunities/${input.opportunity.id}/purchasing`,
+          ok: input.procurementOrder?.status === 'delivered',
+          detail: input.procurementOrder ? `Order is ${input.procurementOrder.status}` : 'Not ordered',
+          href: `/opportunities/${input.opportunity.id}/procurement`,
         },
         {
           id: 'crew',

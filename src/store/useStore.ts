@@ -16,11 +16,11 @@ import type {
   Job,
   JobStatus,
   Location,
-  MaterialOrder,
   Opportunity,
   PaymentRequest,
   PriceBookItem,
   ProspectRequest,
+  ProcurementOrder,
   ProposalTemplate,
   Reminder,
   Role,
@@ -47,8 +47,8 @@ import {
   ISSUES,
   JOBS,
   LOCATIONS,
-  MATERIAL_ORDERS,
   OPPORTUNITIES,
+  PROCUREMENT_ORDERS,
   REMINDERS,
   SITE_VISIT_RESPONSES,
   SCOPE_EXTRACTIONS,
@@ -84,7 +84,9 @@ interface State {
   activity: Activity[]
   siteVisits: SiteVisitResponse[]
   scopeExtractions: ScopeExtraction[]
-  materialOrders: MaterialOrder[]
+  procurementOrders: ProcurementOrder[]
+  /** @deprecated Compatibility alias; use procurementOrders. */
+  materialOrders: ProcurementOrder[]
   changeOrders: ChangeOrder[]
   issues: Issue[]
   users: User[]
@@ -135,8 +137,14 @@ interface State {
   updateJob: (jobId: string, next: Partial<Job>) => void
   addDailyLog: (jobId: string, note: string) => void
 
-  upsertMaterialOrder: (o: MaterialOrder) => void
+  upsertProcurementOrder: (o: ProcurementOrder) => void
+  submitProcurementOrder: (id: string) => void
+  advanceProcurementOrder: (id: string) => void
+  /** @deprecated Compatibility alias; use upsertProcurementOrder. */
+  upsertMaterialOrder: (o: ProcurementOrder) => void
+  /** @deprecated Compatibility alias; use submitProcurementOrder. */
   submitMaterialOrder: (id: string) => void
+  /** @deprecated Compatibility alias; use advanceProcurementOrder. */
   advanceMaterialOrder: (id: string) => void
 
   addChangeOrder: (c: Omit<ChangeOrder, 'id'>) => void
@@ -280,7 +288,8 @@ const initial = () => ({
   activity: structuredClone(ACTIVITY),
   siteVisits: structuredClone(SITE_VISIT_RESPONSES),
   scopeExtractions: structuredClone(SCOPE_EXTRACTIONS),
-  materialOrders: structuredClone(MATERIAL_ORDERS),
+  procurementOrders: structuredClone(PROCUREMENT_ORDERS),
+  materialOrders: structuredClone(PROCUREMENT_ORDERS),
   changeOrders: structuredClone(CHANGE_ORDERS),
   issues: structuredClone(ISSUES),
   users: structuredClone(USERS),
@@ -303,7 +312,7 @@ const initial = () => ({
  * seed invalidates it and "Reset demo" always returns to the story's start.
  */
 const STORAGE_KEY = 'fcg-prototype'
-const STORAGE_VERSION = 6
+const STORAGE_VERSION = 7
 
 const createState: StateCreator<State> = (set, get) => ({
   ...initial(),
@@ -788,45 +797,61 @@ const createState: StateCreator<State> = (set, get) => ({
     get().logActivity(job.opportunityId, 'note', `Daily log: ${note}`)
   },
 
-  upsertMaterialOrder: (o) =>
-    set((s) => ({
-      materialOrders: s.materialOrders.some((x) => x.id === o.id)
-        ? s.materialOrders.map((x) => (x.id === o.id ? o : x))
-        : [...s.materialOrders, o],
-    })),
+  upsertProcurementOrder: (o) =>
+    set((s) => {
+      const procurementOrders = s.procurementOrders.some((x) => x.id === o.id)
+        ? s.procurementOrders.map((x) => (x.id === o.id ? o : x))
+        : [...s.procurementOrders, o]
+      return {
+        procurementOrders,
+        materialOrders: procurementOrders,
+      }
+    }),
 
-  submitMaterialOrder: (id) => {
-    const mo = get().materialOrders.find((m) => m.id === id)
+  submitProcurementOrder: (id) => {
+    const mo = get().procurementOrders.find((m) => m.id === id)
     if (!mo) return
-    const purchaseOrderId = `PO-${4500 + get().materialOrders.length}`
-    set((s) => ({
-      materialOrders: s.materialOrders.map((m) =>
+    const purchaseOrderId = `PO-${4500 + get().procurementOrders.length}`
+    set((s) => {
+      const procurementOrders = s.procurementOrders.map((m) =>
         m.id === id
           ? { ...m, status: 'submitted' as const, submittedAt: new Date().toISOString(), purchaseOrderId }
           : m,
-      ),
-    }))
+      )
+      return {
+        procurementOrders,
+        materialOrders: procurementOrders,
+      }
+    })
     get().logActivity(
       mo.opportunityId,
       'system',
-      `Purchase order ${purchaseOrderId} submitted to purchasing.`,
+      `Procurement order ${purchaseOrderId} submitted to purchasing.`,
     )
   },
 
-  advanceMaterialOrder: (id) => {
-    const order: MaterialOrder['status'][] = ['draft', 'submitted', 'approved', 'shipped', 'delivered']
-    const mo = get().materialOrders.find((m) => m.id === id)
+  advanceProcurementOrder: (id) => {
+    const order: ProcurementOrder['status'][] = ['draft', 'submitted', 'approved', 'shipped', 'delivered']
+    const mo = get().procurementOrders.find((m) => m.id === id)
     if (!mo) return
     const next = order[Math.min(order.length - 1, order.indexOf(mo.status) + 1)]
-    set((s) => ({
-      materialOrders: s.materialOrders.map((m) =>
+    set((s) => {
+      const procurementOrders = s.procurementOrders.map((m) =>
         m.id === id
           ? { ...m, status: next, trackingRef: next === 'shipped' ? `1Z-994-${nextId('T').toUpperCase()}` : m.trackingRef }
           : m,
-      ),
-    }))
-    get().logActivity(mo.opportunityId, 'system', `Purchase order ${mo.purchaseOrderId ?? ''} is now ${next}.`)
+      )
+      return {
+        procurementOrders,
+        materialOrders: procurementOrders,
+      }
+    })
+    get().logActivity(mo.opportunityId, 'system', `Procurement order ${mo.purchaseOrderId ?? ''} is now ${next}.`)
   },
+
+  upsertMaterialOrder: (o) => get().upsertProcurementOrder(o),
+  submitMaterialOrder: (id) => get().submitProcurementOrder(id),
+  advanceMaterialOrder: (id) => get().advanceProcurementOrder(id),
 
   addChangeOrder: (c) => {
     set((s) => ({ changeOrders: [...s.changeOrders, { ...c, id: nextId('co') }] }))
@@ -1126,7 +1151,8 @@ export const useStore = create<State>()(
       activity: s.activity,
       siteVisits: s.siteVisits,
       scopeExtractions: s.scopeExtractions,
-      materialOrders: s.materialOrders,
+      procurementOrders: s.procurementOrders,
+      materialOrders: s.procurementOrders,
       changeOrders: s.changeOrders,
       issues: s.issues,
       users: s.users,

@@ -520,7 +520,7 @@ function PmHome() {
   const scoped = useScopedOpportunities()
   const opps = scoped.filter((o) => o.stage === 'awarded')
   const toSchedule = opps.filter((o) => jobStatusOf(o.id, s.jobs) === 'scheduling_required')
-  const materialNeeded = opps.filter((o) => jobStatusOf(o.id, s.jobs) === 'material_required')
+  const procurementNeeded = opps.filter((o) => jobStatusOf(o.id, s.jobs) === 'procurement_required')
   const active = opps.filter((o) => jobStatusOf(o.id, s.jobs) === 'in_progress')
   const openIssues = s.issues.filter((i) => i.status === 'open' && scoped.some((o) => o.id === i.opportunityId))
   const pendingCo = s.changeOrders.filter(
@@ -531,7 +531,7 @@ function PmHome() {
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Needs dates and a crew" value={toSchedule.length} tone={toSchedule.length ? 'warning' : undefined} icon={<CalendarClock size={12} />} to="/schedule" />
-        <Stat label="Purchasing required" value={materialNeeded.length} icon={<Boxes size={12} />} to="/jobs" />
+        <Stat label="Purchasing required" value={procurementNeeded.length} icon={<Boxes size={12} />} to="/jobs" />
         <Stat label="Active installations" value={active.length} icon={<HardHat size={12} />} to="/jobs" />
         <Stat label="Open issues" value={openIssues.length} tone={openIssues.length ? 'warning' : undefined} icon={<AlertTriangle size={12} />} />
       </div>
@@ -562,13 +562,13 @@ function PmHome() {
           subtitle="Requirements are derived from the sold quote"
           icon={<Boxes size={14} />}
           empty="No purchasing outstanding."
-          items={materialNeeded.map((o) => (
+          items={procurementNeeded.map((o) => (
             <div key={o.id} className="flex items-center gap-3 border-b border-subtle px-4 py-2.5 last:border-0">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-base font-medium text-primary">{o.name}</p>
                 <p className="text-sm text-muted">{o.estimatedQuantity.toLocaleString()} units</p>
               </div>
-              <Link to={`/opportunities/${o.id}/purchasing`}>
+              <Link to={`/opportunities/${o.id}/procurement`}>
                 <Button size="sm" variant="primary">
                   Prepare order
                 </Button>

@@ -21,9 +21,9 @@ import { useLocations, useUserDirectory, useUsers } from '@/store/selectors'
 const WEEKS = 3
 const JOB_ROLES = Object.keys(JOB_ROLE_LABEL) as JobRole[]
 
-/** Small status glyph on the calendar bar, so material risk is visible at a glance. */
-function MaterialGlyph({ opportunityId }: { opportunityId: string }) {
-  const order = useStore((s) => s.materialOrders.find((m) => m.opportunityId === opportunityId))
+/** Small status glyph on the calendar bar, so procurement risk is visible at a glance. */
+function ProcurementGlyph({ opportunityId }: { opportunityId: string }) {
+  const order = useStore((s) => s.procurementOrders.find((m) => m.opportunityId === opportunityId))
   if (!order) return null
   return (
     <Package
@@ -33,9 +33,9 @@ function MaterialGlyph({ opportunityId }: { opportunityId: string }) {
   )
 }
 
-/** Material state inside the crew assignment sheet, with a link into the order. */
-function MaterialPanel({ opportunityId }: { opportunityId: string }) {
-  const order = useStore((s) => s.materialOrders.find((m) => m.opportunityId === opportunityId))
+/** Procurement state inside the crew assignment sheet, with a link into the order. */
+function ProcurementPanel({ opportunityId }: { opportunityId: string }) {
+  const order = useStore((s) => s.procurementOrders.find((m) => m.opportunityId === opportunityId))
   return (
     <div className="rounded-md border border-subtle bg-surface-inset p-3">
       <div className="flex items-center justify-between gap-2">
@@ -50,7 +50,7 @@ function MaterialPanel({ opportunityId }: { opportunityId: string }) {
         Requirements come from the sold quote and move to
         the purchasing queue for fulfilment.
       </p>
-      <Link to={`/opportunities/${opportunityId}/purchasing`}>
+      <Link to={`/opportunities/${opportunityId}/procurement`}>
         <Button size="sm" className="mt-2">
           {order ? 'Open order' : 'Prepare order'}
         </Button>
@@ -304,7 +304,7 @@ export function Schedule() {
                           <span className="truncate text-2xs font-medium">
                             {opp!.code}
                           </span>
-                          <MaterialGlyph opportunityId={opp!.id} />
+                          <ProcurementGlyph opportunityId={opp!.id} />
                         </button>
                       )}
                     </div>
@@ -453,7 +453,7 @@ export function Schedule() {
             </div>
             </div>
 
-            <MaterialPanel opportunityId={selected.opp!.id} />
+            <ProcurementPanel opportunityId={selected.opp!.id} />
 
             <div className="rounded-md border border-subtle bg-surface-inset p-3">
               <p className="mb-2 text-2xs font-semibold tracking-wider text-muted uppercase">

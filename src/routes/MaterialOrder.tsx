@@ -15,7 +15,7 @@ import {
 import { useStore, money } from '@/store/useStore'
 import { PRICE_BOOK_BY_ID, deriveMaterial } from '@/data/priceBook'
 import { ACCOUNT_BY_ID, iso } from '@/data/seed'
-import type { MaterialLine, MaterialOrder as MO } from '@/domain/types'
+import type { ProcurementLine, ProcurementOrder as PO } from '@/domain/types'
 import {
   Badge,
   Button,
@@ -31,7 +31,7 @@ import {
 import { cn } from '@/lib/cn'
 
 /* ==========================================================================
-   Material planning and ordering
+  Procurement planning and ordering
    ==========================================================================
    The client's calculation, made explicit:
 
@@ -44,9 +44,9 @@ import { cn } from '@/lib/cn'
    lives — the two products overlap exactly here.
    ========================================================================== */
 
-const FLOW: MO['status'][] = ['draft', 'submitted', 'approved', 'shipped', 'delivered']
+const FLOW: PO['status'][] = ['draft', 'submitted', 'approved', 'shipped', 'delivered']
 
-const STATUS_LABEL: Record<MO['status'], string> = {
+const STATUS_LABEL: Record<PO['status'], string> = {
   draft: 'Draft',
   submitted: 'Submitted to purchasing',
   approved: 'Approved',
@@ -57,14 +57,14 @@ const STATUS_LABEL: Record<MO['status'], string> = {
 let n = 0
 const uid = (p: string) => `${p}_${Date.now()}_${++n}`
 
-export function MaterialOrder() {
+export function ProcurementOrderPage() {
   const { id = '' } = useParams()
   const opportunity = useStore((s) => s.opportunities.find((o) => o.id === id))
   const estimate = useStore((s) => s.estimates.find((e) => e.opportunityId === id))
-  const order = useStore((s) => s.materialOrders.find((m) => m.opportunityId === id))
-  const upsert = useStore((s) => s.upsertMaterialOrder)
-  const submit = useStore((s) => s.submitMaterialOrder)
-  const advance = useStore((s) => s.advanceMaterialOrder)
+  const order = useStore((s) => s.procurementOrders.find((m) => m.opportunityId === id))
+  const upsert = useStore((s) => s.upsertProcurementOrder)
+  const submit = useStore((s) => s.submitProcurementOrder)
+  const advance = useStore((s) => s.advanceProcurementOrder)
   const setJobStatus = useStore((s) => s.setJobStatus)
   const jobs = useStore((s) => s.jobs)
   const [neededBy, setNeededBy] = useState(iso(7).slice(0, 10))
@@ -73,7 +73,7 @@ export function MaterialOrder() {
    * Everything sold on the estimate, collapsed to one quantity per catalogue item,
    * then run through the resource-rate and contingency calculation.
    */
-  const derived = useMemo<MaterialLine[]>(() => {
+  const derived = useMemo<ProcurementLine[]>(() => {
     if (!estimate) return []
     const byProduct = new Map<string, number>()
     estimate.options
@@ -95,7 +95,7 @@ export function MaterialOrder() {
           adjusted: false,
         }
       })
-      .filter(Boolean) as MaterialLine[]
+      .filter(Boolean) as ProcurementLine[]
   }, [estimate])
 
   if (!opportunity) return <EmptyState title="Opportunity not found" className="h-full" />
@@ -148,7 +148,7 @@ export function MaterialOrder() {
 
         <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="font-display text-2xl text-primary">Purchase order</h1>
+            <h1 className="font-display text-2xl text-primary">Procurement order</h1>
             <p className="mt-0.5 text-base text-muted">
               {account?.name} · {opportunity.name}
             </p>
@@ -209,7 +209,7 @@ export function MaterialOrder() {
                     onClick={() => {
                       submit(order.id)
                       const job = jobs.find((j) => j.opportunityId === opportunity.id)
-                      if (job?.status === 'material_required') setJobStatus(opportunity.id, 'ready_to_start')
+                      if (job?.status === 'procurement_required') setJobStatus(opportunity.id, 'ready_to_start')
                     }}
                   >
                     <Send size={13} />
@@ -321,7 +321,7 @@ export function MaterialOrder() {
             <div className="flex items-center justify-between gap-3 border-t border-subtle bg-surface-inset px-4 py-2.5">
               <p className="flex items-center gap-1.5 text-sm text-muted">
                 <CheckCircle2 size={12} />
-                Fulfilment is handled by the purchasing team. The order is initiated here
+                Fulfilment is handled by the purchasing team. The procurement order is initiated here
                 so the project manager never leaves the job.
               </p>
               <span className="font-mono text-base font-semibold text-primary tabular">
@@ -339,3 +339,5 @@ export function MaterialOrder() {
     </div>
   )
 }
+
+export const MaterialOrder = ProcurementOrderPage
