@@ -1,9 +1,9 @@
 {
-  "name": "fcg-operations-platform-prototype",
+  "name": "service-operations-platform-prototype",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Clickable prototype of the Floor Coatings Group Operations Platform",
+  "description": "Configurable CRM-to-field-service operations platform prototype",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

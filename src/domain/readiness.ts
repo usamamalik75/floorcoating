@@ -1,4 +1,4 @@
-import type { JobStatus, StageId } from './types'
+import type { JobRole, JobStatus, StageId } from './types'
 import { formForCategory, requiredFields } from '@/data/siteVisitForms'
 import { CHECKLIST_BY_ID } from '@/data/checklists'
 import { estimateTotal } from '@/store/useStore'
@@ -21,7 +21,7 @@ export interface ReadinessInput {
   opportunity: {
     id: string
     category: string
-    sqft: number
+    estimatedQuantity: number
     stage: StageId
     pmId: string | null
     estimatorId: string | null
@@ -40,7 +40,7 @@ export interface ReadinessInput {
   }
   checklists: { templateId: string; done: string[] }[]
   materialOrder?: { status: string }
-  job?: { status?: JobStatus; crewLeaderId: string | null; start: string }
+  job?: { status?: JobStatus; crewLeaderId: string | null; start: string; team?: { userId: string; role: JobRole }[] }
   invoices: { kind: string; amount: number; payments: { amount: number }[] }[]
   changeOrders: { status: string }[]
 }
@@ -83,11 +83,11 @@ function siteVisitChecks(input: ReadinessInput): Check[] {
     {
       id: 'measure',
       label: 'Measurements recorded',
-      ok: input.opportunity.sqft > 0,
+      ok: input.opportunity.estimatedQuantity > 0,
       detail:
-        input.opportunity.sqft > 0
-          ? `${input.opportunity.sqft.toLocaleString()} sq ft`
-          : 'No area recorded',
+        input.opportunity.estimatedQuantity > 0
+          ? `${input.opportunity.estimatedQuantity.toLocaleString()} units`
+          : 'No quantity recorded',
       href: `/opportunities/${input.opportunity.id}/visit`,
     },
   ]
@@ -112,7 +112,7 @@ function approvalChecks(input: ReadinessInput): Check[] {
       id: 'margin',
       label: 'Pricing and margin validated',
       ok: Boolean(est && estimateTotal(est as never) > 0),
-      detail: est ? 'Contract value calculated from the price book' : 'No pricing',
+      detail: est ? 'Contract value calculated from the catalogue' : 'No pricing',
       href: `/estimate/${input.opportunity.id}`,
     },
     {
@@ -164,12 +164,12 @@ export function checksForJobStatus(status: JobStatus, input: ReadinessInput): Ch
       return [
         {
           id: 'mo',
-          label: 'Material order submitted to the franchisor',
+          label: 'Purchase order submitted',
           ok: Boolean(input.materialOrder && input.materialOrder.status !== 'draft'),
           detail: input.materialOrder
             ? `Order is ${input.materialOrder.status}`
-            : 'No material order created',
-          href: `/opportunities/${input.opportunity.id}/material`,
+            : 'No purchase order created',
+          href: `/opportunities/${input.opportunity.id}/purchasing`,
         },
       ]
 
@@ -185,16 +185,16 @@ export function checksForJobStatus(status: JobStatus, input: ReadinessInput): Ch
         },
         {
           id: 'material',
-          label: 'Material delivered',
+          label: 'Required resources delivered',
           ok: input.materialOrder?.status === 'delivered',
           detail: input.materialOrder ? `Order is ${input.materialOrder.status}` : 'Not ordered',
-          href: `/opportunities/${input.opportunity.id}/material`,
+          href: `/opportunities/${input.opportunity.id}/purchasing`,
         },
         {
           id: 'crew',
-          label: 'Crew leader assigned',
-          ok: Boolean(input.job?.crewLeaderId),
-          detail: input.job?.crewLeaderId ? 'Assigned' : 'No crew leader',
+          label: 'Field leadership assigned',
+          ok: Boolean(input.job?.team?.some((a) => a.role === 'crew_lead' || a.role === 'field_supervisor') || input.job?.crewLeaderId),
+          detail: input.job?.team?.some((a) => a.role === 'crew_lead' || a.role === 'field_supervisor') || input.job?.crewLeaderId ? 'Assigned' : 'No field lead',
           href: '/schedule',
         },
         {
@@ -214,7 +214,7 @@ export function checksForJobStatus(status: JobStatus, input: ReadinessInput): Ch
           ok: has(input, 'photo', 'before'),
           detail: has(input, 'photo', 'before')
             ? 'On file'
-            : 'The floor as found has not been photographed',
+            : 'The service area as found has not been photographed',
         },
       ]
 

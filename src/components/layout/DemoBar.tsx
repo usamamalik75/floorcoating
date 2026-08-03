@@ -7,7 +7,7 @@ import { ROLE_LABEL } from '@/domain/types'
 
 /**
  * Not a production control — this is the demo's most valuable affordance.
- * The same seeded dataset viewed as the franchisor, an owner, a rep and a
+ * The same seeded dataset viewed as the company administrator, an owner, a rep and a
  * crew leader is what makes the multi-tenant story land in a live meeting.
  */
 export function DemoBar() {
@@ -20,7 +20,7 @@ export function DemoBar() {
   const reset = useStore((s) => s.reset)
 
   const viewer = USERS.find((u) => u.id === viewerId)!
-  const isFranchisor = viewer.role === 'franchisor'
+  const isAdmin = viewer.role === 'admin'
 
   return (
     <div className="flex h-11 shrink-0 items-center gap-3 border-b border-subtle bg-surface-raised px-3">
@@ -48,21 +48,21 @@ export function DemoBar() {
 
       <label className="flex items-center gap-2">
         <span className="hidden text-2xs font-semibold tracking-[0.14em] text-muted uppercase lg:block">
-          Territory
+          Location
         </span>
         <select
-          aria-label="Territory"
+          aria-label="Location"
           value={locationFilter}
           onChange={(e) => setLocationFilter(e.target.value)}
-          disabled={!isFranchisor}
+          disabled={!isAdmin}
           title={
-            isFranchisor
-              ? 'The franchisor sees every territory'
-              : 'Franchise users are scoped to their own territory'
+            isAdmin
+              ? 'Administrators can see every location'
+              : 'Team members are scoped to their location'
           }
           className="h-7 rounded-md border border-strong bg-surface-raised px-2 text-base text-primary disabled:opacity-50"
         >
-          {isFranchisor && <option value="all">All territories</option>}
+          {isAdmin && <option value="all">All locationes</option>}
           {LOCATIONS.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name}

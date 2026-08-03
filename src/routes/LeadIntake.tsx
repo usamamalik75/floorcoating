@@ -62,9 +62,9 @@ export function LeadIntake() {
   const [state, setState] = useState('IL')
   const [category, setCategory] = useState<Category>('industrial')
   const [source, setSource] = useState<LeadSource>('National Website')
-  const [sqft, setSqft] = useState(7500)
+  const [estimatedQuantity, setEstimatedQuantity] = useState(7500)
   const [message, setMessage] = useState(
-    'We run a USDA food plant and our quarry tile is failing around the drains. Need a washdown-rated floor in the process area. Looking to do the work during a weekend shutdown.',
+    'We need preventive maintenance and several equipment repairs at our production facility. Work must happen during a weekend shutdown and requires safety coordination.',
   )
 
   const [created, setCreated] = useState<string | null>(null)
@@ -87,7 +87,7 @@ export function LeadIntake() {
       source,
       message,
       locationId: routed.id,
-      sqft,
+      estimatedQuantity,
     })
     setCreated(id)
   }
@@ -117,7 +117,7 @@ export function LeadIntake() {
             <div className="flex items-center gap-3 border-b border-subtle bg-surface-inset px-4 py-2.5">
               <Logo size={22} />
               <span className="text-base font-medium text-primary">
-                floorcoatingsgroup.com · Request a quote
+                yourcompany.com · Request service
               </span>
               <Badge tone="neutral" className="ml-auto" icon={<Globe size={9} />}>
                 Public form
@@ -146,8 +146,8 @@ export function LeadIntake() {
               <FieldRow label="Zip code" required hint="This is what decides the territory.">
                 <Input value={zip} onChange={(e) => setZip(e.target.value)} />
               </FieldRow>
-              <FieldRow label="Approximate area" hint="Square feet">
-                <Input type="number" value={sqft} onChange={(e) => setSqft(Number(e.target.value))} />
+              <FieldRow label="Estimated quantity" hint="Units, assets, hours, or another configured measure">
+                <Input type="number" value={estimatedQuantity} onChange={(e) => setEstimatedQuantity(Number(e.target.value))} />
               </FieldRow>
               <FieldRow label="Project type">
                 <Select value={category} onChange={(e) => setCategory(e.target.value as Category)}>
@@ -179,7 +179,7 @@ export function LeadIntake() {
               ) : (
                 <span className="flex items-center gap-1.5 text-base text-danger-text">
                   <XCircle size={13} />
-                  No territory covers zip {zip} — this becomes a franchisor-held lead.
+                  No location serves zip {zip} — this becomes an administrator-held lead.
                 </span>
               )}
               <Button
@@ -235,7 +235,7 @@ export function LeadIntake() {
               {[
                 { label: 'Unqualified Lead created', detail: 'Account and opportunity in one write.' },
                 { label: 'Category identified', detail: `${category} — decides the checklist and vocabulary.` },
-                { label: 'Territory resolved by zip', detail: routed ? routed.name : 'No coverage' },
+                { label: 'Location resolved by zip', detail: routed ? routed.name : 'No coverage' },
                 { label: 'Assigned to a representative', detail: 'Owner sees it as unassigned until then.' },
                 { label: 'Follow-up workflow starts', detail: 'First contact due within 24 hours.' },
               ].map((step, i, arr) => (
@@ -261,7 +261,7 @@ export function LeadIntake() {
           </Card>
 
           <Card>
-            <CardHeader title="Territory coverage" subtitle="Zip prefixes by location" icon={<Building2 size={14} />} />
+            <CardHeader title="Location coverage" subtitle="Zip prefixes by location" icon={<Building2 size={14} />} />
             <div className="p-1">
               {LOCATIONS.map((l) => (
                 <div
@@ -295,7 +295,7 @@ export function LeadIntake() {
                 'Phone calls logged by the office',
                 'Inbound email parsing',
                 'Referral submissions',
-                'Prospecting campaign responses',
+                'Partner and marketplace referrals',
                 'Manual entry by a rep',
               ].map((c) => (
                 <li key={c} className="flex items-center gap-2">

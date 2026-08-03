@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs'
 /* ==========================================================================
    The demo scenario, clicked rather than described.
    ==========================================================================
-   A food-production facility submits a request for a new industrial floor and
+   A food-production facility submits a request for a new industrial service area and
    the job is followed all the way to Paid and Closed. This runs the same path
    the client will click in the walkthrough, so a broken step is caught here
    rather than in the meeting.
@@ -39,7 +39,7 @@ await field('Contact name*').fill('Dale Munro')
 await field('Email*').fill('dmunro@cascadeprovisions.com')
 await field('Phone*').fill('(815) 555-0143')
 await field('Zip code*').fill('60431')
-await field('Approximate area').fill('7500')
+await field('Estimated quantity').fill('7500')
 await page.getByLabel(/^Project type/).selectOption('industrial')
 await mark('intake-filled')
 await page.getByRole('button', { name: 'Submit request' }).click()
@@ -60,12 +60,12 @@ await mark('record-summary')
 await go('/opportunities/op_midwest_plant3/visit')
 await mark('guided-form')
 
-/* -- 4. Estimating, with the AI takeoff on the table --------------------- */
+/* -- 4. Estimating, with the document-assisted scope extraction on the table --------------------- */
 await go('/estimate/op_midwest_plant3')
 await mark('estimate')
-await page.getByRole('button', { name: /Accept measurements/i }).click()
+await page.getByRole('button', { name: /Accept scope/i }).click()
 await page.waitForTimeout(400)
-await mark('takeoff-accepted')
+await mark('scope-extraction-accepted')
 
 /* -- 5. Internal approval before anything reaches the customer ----------- */
 await page.getByRole('button', { name: /Request approval/i }).click()
@@ -93,15 +93,15 @@ console.log('Scheduling, material, field')
 await go('/opportunities/op_midwest_plant3')
 await mark('awarded-record')
 
-await go('/opportunities/op_midwest_plant3/material')
+await go('/opportunities/op_midwest_plant3/purchasing')
 await page.getByRole('button', { name: /Create order/i }).click()
 await page.waitForTimeout(400)
-await page.getByRole('button', { name: /Submit to franchisor/i }).click()
+await page.getByRole('button', { name: /Submit to purchasing/i }).click()
 await page.waitForTimeout(400)
 await mark('material-submitted')
 
-await go('/fms/orders')
-await mark('fms-received')
+await go('/purchasing')
+await mark('purchasing-received')
 
 /* -- 8. The crew on site -------------------------------------------------- */
 await page.setViewportSize({ width: 430, height: 932 })

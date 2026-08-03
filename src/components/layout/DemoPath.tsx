@@ -40,9 +40,9 @@ const STEPS: { to: string; title: string; body: string }[] = [
     body: 'Crew leaders land in Field. Same components, larger touch targets.',
   },
   {
-    to: '/admin',
-    title: 'Franchisor lens',
-    body: 'Network overview, standards and Franchise Management stay in the second product group.',
+    to: '/settings',
+    title: 'Administrator lens',
+    body: 'Company-wide pipeline, standards, teams, and operating controls.',
   },
 ]
 

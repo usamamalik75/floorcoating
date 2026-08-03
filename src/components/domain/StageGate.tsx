@@ -15,7 +15,7 @@ import {
   UserPlus,
   XCircle,
 } from 'lucide-react'
-import type { Gate, Opportunity, StageId } from '@/domain/types'
+import type { CommunicationChannel, Gate, Opportunity, StageId } from '@/domain/types'
 import { ROLE_LABEL } from '@/domain/types'
 import { STAGE_BY_ID, stageLabel } from '@/domain/stages'
 import { templateForStage, CHECKLIST_BY_ID } from '@/data/checklists'
@@ -85,6 +85,7 @@ export function StageGate({
   const [satisfied, setSatisfied] = useState<Record<number, boolean>>({})
   const [reminderDate, setReminderDate] = useState('')
   const [reminderNote, setReminderNote] = useState('')
+  const [followUpChannel, setFollowUpChannel] = useState<CommunicationChannel>('email')
   const [reason, setReason] = useState('')
   const [expectedPeriod, setExpectedPeriod] = useState('')
   const [assignee, setAssignee] = useState('')
@@ -97,6 +98,7 @@ export function StageGate({
     setSatisfied({})
     setReminderDate('')
     setReminderNote('')
+    setFollowUpChannel('email')
     setReason('')
     setExpectedPeriod('')
     setAssignee('')
@@ -147,6 +149,7 @@ export function StageGate({
     moveStage(opportunity.id, targetStage, {
       reminderAt: reminderDate ? new Date(reminderDate).toISOString() : undefined,
       reminderNote,
+      followUpChannel,
       reminderReason: reason || undefined,
       expectedPeriod: expectedPeriod || undefined,
       assigneeId: assignee || undefined,
@@ -290,7 +293,7 @@ export function StageGate({
                       <div className="mt-2.5 space-y-1.5 rounded-sm border border-subtle bg-surface-base p-2.5">
                         <p className="mb-1.5 text-2xs font-semibold tracking-wider text-muted uppercase">
                           {checklistTemplate.name}
-                          {checklistTemplate.managedByFranchisor && ' · network standard'}
+                          {checklistTemplate.managedByCompany && ' · company standard'}
                         </p>
                         {checklistTemplate.items.map((item) => (
                           <Checkbox
@@ -368,6 +371,17 @@ export function StageGate({
                           onChange={(e) => setReminderNote(e.target.value)}
                           placeholder="What did the customer say? e.g. budget pushed to the 2028 capital cycle — re-engage mid-2027."
                         />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm text-muted">Create follow-up draft in</span>
+                          <Select
+                            value={followUpChannel}
+                            onChange={(e) => setFollowUpChannel(e.target.value as CommunicationChannel)}
+                            className="max-w-[10rem]"
+                          >
+                            <option value="email">Email</option>
+                            <option value="sms">SMS</option>
+                          </Select>
+                        </div>
                       </div>
                     )}
 

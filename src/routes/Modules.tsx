@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format, isToday, parseISO } from 'date-fns'
-import { FileText, MapPin, Package, Ruler } from 'lucide-react'
+import { FileText, MapPin, Ruler } from 'lucide-react'
 import { useStore, money, estimateTotal } from '@/store/useStore'
 import { useScopedOpportunities } from '@/store/selectors'
 import { ACCOUNT_BY_ID, LOCATION_BY_ID, USER_BY_ID } from '@/data/seed'
@@ -9,11 +9,11 @@ import { PRICE_BOOK } from '@/data/priceBook'
 import { CHECKLIST_TEMPLATES } from '@/data/checklists'
 import { PROPOSAL_TEMPLATES } from '@/data/priceBook'
 import { STAGE_BY_ID, stageLabel, JOB_STATUSES, jobStatusLabel } from '@/domain/stages'
-import { Accounts } from '@/routes/Admin'
+import { Customers as CustomerWorkspace } from '@/routes/Customers'
 import { Accounting } from '@/routes/Accounting'
-import { FmsOrders } from '@/routes/Fms'
 import {
   Badge,
+  Button,
   Card,
   EmptyState,
   SectionTitle,
@@ -59,8 +59,8 @@ export function SiteVisits() {
 
   return (
     <ModuleShell
-      title="Site Visits"
-      subtitle="Guided forms, measurements and photos — linked to the opportunity."
+      title="Assessments"
+      subtitle="Configurable forms, measurements, files, and photos linked to the opportunity."
       filters={[
         { id: 'all', label: 'All' },
         { id: 'today', label: 'Today' },
@@ -135,8 +135,8 @@ export function Estimates() {
 
   return (
     <ModuleShell
-      title="Estimates"
-      subtitle="Detailed pricing lives here. The sales pipeline only tracks Estimate In Progress / Ready."
+      title="Quotes"
+      subtitle="Versioned pricing and scope live here; the pipeline tracks progress and approval."
       filters={[
         { id: 'all', label: 'All' },
         { id: 'draft', label: 'Draft' },
@@ -276,32 +276,10 @@ export function Proposals() {
   )
 }
 
-export function Materials() {
-  return (
-    <div className="h-full overflow-y-auto scrollbar-thin">
-      <div className="mx-auto max-w-[80rem] px-5 py-5">
-        <header className="mb-4">
-          <h1 className="font-display text-2xl text-primary">Materials</h1>
-          <p className="mt-0.5 text-base text-muted">
-            Requirements raised from Jobs; fulfilment continues in Franchise Management.
-          </p>
-        </header>
-        <Card className="mb-4 p-3">
-          <p className="flex items-center gap-2 text-base text-secondary">
-            <Package size={14} />
-            Orders below are the same records as FMS Material Orders — one ecosystem, two products.
-          </p>
-        </Card>
-        <FmsOrders />
-      </div>
-    </div>
-  )
-}
-
 export function Customers() {
   return (
     <div className="h-full overflow-hidden">
-      <Accounts />
+      <CustomerWorkspace />
     </div>
   )
 }
@@ -408,11 +386,42 @@ export function Settings() {
         <header className="mb-5">
           <h1 className="font-display text-2xl text-primary">Settings</h1>
           <p className="mt-0.5 text-base text-muted">
-            Network standards — price book, proposal templates and checklists.
+            Workspace configuration — catalogue, document templates, workflows, and checklists.
           </p>
         </header>
 
-        <SectionTitle>Price book</SectionTitle>
+        <SectionTitle>Builder entry points</SectionTitle>
+        <div className="mb-5 grid gap-3 md:grid-cols-3">
+          <Card className="p-4">
+            <p className="text-base font-medium text-primary">Workspace and forms</p>
+            <p className="mt-1 text-sm text-muted">
+              Edit terminology, fields, and guided forms from the administrator builder.
+            </p>
+            <Link to="/admin">
+              <Button size="sm" className="mt-3">Open admin builder</Button>
+            </Link>
+          </Card>
+          <Card className="p-4">
+            <p className="text-base font-medium text-primary">Communications</p>
+            <p className="mt-1 text-sm text-muted">
+              Review customer threads, templates, and follow-up drafts in one inbox.
+            </p>
+            <Link to="/communications">
+              <Button size="sm" className="mt-3">Open communications</Button>
+            </Link>
+          </Card>
+          <Card className="p-4">
+            <p className="text-base font-medium text-primary">Hosted payments</p>
+            <p className="mt-1 text-sm text-muted">
+              Payment links are issued from Finance and displayed back on the opportunity.
+            </p>
+            <Link to="/finance">
+              <Button size="sm" className="mt-3">Open finance</Button>
+            </Link>
+          </Card>
+        </div>
+
+        <SectionTitle>Product and service catalogue</SectionTitle>
         <Card className="mb-5 overflow-hidden">
           <Table>
             <thead>
@@ -456,7 +465,7 @@ export function Settings() {
             <Card key={c.id} className="p-3">
               <p className="font-medium text-primary">{c.name}</p>
               <p className="mt-1 text-sm text-muted">
-                {c.items.length} items · {c.managedByFranchisor ? 'Franchisor managed' : 'Location editable'}
+                {c.items.length} items · {c.managedByCompany ? 'Company managed' : 'Location editable'}
               </p>
             </Card>
           ))}

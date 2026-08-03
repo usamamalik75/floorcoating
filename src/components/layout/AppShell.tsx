@@ -1,12 +1,10 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
-  Boxes,
+  BookOpen,
   Building2,
   CalendarDays,
   ClipboardList,
-  Factory,
-  FileSpreadsheet,
   FileText,
   HardHat,
   KanbanSquare,
@@ -15,9 +13,10 @@ import {
   Palette,
   Receipt,
   Ruler,
-  Search,
   Settings2,
+  ShoppingCart,
   BarChart3,
+  MessagesSquare,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/cn'
@@ -34,31 +33,25 @@ interface NavItem {
   roles?: Role[]
 }
 
-const OFFICE: Role[] = ['franchisor', 'owner', 'sales', 'estimator', 'pm', 'accounting']
+const OFFICE: Role[] = ['admin', 'owner', 'sales', 'estimator', 'pm', 'accounting']
 
 /** Modules = types of work. Pipeline stages are not menu items. */
 const OPERATIONS: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/sales', label: 'Sales', icon: KanbanSquare, roles: OFFICE },
-  { to: '/site-visits', label: 'Site Visits', icon: MapPin, roles: [...OFFICE, 'crew_leader'] },
-  { to: '/estimates', label: 'Estimates', icon: Ruler, roles: ['franchisor', 'owner', 'sales', 'estimator', 'pm'] },
-  { to: '/proposals', label: 'Proposals', icon: FileText, roles: ['franchisor', 'owner', 'sales', 'estimator'] },
-  { to: '/jobs', label: 'Jobs', icon: ClipboardList, roles: ['franchisor', 'owner', 'pm', 'estimator', 'crew_leader', 'accounting'] },
+  { to: '/site-visits', label: 'Assessments', icon: MapPin, roles: [...OFFICE, 'crew_leader'] },
+  { to: '/estimates', label: 'Quotes', icon: Ruler, roles: ['admin', 'owner', 'sales', 'estimator', 'pm'] },
+  { to: '/proposals', label: 'Proposals', icon: FileText, roles: ['admin', 'owner', 'sales', 'estimator'] },
+  { to: '/jobs', label: 'Jobs', icon: ClipboardList, roles: ['admin', 'owner', 'pm', 'estimator', 'crew_leader', 'accounting'] },
   { to: '/schedule', label: 'Schedule', icon: CalendarDays, roles: [...OFFICE, 'crew_leader'] },
-  { to: '/materials', label: 'Materials', icon: Boxes, roles: [...OFFICE, 'crew_leader'] },
+  { to: '/catalog', label: 'Products & Services', icon: BookOpen, roles: OFFICE },
+  { to: '/purchasing', label: 'Purchasing', icon: ShoppingCart, roles: ['admin', 'owner', 'pm', 'accounting'] },
   { to: '/customers', label: 'Customers', icon: Building2, roles: OFFICE },
-  { to: '/finance', label: 'Finance', icon: Receipt, roles: ['franchisor', 'owner', 'accounting', 'pm'] },
-  { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['franchisor', 'owner'] },
-  { to: '/settings', label: 'Settings', icon: Settings2, roles: ['franchisor', 'owner'] },
+  { to: '/finance', label: 'Finance', icon: Receipt, roles: ['admin', 'owner', 'accounting', 'pm'] },
+  { to: '/communications', label: 'Communications', icon: MessagesSquare, roles: OFFICE },
+  { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['admin', 'owner'] },
+  { to: '/settings', label: 'Settings', icon: Settings2, roles: ['admin', 'owner'] },
   { to: '/field', label: 'Field', icon: HardHat },
-  { to: '/prospecting', label: 'Prospecting', icon: Search, roles: ['franchisor', 'owner', 'sales'] },
-]
-
-const FRANCHISE: NavItem[] = [
-  { to: '/admin', label: 'Network Overview', icon: Settings2, roles: ['franchisor'] },
-  { to: '/fms/catalogue', label: 'Product Catalogue', icon: FileSpreadsheet },
-  { to: '/fms/orders', label: 'Material Orders', icon: Boxes, roles: [...OFFICE, 'crew_leader'] },
-  { to: '/fms/locations', label: 'Locations & Agreements', icon: Factory, roles: ['franchisor'] },
 ]
 
 export function AppShell() {
@@ -77,13 +70,13 @@ export function AppShell() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <aside className="hidden w-56 shrink-0 flex-col overflow-y-auto bg-surface-chrome text-white md:flex scrollbar-thin">
+      <aside className="hidden w-56 shrink-0 flex-col overflow-y-auto bg-surface-glass-chrome backdrop-blur-xl border-r border-glass-border shadow-2xl text-white md:flex scrollbar-thin z-10 transition-colors duration-(--duration-slow)">
         <div className="px-3 py-4">
           <Logo size={40} variant="white" />
         </div>
 
-        <NavGroup title="Operations Platform" items={visible(OPERATIONS)} pathname={pathname} />
-        <NavGroup title="Franchise Management" items={visible(FRANCHISE)} pathname={pathname} />
+        <NavGroup title="Customer Operations" items={visible(OPERATIONS)} pathname={pathname} />
+        
 
         <div className="mt-auto border-t border-white/10 px-2 py-2">
           <NavGroup items={[{ to: '/styleguide', label: 'Design System', icon: Palette }]} pathname={pathname} />
@@ -116,13 +109,13 @@ function NavGroup({
 }) {
   if (items.length === 0) return null
   return (
-    <div className="mb-2">
+    <div className="mb-4">
       {title && (
-        <p className="px-4 pt-2 pb-1.5 text-2xs font-semibold tracking-[0.14em] text-white/35 uppercase">
+        <p className="px-4 pt-2 pb-2 text-xs font-semibold tracking-widest text-white/40 uppercase">
           {title}
         </p>
       )}
-      <nav className="flex flex-col gap-0.5 px-2">
+      <nav className="flex flex-col gap-1 px-2">
         {items.map(({ to, label, icon: Icon }) => {
           const active = to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(to + '/')
           return (
@@ -130,12 +123,14 @@ function NavGroup({
               key={to}
               to={to}
               className={cn(
-                'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-base font-medium',
-                'transition-colors duration-(--duration-fast)',
-                active ? 'bg-white/12 text-white' : 'text-white/60 hover:bg-white/6 hover:text-white/90',
+                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium',
+                'transition-all duration-(--duration-base) ease-out will-change-transform',
+                active 
+                  ? 'bg-white/15 text-white shadow-glow-primary' 
+                  : 'text-white/60 hover:bg-white/10 hover:text-white hover:scale-[1.02]',
               )}
             >
-              <Icon size={15} className="shrink-0" />
+              <Icon size={16} className={cn('shrink-0 transition-transform duration-(--duration-base)', active ? 'text-burgundy-300' : 'text-white/50')} />
               {label}
             </NavLink>
           )

@@ -22,22 +22,17 @@ async function shot(name, path, w = 1600, h = 950) {
 await shot('01-dashboard', '/')
 await shot('02-sales', '/sales')
 await shot('03-jobs', '/jobs')
-await shot('04-prospecting', '/prospecting')
 await shot('05-intake', '/intake')
 await shot('06-record', `/opportunities/${HERO}`)
 await shot('07-estimate', `/estimate/${HERO}`)
-await shot('08-material', `/opportunities/${HERO}/material`)
+await shot('08-purchasing', `/opportunities/${HERO}/purchasing`)
 await shot('09-site-visits', '/site-visits')
 await shot('09b-estimates', '/estimates')
 await shot('09c-proposals', '/proposals')
 await shot('10-schedule', '/schedule')
 await shot('11-finance', '/finance')
-await shot('12-admin', '/admin', 1600, 1150)
 
-/* -- Desktop: the franchise management system --------------------------- */
-await shot('13-fms-catalogue', '/fms/catalogue', 1600, 1050)
-await shot('14-fms-orders', '/fms/orders')
-await shot('15-fms-locations', '/fms/locations')
+/* -- Desktop: purchasing and fulfilment --------------------------------- */
 
 /* -- External customer experience --------------------------------------- */
 await shot('16-customer-proposal', '/proposal/qd7w1z', 1200, 1250)

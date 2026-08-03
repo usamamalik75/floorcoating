@@ -35,12 +35,12 @@ import { cn } from '@/lib/cn'
    ==========================================================================
    The client's calculation, made explicit:
 
-     selected system + square footage + cove + coats + waste allowance
+     sold catalogue items + configured resource rates + contingency allowance
        → an orderable quantity
 
    The project manager never starts from a blank page, but every line stays
-   editable because the floor always has a surprise in it. Submitting hands
-   the order to the Franchise Management System, which is where fulfilment
+   editable because site conditions and actual usage can change. Submitting hands
+   the order to the purchasing queue, where fulfilment
    lives — the two products overlap exactly here.
    ========================================================================== */
 
@@ -48,7 +48,7 @@ const FLOW: MO['status'][] = ['draft', 'submitted', 'approved', 'shipped', 'deli
 
 const STATUS_LABEL: Record<MO['status'], string> = {
   draft: 'Draft',
-  submitted: 'Submitted to franchisor',
+  submitted: 'Submitted to purchasing',
   approved: 'Approved',
   shipped: 'Shipped',
   delivered: 'Delivered',
@@ -70,14 +70,14 @@ export function MaterialOrder() {
   const [neededBy, setNeededBy] = useState(iso(7).slice(0, 10))
 
   /**
-   * Everything sold on the estimate, collapsed to one quantity per system,
-   * then run through the coverage / coats / waste calculation.
+   * Everything sold on the estimate, collapsed to one quantity per catalogue item,
+   * then run through the resource-rate and contingency calculation.
    */
   const derived = useMemo<MaterialLine[]>(() => {
     if (!estimate) return []
     const byProduct = new Map<string, number>()
     estimate.options
-      .filter((o) => o.kind === 'area' || o.selectedByCustomer || o.recommended)
+      .filter((o) => o.kind === 'scope' || o.selectedByCustomer || o.recommended)
       .flatMap((o) => o.lineItems)
       .forEach((li) => byProduct.set(li.priceBookId, (byProduct.get(li.priceBookId) ?? 0) + li.qty))
 
@@ -112,7 +112,7 @@ export function MaterialOrder() {
       status: 'draft',
       submittedAt: null,
       neededBy: new Date(neededBy).toISOString(),
-      fmsOrderId: null,
+      purchaseOrderId: null,
       trackingRef: null,
     })
   }
@@ -148,17 +148,17 @@ export function MaterialOrder() {
 
         <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="font-display text-2xl text-primary">Material order</h1>
+            <h1 className="font-display text-2xl text-primary">Purchase order</h1>
             <p className="mt-0.5 text-base text-muted">
               {account?.name} · {opportunity.name}
             </p>
           </div>
           {order && (
             <div className="flex items-center gap-2">
-              {order.fmsOrderId && (
-                <Link to="/fms/orders">
+              {order.purchaseOrderId && (
+                <Link to="/purchasing">
                   <Badge tone="info" icon={<Boxes size={9} />}>
-                    {order.fmsOrderId}
+                    {order.purchaseOrderId}
                   </Badge>
                 </Link>
               )}
@@ -213,7 +213,7 @@ export function MaterialOrder() {
                     }}
                   >
                     <Send size={13} />
-                    Submit to franchisor
+                    Submit to purchasing
                   </Button>
                 )}
                 {order.status !== 'draft' && order.status !== 'delivered' && (
@@ -232,14 +232,14 @@ export function MaterialOrder() {
             <EmptyState
               icon={<Package size={28} />}
               title="Nothing to order yet"
-              description="Material quantities are derived from the sold estimate. Build the estimate first and this list will fill itself in."
+              description="Orderable resources are derived from the sold quote. Configure resources in the catalogue and this list will fill itself in."
             />
           </Card>
         ) : (
           <Card className="overflow-hidden">
             <CardHeader
-              title="Derived material requirement"
-              subtitle="Calculated from the sold system, area, coats and waste allowance"
+              title="Resources to procure"
+              subtitle="Calculated from sold catalogue items and configured resource rules"
               icon={<Calculator size={14} />}
               actions={
                 !order && (
@@ -321,7 +321,7 @@ export function MaterialOrder() {
             <div className="flex items-center justify-between gap-3 border-t border-subtle bg-surface-inset px-4 py-2.5">
               <p className="flex items-center gap-1.5 text-sm text-muted">
                 <CheckCircle2 size={12} />
-                Fulfilment is handled in the Franchise Management System. The order is initiated here
+                Fulfilment is handled by the purchasing team. The order is initiated here
                 so the project manager never leaves the job.
               </p>
               <span className="font-mono text-base font-semibold text-primary tabular">

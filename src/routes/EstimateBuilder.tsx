@@ -18,7 +18,6 @@ import {
   XCircle,
 } from 'lucide-react'
 import type { Estimate, EstimateOption, LineItem } from '@/domain/types'
-import { PRICE_BOOK, PRICE_BOOK_BY_ID, PROPOSAL_TEMPLATES, TEMPLATE_BY_ID } from '@/data/priceBook'
 import { ACCOUNT_BY_ID, USER_BY_ID } from '@/data/seed'
 import { estimateTotal, money, optionTotal, useStore } from '@/store/useStore'
 import { useChecks, useViewer } from '@/store/selectors'
@@ -44,11 +43,11 @@ const uid = (p: string) => `${p}_${Date.now()}_${++n}`
    Estimate builder
    ==========================================================================
    Replaces the split between a Google Sheet and Housecall Pro. Selecting a
-   floor system pulls its description, unit, price, spec sheet, material
+   catalogue item pulls its description, unit, price, spec sheet, material
    requirement, install checklist, load list and exclusions in one action.
 
    Supports both shapes the client needs at once: multiple AREAS within a
-   facility (which add up), and multiple ALTERNATIVES for the same area
+   facility (which add up), and multiple ALTERNATIVES for the same scope
    (where the customer picks one, so only the chosen one counts).
    ========================================================================== */
 
@@ -57,36 +56,51 @@ export function EstimateBuilder() {
   const viewer = useViewer()
   const opportunities = useStore((s) => s.opportunities)
   const estimates = useStore((s) => s.estimates)
-  const takeoffs = useStore((s) => s.takeoffs)
+  const scopeExtractions = useStore((s) => s.scopeExtractions)
+  const priceBookItems = useStore((s) => s.priceBookItems)
+  const proposalTemplates = useStore((s) => s.proposalTemplates)
   const upsertEstimate = useStore((s) => s.upsertEstimate)
   const updateEstimate = useStore((s) => s.updateEstimate)
   const approveEstimate = useStore((s) => s.approveEstimate)
   const rejectEstimate = useStore((s) => s.rejectEstimate)
   const moveStage = useStore((s) => s.moveStage)
+  const sendMessage = useStore((s) => s.sendMessage)
 
   const [pickerFor, setPickerFor] = useState<string | null>(null)
   const [preview, setPreview] = useState(false)
   const [rejecting, setRejecting] = useState(false)
   const [rejectNote, setRejectNote] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sendChannel, setSendChannel] = useState<'email' | 'sms'>('email')
+  const [sendSubject, setSendSubject] = useState('Your proposal is ready')
+  const [sendBody, setSendBody] = useState('')
 
   const opp = opportunities.find((o) => o.id === id)
   const est = estimates.find((e) => e.opportunityId === id)
-  const takeoff = takeoffs.find((t) => t.opportunityId === id)
+  const scopeExtraction = scopeExtractions.find((t) => t.opportunityId === id)
   const account = opp ? ACCOUNT_BY_ID[opp.accountId] : undefined
   const checks = useChecks(id, 'estimate_ready')
+  const priceBookById = useMemo(
+    () => Object.fromEntries(priceBookItems.map((item) => [item.id, item])) as Record<string, typeof priceBookItems[number]>,
+    [priceBookItems],
+  )
+  const templateById = useMemo(
+    () => Object.fromEntries(proposalTemplates.map((template) => [template.id, template])) as Record<string, typeof proposalTemplates[number]>,
+    [proposalTemplates],
+  )
 
   const grand = useMemo(() => (est ? estimateTotal(est) : 0), [est])
 
   if (!opp) return <EmptyState title="Opportunity not found" className="h-full" />
 
-  const canApprove = viewer?.role === 'estimator' || viewer?.role === 'owner' || viewer?.role === 'franchisor'
+  const canApprove = viewer?.role === 'estimator' || viewer?.role === 'owner' || viewer?.role === 'admin'
   const readyForApproval = checks.every((c) => c.ok)
 
   const createEstimate = () =>
     upsertEstimate({
       id: uid('est'),
       opportunityId: opp.id,
-      options: [{ id: uid('eo'), label: 'Area 1', kind: 'area', recommended: true, lineItems: [] }],
+      options: [{ id: uid('eo'), label: 'Scope 1', kind: 'scope', recommended: true, lineItems: [] }],
       templateId: opp.category === 'residential' ? 'pt_residential' : 'pt_standard',
       internalNotes: '',
       status: 'draft',
@@ -110,8 +124,8 @@ export function EstimateBuilder() {
       {
         id: uid('eo'),
         label:
-          kind === 'area'
-            ? `Area ${est.options.filter((o) => o.kind === 'area').length + 1}`
+          kind === 'scope'
+            ? `Scope ${est.options.filter((o) => o.kind === 'scope').length + 1}`
             : `Alternative ${est.options.filter((o) => o.kind === 'alternative').length + 1}`,
         kind,
         recommended: false,
@@ -122,14 +136,14 @@ export function EstimateBuilder() {
 
   const addLine = (optionId: string, priceBookId: string) => {
     if (!est) return
-    const pb = PRICE_BOOK_BY_ID[priceBookId]
+    const pb = priceBookById[priceBookId]
     if (!pb) return
     const line: LineItem = {
       id: uid('li'),
       priceBookId: pb.id,
       name: pb.name,
       description: pb.description,
-      qty: pb.unit === 'ea' ? 1 : pb.unit === 'lin ft' ? opp.coveLf || 0 : opp.sqft,
+      qty: ['visit', 'unit', 'day', 'each'].includes(pb.unit) ? 1 : pb.id === 'svc_access_equipment' ? opp.secondaryQuantity || 1 : opp.estimatedQuantity,
       unit: pb.unit,
       unitPrice: pb.unitPrice,
     }
@@ -157,10 +171,10 @@ export function EstimateBuilder() {
     )
   }
 
-  /** Every distinct system on the estimate, for the auto-populated panels. */
-  const selectedSystems = est
+  /** Every distinct catalogue item on the quote, for the auto-populated panels. */
+  const selectedCatalogueItems = est
     ? [...new Set(est.options.flatMap((o) => o.lineItems.map((l) => l.priceBookId)))]
-        .map((pid) => PRICE_BOOK_BY_ID[pid])
+        .map((pid) => priceBookById[pid])
         .filter(Boolean)
     : []
 
@@ -174,8 +188,8 @@ export function EstimateBuilder() {
           <h1 className="truncate font-display text-lg leading-tight text-primary">{opp.name}</h1>
           <p className="text-sm text-muted">
             {account?.name} · <span className="font-mono">{opp.code}</span> ·{' '}
-            {opp.sqft.toLocaleString()} sq ft
-            {opp.coveLf > 0 && ` · ${opp.coveLf} lin ft cove`}
+            {opp.estimatedQuantity.toLocaleString()} units
+            {opp.secondaryQuantity > 0 && ` · ${opp.secondaryQuantity} additional units`}
           </p>
         </div>
 
@@ -226,8 +240,12 @@ export function EstimateBuilder() {
               <Button
                 variant="primary"
                 onClick={() => {
-                  patch({ status: 'sent', sentAt: new Date().toISOString() })
-                  moveStage(opp.id, 'proposal_sent')
+                  setSendChannel('email')
+                  setSendSubject('Your proposal is ready')
+                  setSendBody(
+                    `Hi ${account?.contactName ?? 'there'},\n\nYour proposal is ready to review. You can open the secure link, compare options, and sign electronically when you are ready.\n\nThanks,\n${viewer?.name ?? 'Your service team'}`,
+                  )
+                  setSending(true)
                 }}
               >
                 <Send size={13} />
@@ -254,7 +272,7 @@ export function EstimateBuilder() {
               <EmptyState
                 icon={<Layers size={28} />}
                 title="No estimate yet"
-                description="Start one and the price book will populate the description, unit, price, spec sheet, material requirement and load list for every FCG floor system."
+                description="Start one and the catalogue will populate the description, unit, price, service document, resource requirement, and job checklist."
                 action={
                   <Button variant="primary" onClick={createEstimate}>
                     <Plus size={13} />
@@ -282,34 +300,34 @@ export function EstimateBuilder() {
                 </Card>
               )}
 
-              {takeoff && <TakeoffPanel takeoffId={takeoff.id} onApplyArea={(label, sqft, coveLf) => {
+              {scopeExtraction && <ScopeExtractionPanel scopeExtractionId={scopeExtraction.id} onApplyScope={(label, estimatedQuantity, secondaryQuantity) => {
                 setOptions([
                   ...est.options,
                   {
                     id: uid('eo'),
                     label,
-                    kind: 'area',
+                    kind: 'scope',
                     recommended: true,
                     lineItems: [
                       {
                         id: uid('li'),
-                        priceBookId: takeoff.recommendedSystemId,
-                        name: PRICE_BOOK_BY_ID[takeoff.recommendedSystemId].name,
-                        description: PRICE_BOOK_BY_ID[takeoff.recommendedSystemId].description,
-                        qty: sqft,
-                        unit: PRICE_BOOK_BY_ID[takeoff.recommendedSystemId].unit,
-                        unitPrice: PRICE_BOOK_BY_ID[takeoff.recommendedSystemId].unitPrice,
+                        priceBookId: scopeExtraction.recommendedCatalogItemId,
+                        name: priceBookById[scopeExtraction.recommendedCatalogItemId].name,
+                        description: priceBookById[scopeExtraction.recommendedCatalogItemId].description,
+                        qty: estimatedQuantity,
+                        unit: priceBookById[scopeExtraction.recommendedCatalogItemId].unit,
+                        unitPrice: priceBookById[scopeExtraction.recommendedCatalogItemId].unitPrice,
                       },
-                      ...(coveLf > 0
+                      ...(secondaryQuantity > 0
                         ? [
                             {
                               id: uid('li'),
-                              priceBookId: 'pb_cove_base',
-                              name: PRICE_BOOK_BY_ID.pb_cove_base.name,
-                              description: PRICE_BOOK_BY_ID.pb_cove_base.description,
-                              qty: coveLf,
-                              unit: PRICE_BOOK_BY_ID.pb_cove_base.unit,
-                              unitPrice: PRICE_BOOK_BY_ID.pb_cove_base.unitPrice,
+                              priceBookId: 'svc_access_equipment',
+                              name: priceBookById.svc_access_equipment.name,
+                              description: priceBookById.svc_access_equipment.description,
+                              qty: secondaryQuantity,
+                              unit: priceBookById.svc_access_equipment.unit,
+                              unitPrice: priceBookById.svc_access_equipment.unitPrice,
                             },
                           ]
                         : []),
@@ -366,14 +384,14 @@ export function EstimateBuilder() {
                       />
                     }
                     subtitle={
-                      opt.kind === 'area'
-                        ? 'A distinct area of the facility — adds to the contract total'
+                      opt.kind === 'scope'
+                        ? 'A distinct section of work — adds to the contract total'
                         : 'A price or quality alternative — the customer picks one, so it does not add to the total'
                     }
                     actions={
                       <>
-                        <Badge tone={opt.kind === 'area' ? 'info' : 'attention'}>
-                          {opt.kind === 'area' ? 'Area' : 'Alternative'}
+                        <Badge tone={opt.kind === 'scope' ? 'info' : 'attention'}>
+                          {opt.kind === 'scope' ? 'Scope' : 'Alternative'}
                         </Badge>
                         <Button
                           size="sm"
@@ -465,9 +483,9 @@ export function EstimateBuilder() {
               ))}
 
               <div className="flex flex-wrap gap-2">
-                <Button onClick={() => addOption('area')}>
+                <Button onClick={() => addOption('scope')}>
                   <Plus size={13} />
-                  Add another area
+                  Add scope section
                 </Button>
                 <Button onClick={() => addOption('alternative')}>
                   <Plus size={13} />
@@ -476,26 +494,26 @@ export function EstimateBuilder() {
               </div>
 
               {/* ---- What the price book brought with it ---- */}
-              {selectedSystems.length > 0 && (
+              {selectedCatalogueItems.length > 0 && (
                 <>
                   <SectionTitle className="mt-5">
                     Automatically attached by the price book
                   </SectionTitle>
                   <div className="grid gap-3 lg:grid-cols-2">
                     <Card>
-                      <CardHeader title="Product specifications" icon={<FileText size={14} />} />
+                      <CardHeader title="Service documentation" icon={<FileText size={14} />} />
                       <ul className="space-y-1.5 p-4">
-                        {selectedSystems.map((pb) => (
+                        {selectedCatalogueItems.map((pb) => (
                           <li key={pb.id} className="flex items-start gap-2 text-sm">
                             <span
                               className="mt-1 h-2.5 w-2.5 shrink-0 rounded-xs"
                               style={{ background: pb.swatch }}
                             />
                             <span>
-                              <span className="text-primary">{pb.specSheet}</span>
+                              <span className="text-primary">{pb.serviceDocument}</span>
                               <span className="block text-muted">
-                                {pb.coats} coat{pb.coats === 1 ? '' : 's'} · {pb.coveragePerUnit}{' '}
-                                {pb.materialUnit}/{pb.unit} · {Math.round(pb.wasteAllowance * 100)}% waste
+                                {pb.resourceMultiplier} resource factor{pb.resourceMultiplier === 1 ? '' : 's'} · {pb.materialRate}{' '}
+                                {pb.materialUnit}/{pb.unit} · {Math.round(pb.contingencyAllowance * 100)}% waste
                                 allowance
                               </span>
                             </span>
@@ -505,9 +523,9 @@ export function EstimateBuilder() {
                     </Card>
 
                     <Card>
-                      <CardHeader title="Trailer load list" icon={<Truck size={14} />} />
+                      <CardHeader title="Required resources" icon={<Truck size={14} />} />
                       <ul className="grid grid-cols-2 gap-x-3 gap-y-1 p-4 text-sm text-secondary">
-                        {[...new Set(selectedSystems.flatMap((pb) => pb.loadList))].map((item) => (
+                        {[...new Set(selectedCatalogueItems.flatMap((pb) => pb.requiredResources))].map((item) => (
                           <li key={item} className="flex items-center gap-1.5">
                             <span className="h-1 w-1 shrink-0 rounded-full bg-(--color-steel-400)" />
                             {item}
@@ -519,7 +537,7 @@ export function EstimateBuilder() {
                     <Card>
                       <CardHeader title="Exclusions carried onto the proposal" icon={<XCircle size={14} />} />
                       <ul className="space-y-1 p-4 text-sm text-secondary">
-                        {[...new Set(selectedSystems.flatMap((pb) => pb.exclusions))].map((e) => (
+                        {[...new Set(selectedCatalogueItems.flatMap((pb) => pb.exclusions))].map((e) => (
                           <li key={e} className="flex items-start gap-1.5">
                             <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-(--color-steel-400)" />
                             {e}
@@ -529,14 +547,14 @@ export function EstimateBuilder() {
                     </Card>
 
                     <Card>
-                      <CardHeader title="Estimated material requirement" icon={<Package size={14} />} />
+                      <CardHeader title="Estimated resource requirement" icon={<Package size={14} />} />
                       <ul className="space-y-1 p-4 text-sm">
-                        {selectedSystems
-                          .filter((pb) => pb.coveragePerUnit > 0)
+                        {selectedCatalogueItems
+                          .filter((pb) => pb.materialRate > 0)
                           .map((pb) => {
-                            const qty = pb.unit === 'lin ft' ? opp.coveLf : opp.sqft
+                            const qty = ['visit', 'unit', 'day', 'each'].includes(pb.unit) ? 1 : pb.id === 'svc_access_equipment' ? opp.secondaryQuantity || 1 : opp.estimatedQuantity
                             const total = Math.ceil(
-                              qty * pb.coveragePerUnit * Math.max(1, pb.coats) * (1 + pb.wasteAllowance),
+                              qty * pb.materialRate * Math.max(1, pb.resourceMultiplier) * (1 + pb.contingencyAllowance),
                             )
                             return (
                               <li key={pb.id} className="flex items-center justify-between gap-2">
@@ -549,7 +567,7 @@ export function EstimateBuilder() {
                           })}
                       </ul>
                       <p className="border-t border-subtle px-4 py-2 text-2xs text-muted">
-                        Becomes the material order once the job is sold and scheduled.
+                        Becomes a purchasing requirement once the job is sold and scheduled.
                       </p>
                     </Card>
                   </div>
@@ -564,22 +582,22 @@ export function EstimateBuilder() {
                     Proposal template
                   </label>
                   <Select value={est.templateId} onChange={(e) => patch({ templateId: e.target.value })}>
-                    {PROPOSAL_TEMPLATES.map((t) => (
+                    {proposalTemplates.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.name}
-                        {t.managedByFranchisor ? ' (network standard)' : ''}
+                        {t.managedByCompany ? ' (company standard)' : ''}
                       </option>
                     ))}
                   </Select>
                   <p className="mt-2 text-sm text-muted">
-                    {TEMPLATE_BY_ID[est.templateId]?.depositPct}% deposit · valid{' '}
-                    {TEMPLATE_BY_ID[est.templateId]?.validDays} days
+                    {templateById[est.templateId]?.depositPct}% deposit · valid{' '}
+                    {templateById[est.templateId]?.validDays} days
                   </p>
                 </Card>
 
                 <Card className="p-4">
                   <label className="mb-1 block text-xs font-medium tracking-wide text-secondary uppercase">
-                    Internal notes and installation requirements
+                    Internal notes and job requirements
                   </label>
                   <Textarea
                     rows={3}
@@ -604,10 +622,10 @@ export function EstimateBuilder() {
         size="lg"
         icon={<Layers size={17} />}
         title="Price book"
-        subtitle="Selecting a system brings its description, pricing, spec sheet, material requirement, install checklist, load list and exclusions with it."
+        subtitle="Selecting a catalogue item brings its description, pricing, service document, resource requirement, job checklist, required resources and exclusions with it."
       >
         <div className="space-y-1.5">
-          {PRICE_BOOK.filter((pb) => pb.categories.includes(opp.category)).map((pb) => (
+          {priceBookItems.filter((pb) => pb.categories.includes(opp.category)).map((pb) => (
             <button
               key={pb.id}
               onClick={() => pickerFor && addLine(pickerFor, pb.id)}
@@ -620,9 +638,9 @@ export function EstimateBuilder() {
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
                   <span className="text-base font-medium text-primary">{pb.name}</span>
-                  {pb.managedByFranchisor && (
+                  {pb.managedByCompany && (
                     <Badge tone="neutral" className="shrink-0">
-                      Network standard
+                      Company standard
                     </Badge>
                   )}
                 </span>
@@ -659,6 +677,88 @@ export function EstimateBuilder() {
         }
       >
         {est && <ProposalDocument estimate={est} opportunity={opp} />}
+      </Modal>
+
+      {/* ---- Send to customer ---- */}
+      <Modal
+        open={sending}
+        onClose={() => setSending(false)}
+        icon={<Send size={17} />}
+        title="Send proposal to customer"
+        subtitle="Preview the delivery channel, message, and customer timeline before the proposal moves out."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setSending(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!est || !sendBody.trim()) return
+                sendMessage(opp.id, {
+                  channel: sendChannel,
+                  subject: sendChannel === 'email' ? sendSubject : undefined,
+                  body: sendBody,
+                  contactName: account?.contactName ?? 'Customer',
+                  contactEmail: account?.email,
+                  contactPhone: account?.phone,
+                  status: 'draft',
+                })
+              }}
+            >
+              Save draft
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!sendBody.trim()}
+              onClick={() => {
+                if (!est) return
+                sendMessage(opp.id, {
+                  channel: sendChannel,
+                  subject: sendChannel === 'email' ? sendSubject : undefined,
+                  body: sendBody,
+                  contactName: account?.contactName ?? 'Customer',
+                  contactEmail: account?.email,
+                  contactPhone: account?.phone,
+                  status: 'sent',
+                })
+                patch({ status: 'sent', sentAt: new Date().toISOString() })
+                moveStage(opp.id, 'proposal_sent')
+                setSending(false)
+              }}
+            >
+              Send proposal
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2 rounded-md border border-subtle bg-surface-inset px-3 py-2.5 text-sm text-muted">
+            Customer link: <span className="font-mono text-primary">/proposal/{est?.token}</span>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium tracking-wide text-secondary uppercase">
+              Delivery channel
+            </label>
+            <Select value={sendChannel} onChange={(e) => setSendChannel(e.target.value as 'email' | 'sms')}>
+              <option value="email">Email</option>
+              <option value="sms">SMS</option>
+            </Select>
+          </div>
+          {sendChannel === 'email' && (
+            <div>
+              <label className="mb-1 block text-xs font-medium tracking-wide text-secondary uppercase">
+                Subject
+              </label>
+              <Input value={sendSubject} onChange={(e) => setSendSubject(e.target.value)} />
+            </div>
+          )}
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs font-medium tracking-wide text-secondary uppercase">
+              Message
+            </label>
+            <Textarea rows={6} value={sendBody} onChange={(e) => setSendBody(e.target.value)} />
+          </div>
+        </div>
       </Modal>
 
       {/* ---- Send back ---- */}
@@ -698,7 +798,7 @@ export function EstimateBuilder() {
 }
 
 /* ==========================================================================
-   AI-assisted takeoff
+   Document-assisted scope extraction
    ==========================================================================
    Deliberately scoped as one panel rather than the centre of the prototype.
    The point the client made is that this reduces the specialist training
@@ -706,31 +806,36 @@ export function EstimateBuilder() {
    nothing here writes to the record without a human pressing accept.
    ========================================================================== */
 
-function TakeoffPanel({
-  takeoffId,
-  onApplyArea,
+function ScopeExtractionPanel({
+  scopeExtractionId,
+  onApplyScope,
 }: {
-  takeoffId: string
-  onApplyArea: (label: string, sqft: number, coveLf: number) => void
+  scopeExtractionId: string
+  onApplyScope: (label: string, estimatedQuantity: number, secondaryQuantity: number) => void
 }) {
-  const takeoff = useStore((s) => s.takeoffs.find((t) => t.id === takeoffId))!
-  const accept = useStore((s) => s.acceptTakeoff)
+  const scopeExtraction = useStore((s) => s.scopeExtractions.find((t) => t.id === scopeExtractionId))!
+  const accept = useStore((s) => s.acceptScopeExtraction)
   const [analysing, setAnalysing] = useState(false)
 
-  const totalSqft = takeoff.areas.reduce((s, a) => s + a.sqft, 0)
-  const totalCove = takeoff.areas.reduce((s, a) => s + a.coveLf, 0)
-  const recommended = PRICE_BOOK_BY_ID[takeoff.recommendedSystemId]
+  const totalEstimatedQuantity = scopeExtraction.sections.reduce((s, a) => s + a.estimatedQuantity, 0)
+  const totalSecondaryQuantity = scopeExtraction.sections.reduce((s, a) => s + a.secondaryQuantity, 0)
+  const priceBookItems = useStore((s) => s.priceBookItems)
+  const priceBookById = useMemo(
+    () => Object.fromEntries(priceBookItems.map((item) => [item.id, item])) as Record<string, typeof priceBookItems[number]>,
+    [priceBookItems],
+  )
+  const recommended = priceBookById[scopeExtraction.recommendedCatalogItemId]
 
   return (
-    <Card id="takeoff" className="border-(--accent-attention)">
+    <Card id="scopeExtraction" className="border-(--accent-attention)">
       <CardHeader
         icon={<ScanSearch size={14} className="text-attention" />}
-        title="AI-assisted takeoff"
-        subtitle={`${takeoff.fileName} · ${takeoff.pageCount} pages · ${takeoff.relevantPages.length} identified as relevant`}
+        title="Document-assisted scope extraction"
+        subtitle={`${scopeExtraction.fileName} · ${scopeExtraction.pageCount} pages · ${scopeExtraction.relevantPages.length} identified as relevant`}
         actions={
           <>
-            <Badge tone="attention">{Math.round(takeoff.confidence * 100)}% confidence</Badge>
-            {takeoff.status === 'accepted' ? (
+            <Badge tone="attention">{Math.round(scopeExtraction.confidence * 100)}% confidence</Badge>
+            {scopeExtraction.status === 'accepted' ? (
               <Badge tone="success" icon={<CheckCircle2 size={9} />}>
                 Verified
               </Badge>
@@ -747,9 +852,9 @@ function TakeoffPanel({
                   {analysing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                   Re-run
                 </Button>
-                <Button size="sm" variant="primary" onClick={() => accept(takeoff.id)}>
+                <Button size="sm" variant="primary" onClick={() => accept(scopeExtraction.id)}>
                   <CheckCircle2 size={12} />
-                  Accept measurements
+                  Accept scope
                 </Button>
               </>
             )}
@@ -760,10 +865,10 @@ function TakeoffPanel({
       <div className="grid gap-4 p-4 lg:grid-cols-2">
         <div>
           <p className="mb-2 text-xs font-semibold tracking-wider text-muted uppercase">
-            Relevant sheets found
+            Relevant source sections
           </p>
           <ul className="space-y-1.5">
-            {takeoff.relevantPages.map((p) => (
+            {scopeExtraction.relevantPages.map((p) => (
               <li key={p.page} className="flex items-start gap-2 text-sm">
                 <span className="shrink-0 rounded-xs bg-surface-inset px-1.5 py-0.5 font-mono text-2xs text-secondary">
                   p{p.page}
@@ -779,10 +884,10 @@ function TakeoffPanel({
 
         <div>
           <p className="mb-2 text-xs font-semibold tracking-wider text-muted uppercase">
-            Extracted areas
+            Extracted scope
           </p>
           <div className="space-y-1.5">
-            {takeoff.areas.map((a) => (
+            {scopeExtraction.sections.map((a) => (
               <div
                 key={a.id}
                 className="flex items-center gap-2 rounded-sm border border-subtle bg-surface-inset px-2.5 py-2"
@@ -790,25 +895,25 @@ function TakeoffPanel({
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-primary">{a.name}</p>
                   <p className="text-2xs text-muted">
-                    {a.sqft.toLocaleString()} sq ft · {a.coveLf} lin ft cove · {a.specifiedFinish}
+                    {a.estimatedQuantity.toLocaleString()} units · {a.secondaryQuantity} additional units · {a.specification}
                   </p>
                 </div>
-                <Button size="sm" onClick={() => onApplyArea(a.name, a.sqft, a.coveLf)}>
-                  Add as area
+                <Button size="sm" onClick={() => onApplyScope(a.name, a.estimatedQuantity, a.secondaryQuantity)}>
+                  Add to quote
                 </Button>
               </div>
             ))}
           </div>
           <p className="mt-2 font-mono text-sm text-primary tabular">
-            {totalSqft.toLocaleString()} sq ft · {totalCove} lin ft cove total
+            {totalEstimatedQuantity.toLocaleString()} units · {totalSecondaryQuantity} additional units total
           </p>
         </div>
       </div>
 
       <div className="border-t border-subtle bg-surface-inset px-4 py-3">
         <p className="text-sm text-secondary">
-          <span className="font-medium text-primary">Recommended system: {recommended?.name}.</span>{' '}
-          {takeoff.notes}
+          <span className="font-medium text-primary">Recommended catalogue item: {recommended?.name}.</span>{' '}
+          {scopeExtraction.notes}
         </p>
         <p className="mt-1.5 text-2xs text-muted">
           Findings are passed to the estimator for verification. Nothing is written to the estimate

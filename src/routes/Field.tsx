@@ -13,16 +13,19 @@ import {
   MapPin,
   Navigation,
   Package,
+  Phone,
   Plus,
   Ruler,
   ShieldAlert,
   StickyNote,
+  WifiOff,
 } from 'lucide-react'
 import { CHECKLIST_BY_ID } from '@/data/checklists'
 import { ACCOUNT_BY_ID, TODAY, USER_BY_ID } from '@/data/seed'
 import { PRICE_BOOK_BY_ID } from '@/data/priceBook'
 import { STAGE_BY_ID, stageLabel } from '@/domain/stages'
 import { money, useStore } from '@/store/useStore'
+import { assignedTo } from '@/domain/jobs'
 import { useArtifactsFor, useIssuesFor } from '@/store/selectors'
 import {
   Badge,
@@ -89,9 +92,7 @@ export function FieldToday() {
   const viewer = USER_BY_ID[viewerId]
 
   const isField = viewer?.role === 'tech' || viewer?.role === 'crew_leader'
-  const myJobs = jobs.filter((j) =>
-    isField ? j.crewLeaderId === viewerId || j.crewIds.includes(viewerId) : true,
-  )
+  const myJobs = jobs.filter((j) => (isField ? assignedTo(j, viewerId) : true))
 
   // A rep's day is appointments; a crew's day is jobs. Both land here.
   const visits = opportunities.filter(
@@ -130,7 +131,7 @@ export function FieldToday() {
                       <MapPin size={13} /> {o.address}
                     </p>
                     <p className="mt-1 flex items-center gap-1.5 text-base text-muted">
-                      <Ruler size={13} /> {o.sqft.toLocaleString()} sq ft · {money(o.value, true)}
+                      <Ruler size={13} /> {o.estimatedQuantity.toLocaleString()} units · {money(o.value, true)}
                     </p>
                     {o.visitAt && (
                       <p className="mt-1 text-base font-medium text-primary">
@@ -178,6 +179,14 @@ export function FieldToday() {
                       <p className="mt-1 text-base text-muted">
                         {format(new Date(j.start), 'MMM d')} – {format(new Date(j.end), 'MMM d')}
                       </p>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {j.dispatchState && (
+                          <Badge tone={j.dispatchState === 'ready' ? 'success' : j.dispatchState === 'at_risk' ? 'warning' : 'neutral'}>
+                            {j.dispatchState.replace('_', ' ')}
+                          </Badge>
+                        )}
+                        {j.syncStatus === 'pending' && <Badge tone="warning">Pending sync</Badge>}
+                      </div>
                       <Meter value={j.progress} tone="attention" className="mt-2" />
                     </Card>
                   </Link>
@@ -235,8 +244,8 @@ export function FieldVisit() {
           </div>
           <p className="mt-1.5 text-base text-muted">
             {opp.category === 'residential'
-              ? 'Dimensions, floor condition, moisture, finish and customer expectations.'
-              : 'Area, cove, substrate, chemical exposure, temperature, shutdown windows, safety and testing.'}
+              ? 'Requested service, asset details, site access, hazards, and customer expectations.'
+              : 'Scope, asset inventory, operating constraints, safety, access, and commercial requirements.'}
           </p>
           <Link to={`/opportunities/${opp.id}/visit`}>
             <Button variant="primary" size="lg" className="mt-2 w-full">
@@ -293,9 +302,12 @@ export function FieldJob() {
   const checklists = useStore((s) => s.checklists)
   const toggle = useStore((s) => s.toggleChecklistItem)
   const addArtifact = useStore((s) => s.addArtifact)
+  const updateJob = useStore((s) => s.updateJob)
+  const addDailyLog = useStore((s) => s.addDailyLog)
   const viewerId = useStore((s) => s.viewerId)
 
   const [reporting, setReporting] = useState<'issue' | 'change' | null>(null)
+  const [logNote, setLogNote] = useState('')
 
   if (!opp || !job)
     return (
@@ -310,12 +322,13 @@ export function FieldJob() {
   const plans = artifacts.filter((a) => a.kind === 'plan' || a.kind === 'map')
   const photos = artifacts.filter((a) => a.kind === 'photo')
   const account = ACCOUNT_BY_ID[opp.accountId]
+  const materialOrder = useStore((s) => s.materialOrders.find((m) => m.opportunityId === id))
 
   const scope = est?.options
-    .filter((o) => o.kind === 'area' || o.selectedByCustomer || o.recommended)
+    .filter((o) => o.kind === 'scope' || o.selectedByCustomer || o.recommended)
     .flatMap((o) => o.lineItems)
 
-  const systems = [...new Set(scope?.map((l) => l.priceBookId) ?? [])]
+  const catalogueItems = [...new Set(scope?.map((l) => l.priceBookId) ?? [])]
     .map((pid) => PRICE_BOOK_BY_ID[pid])
     .filter(Boolean)
 
@@ -330,13 +343,56 @@ export function FieldJob() {
           </p>
           <p className="mt-1 text-base text-muted">
             {format(new Date(job.start), 'MMM d')} – {format(new Date(job.end), 'MMM d')} ·{' '}
-            {opp.sqft.toLocaleString()} sq ft
+            {opp.estimatedQuantity.toLocaleString()} units
           </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Badge tone={job.dispatchState === 'ready' ? 'success' : job.dispatchState === 'at_risk' ? 'warning' : 'neutral'}>
+              {job.dispatchState ?? 'unassigned'}
+            </Badge>
+            <Badge tone={job.syncStatus === 'pending' ? 'warning' : 'success'}>
+              {job.syncStatus === 'pending' ? 'Offline pending sync' : 'Synced'}
+            </Badge>
+            <Badge tone="neutral">{job.clockStatus ?? 'not_started'}</Badge>
+          </div>
           <Button className="mt-2 w-full" size="lg">
             <Navigation size={15} />
             Navigate
           </Button>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <Button size="sm" onClick={() => updateJob(job.id, { clockStatus: 'traveling', syncStatus: 'pending' })}>
+              Start travel
+            </Button>
+            <Button size="sm" onClick={() => updateJob(job.id, { clockStatus: 'on_site', checkInAt: new Date().toISOString(), syncStatus: 'pending' })}>
+              Check in
+            </Button>
+            <Button size="sm" onClick={() => updateJob(job.id, { clockStatus: 'wrapped', checkOutAt: new Date().toISOString(), syncStatus: 'pending' })}>
+              Wrap day
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => updateJob(job.id, { syncStatus: job.syncStatus === 'pending' ? 'synced' : 'pending' })}>
+              <WifiOff size={12} />
+              {job.syncStatus === 'pending' ? 'Mark synced' : 'Go offline'}
+            </Button>
+          </div>
           <Meter value={job.progress} tone="attention" className="mt-2" />
+        </Card>
+
+        <Card className="p-3">
+          <p className="text-md font-semibold text-primary">Customer contact and appointment</p>
+          <p className="mt-1 flex items-center gap-1.5 text-base text-secondary">
+            <Phone size={13} /> {account?.phone}
+          </p>
+          <p className="mt-1 text-base text-muted">{account?.contactName} · {account?.email}</p>
+          <p className="mt-2 text-sm text-muted">
+            Travel buffer {job.travelMinutes ?? 30} min
+            {job.customerNotifiedAt ? ` · customer notified ${format(new Date(job.customerNotifiedAt), 'd MMM · HH:mm')}` : ''}
+          </p>
+          <Button
+            className="mt-2 w-full"
+            size="sm"
+            onClick={() => updateJob(job.id, { customerNotifiedAt: new Date().toISOString(), syncStatus: 'pending' })}
+          >
+            Confirm arrival with customer
+          </Button>
         </Card>
 
         {/* What we sold — the thing crews currently have to go find elsewhere. */}
@@ -360,29 +416,59 @@ export function FieldJob() {
           </div>
         </Card>
 
-        {systems.length > 0 && (
+        {catalogueItems.length > 0 && (
           <Card>
             <div className="border-b border-subtle px-3 py-2.5 text-md font-semibold text-primary">
               Product specifications
             </div>
-            {systems.map((s) => (
+            {catalogueItems.map((s) => (
               <div key={s.id} className="flex items-start gap-2 px-3 py-2.5">
                 <span
                   className="mt-0.5 h-6 w-6 shrink-0 rounded-sm border border-subtle"
                   style={{ background: s.swatch }}
                 />
                 <div className="min-w-0">
-                  <p className="text-base font-medium text-primary">{s.specSheet}</p>
+                  <p className="text-base font-medium text-primary">{s.serviceDocument}</p>
                   <p className="text-base text-muted">
-                    {s.coats === 0
-                      ? 'Preparation — no coats'
-                      : `${s.coats} coat${s.coats === 1 ? '' : 's'} · ${Math.round(s.wasteAllowance * 100)}% waste allowance`}
+                    {s.resourceMultiplier === 0
+                      ? 'No orderable resources'
+                      : `${s.resourceMultiplier} resource factor${s.resourceMultiplier === 1 ? '' : 's'} · ${Math.round(s.contingencyAllowance * 100)}% contingency allowance`}
                   </p>
                 </div>
               </div>
             ))}
           </Card>
         )}
+
+        <Card className="p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-md font-semibold text-primary">Equipment and materials</p>
+            <Badge tone={materialOrder?.status === 'delivered' ? 'success' : materialOrder ? 'attention' : 'warning'}>
+              {materialOrder ? materialOrder.status : 'not ordered'}
+            </Badge>
+          </div>
+          <p className="mt-1 text-base text-muted">
+            Confirm the trailer load, material drop, and any missing items before work starts.
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <Button
+              size="sm"
+              onClick={() => updateJob(job.id, { dispatchState: 'ready', syncStatus: 'pending' })}
+            >
+              Crew fully ready
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => updateJob(job.id, { dispatchState: 'at_risk', lastDispatchNote: 'Material or equipment issue reported from field.', syncStatus: 'pending' })}
+            >
+              Mark at risk
+            </Button>
+          </div>
+          {job.lastDispatchNote && (
+            <p className="mt-2 text-sm text-muted">{job.lastDispatchNote}</p>
+          )}
+        </Card>
 
         {plans.length > 0 && (
           <Card>
@@ -463,6 +549,34 @@ export function FieldJob() {
 
         <PhotoGrid photos={photos} />
 
+        <Card className="p-3">
+          <p className="text-md font-semibold text-primary">Daily log and sync queue</p>
+          <div className="mt-2 flex gap-2">
+            <Input value={logNote} onChange={(e) => setLogNote(e.target.value)} placeholder="What changed on site?" />
+            <Button
+              size="sm"
+              onClick={() => {
+                if (!logNote.trim()) return
+                addDailyLog(job.id, logNote)
+                updateJob(job.id, { syncStatus: 'pending' })
+                setLogNote('')
+              }}
+            >
+              Add
+            </Button>
+          </div>
+          {job.dailyLogs.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              {job.dailyLogs.slice().reverse().slice(0, 3).map((entry) => (
+                <div key={entry.id} className="rounded-md border border-subtle px-2.5 py-2 text-sm text-secondary">
+                  <p>{entry.note}</p>
+                  <p className="mt-0.5 text-xs text-muted">{format(new Date(entry.date), 'd MMM · HH:mm')}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
         <div className="grid grid-cols-2 gap-2">
           <Button
             variant="attention"
@@ -490,7 +604,7 @@ export function FieldJob() {
               addArtifact({
                 opportunityId: opp.id,
                 kind: 'photo',
-                name: `Completed floor ${photos.filter((p) => p.photoPhase === 'after').length + 1}`,
+                name: `Completion photo ${photos.filter((p) => p.photoPhase === 'after').length + 1}`,
                 stageAdded: 'awarded',
                 addedById: viewerId,
                 addedAt: new Date().toISOString(),
@@ -613,7 +727,7 @@ function FieldReport({
                   opportunityId,
                   description: title,
                   qty,
-                  unit: 'sq ft',
+                  unit: 'units',
                   amount,
                   raisedById: viewerId,
                   raisedAt: new Date().toISOString(),
@@ -648,7 +762,7 @@ function FieldReport({
           </FieldRow>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            <FieldRow label="Additional quantity (sq ft)">
+            <FieldRow label="Additional quantity (units)">
               <Input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} />
             </FieldRow>
             <FieldRow label="Additional price">

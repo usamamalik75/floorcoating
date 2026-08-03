@@ -13,11 +13,10 @@ import type {
   MaterialLine,
   MaterialOrder,
   Opportunity,
-  ProspectRequest,
   Reminder,
   SiteVisitResponse,
   StageId,
-  Takeoff,
+  ScopeExtraction,
   User,
 } from '@/domain/types'
 import { deriveMaterial, PRICE_BOOK_BY_ID } from './priceBook'
@@ -35,7 +34,7 @@ export const iso = (offsetDays: number, hour = 9): string => {
 }
 
 /* ========================================================================== */
-/* Locations — one corporate store plus two franchises                        */
+/* Locations — three operating locations                        */
 /* ========================================================================== */
 
 export const LOCATIONS: Location[] = [
@@ -81,7 +80,7 @@ export const LOCATION_BY_ID = Object.fromEntries(LOCATIONS.map((l) => [l.id, l])
 /* ========================================================================== */
 
 export const USERS: User[] = [
-  { id: 'u_nic', name: 'Nic Ugolini', role: 'franchisor', title: 'Founder & Franchisor', locationId: null },
+  { id: 'u_nic', name: 'Nic Ugolini', role: 'admin', title: 'Platform Administrator', locationId: null },
 
   { id: 'u_dennis', name: 'Dennis Frost', role: 'owner', title: 'Owner — Chicago', locationId: 'loc_chi' },
   { id: 'u_marcus', name: 'Marcus Webb', role: 'estimator', title: 'Head of Projects', locationId: 'loc_chi' },
@@ -110,63 +109,6 @@ export const USERS: User[] = [
 
 export const USER_BY_ID = Object.fromEntries(USERS.map((u) => [u.id, u]))
 
-/* ========================================================================== */
-/* Prospecting requests — the Apollo loop with franchisor approval            */
-/* ========================================================================== */
-
-export const PROSPECT_REQUESTS: ProspectRequest[] = [
-  {
-    id: 'pr_1',
-    locationId: 'loc_atl',
-    requestedById: 'u_tanya',
-    requestedAt: iso(-9),
-    vertical: 'Food & Beverage',
-    radiusMiles: 100,
-    originCity: 'Atlanta, GA',
-    minEmployees: 50,
-    targetTitles: ['Facilities Manager', 'Plant Manager', 'Maintenance Director', 'EHS Manager'],
-    estimatedCount: 184,
-    status: 'imported',
-    approvedById: 'u_nic',
-    approvedAt: iso(-8),
-    importedCount: 171,
-    creditCost: 184,
-  },
-  {
-    id: 'pr_2',
-    locationId: 'loc_den',
-    requestedById: 'u_nina',
-    requestedAt: iso(-2),
-    vertical: 'Warehouse',
-    radiusMiles: 75,
-    originCity: 'Denver, CO',
-    minEmployees: 100,
-    targetTitles: ['Operations Manager', 'Site Director', 'Facilities Manager'],
-    estimatedCount: 96,
-    status: 'pending_approval',
-    approvedById: null,
-    approvedAt: null,
-    importedCount: 0,
-    creditCost: 96,
-  },
-  {
-    id: 'pr_3',
-    locationId: 'loc_chi',
-    requestedById: 'u_bj',
-    requestedAt: iso(-1),
-    vertical: 'Pharmaceutical',
-    radiusMiles: 150,
-    originCity: 'Chicago, IL',
-    minEmployees: 200,
-    targetTitles: ['Facilities Director', 'EHS Manager', 'Validation Engineer'],
-    estimatedCount: 61,
-    status: 'pending_approval',
-    approvedById: null,
-    approvedAt: null,
-    importedCount: 0,
-    creditCost: 61,
-  },
-]
 
 /* ========================================================================== */
 /* Accounts                                                                   */
@@ -216,7 +158,7 @@ export const ACCOUNTS: Account[] = [
     locationId: 'loc_chi',
     contactName: 'Priyanka Rao',
     contactTitle: 'Regional Construction Manager',
-    email: 'prao@qdobafranchise.com',
+    email: 'prao@example.com',
     phone: '(312) 555-0188',
     city: 'Chicago',
     state: 'IL',
@@ -239,7 +181,7 @@ export const ACCOUNTS: Account[] = [
     state: 'IL',
     zip: '60638',
     isNational: false,
-    source: 'Apollo',
+    source: 'External provider',
     createdAt: iso(-101),
     anchorStage: 'contact',
   },
@@ -307,7 +249,7 @@ export const ACCOUNTS: Account[] = [
     state: 'CO',
     zip: '80011',
     isNational: false,
-    source: 'Apollo',
+    source: 'External provider',
     createdAt: iso(-74),
     anchorStage: 'contact',
   },
@@ -341,10 +283,10 @@ export const ACCOUNTS: Account[] = [
     state: 'GA',
     zip: '30309',
     isNational: false,
-    source: 'Apollo',
+    source: 'External provider',
     createdAt: iso(-115),
     anchorStage: 'contact',
-    prospectRequestId: 'pr_1',
+    importBatchId: 'pr_1',
   },
   {
     id: 'ac_southline',
@@ -359,10 +301,10 @@ export const ACCOUNTS: Account[] = [
     state: 'GA',
     zip: '30060',
     isNational: false,
-    source: 'Apollo',
+    source: 'External provider',
     createdAt: iso(-63),
     anchorStage: 'contact',
-    prospectRequestId: 'pr_1',
+    importBatchId: 'pr_1',
   },
   {
     id: 'ac_dogwood',
@@ -382,7 +324,7 @@ export const ACCOUNTS: Account[] = [
     anchorStage: 'contact',
   },
 
-  /* ---- Prospect column: imported from Apollo, nobody has called yet ----- */
+  /* ---- New enquiries imported from an external source ----- */
   ...[
     ['ac_p1', 'Kettleman Dairy Co-op', 'Vince Kettleman', 'Maintenance Director', 'DeKalb', 'IL', '60115', 'loc_chi'],
     ['ac_p2', 'Prairie State Meats', 'Denise Ohara', 'Plant Engineer', 'Rockford', 'IL', '61103', 'loc_chi'],
@@ -406,10 +348,10 @@ export const ACCOUNTS: Account[] = [
       state,
       zip,
       isNational: false,
-      source: 'Apollo',
+      source: 'External provider',
       createdAt: iso(-8),
       anchorStage: 'prospect',
-      prospectRequestId: locationId === 'loc_atl' ? 'pr_1' : undefined,
+      importBatchId: locationId === 'loc_atl' ? 'pr_1' : undefined,
     }),
   ),
 ]
@@ -420,15 +362,15 @@ export const ACCOUNT_BY_ID = Object.fromEntries(ACCOUNTS.map((a) => [a.id, a]))
 /* Opportunities — sales stages + awarded jobs                                */
 /* ========================================================================== */
 
-type OppSeed = Partial<Opportunity> & Pick<Opportunity, 'id' | 'code' | 'name' | 'accountId' | 'locationId' | 'category' | 'stage' | 'ownerId' | 'value' | 'sqft' | 'address' | 'zip'>
+type OppSeed = Partial<Opportunity> & Pick<Opportunity, 'id' | 'code' | 'name' | 'accountId' | 'locationId' | 'category' | 'stage' | 'ownerId' | 'value' | 'estimatedQuantity' | 'address' | 'zip'>
 
 const opp = (o: OppSeed): Opportunity => ({
   estimatorId: null,
   pmId: null,
-  coveLf: 0,
+  secondaryQuantity: 0,
   createdAt: iso(-30),
   stageEnteredAt: iso(-2),
-  systemIds: [],
+  catalogItemIds: [],
   reminderAt: null,
   source: 'National Website',
   visitAt: null,
@@ -439,12 +381,12 @@ const opp = (o: OppSeed): Opportunity => ({
 export const OPPORTUNITIES: Opportunity[] = [
   /* ---- THE DEMO SCENARIO ------------------------------------------------
      A food-production facility submitted a request for a new industrial
-     floor. This record sits at Estimating so the guided walkthrough has
+     site. This record sits at Estimating so the guided walkthrough has
      somewhere to go, and carries the full inherited artifact set.        */
   opp({
     id: 'op_midwest_plant3',
     code: 'FCG-CHI-1062',
-    name: 'Midwest Foods — Plant 3 Process Floor',
+    name: 'Midwest Foods — Plant 3 Facility Upgrade',
     accountId: 'ac_midwest',
     locationId: 'loc_chi',
     category: 'industrial',
@@ -453,13 +395,13 @@ export const OPPORTUNITIES: Opportunity[] = [
     ownerId: 'u_bj',
     estimatorId: 'u_marcus',
     value: 214_830,
-    sqft: 9_400,
-    coveLf: 620,
+    estimatedQuantity: 9_400,
+    secondaryQuantity: 620,
     address: '3400 Channahon Rd, Joliet, IL',
     zip: '60431',
     createdAt: iso(-24),
     stageEnteredAt: iso(-2),
-    systemIds: ['pb_urethane_cement', 'pb_cove_base', 'pb_moisture_mitigation', 'pb_concrete_prep'],
+    catalogItemIds: ['svc_commercial_cleaning', 'svc_access_equipment', 'svc_site_protection', 'svc_site_preparation'],
     source: 'National Website',
     visitAt: iso(-6),
   }),
@@ -476,7 +418,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     temperature: 'cold',
     ownerId: 'u_devin',
     value: 18_000,
-    sqft: 4_200,
+    estimatedQuantity: 4_200,
     address: '200 Powder Springs St, Marietta, GA',
     zip: '30064',
     createdAt: iso(-1),
@@ -493,7 +435,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     stage: 'new_lead',
     ownerId: 'u_bj',
     value: 41_000,
-    sqft: 2_400,
+    estimatedQuantity: 2_400,
     address: '2100 W 22nd St, Oak Brook, IL',
     zip: '60523',
     createdAt: iso(-4),
@@ -510,7 +452,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     stage: 'qualified',
     ownerId: 'u_bj',
     value: 64_000,
-    sqft: 6_800,
+    estimatedQuantity: 6_800,
     address: '3400 Channahon Rd, Joliet, IL',
     zip: '60431',
     createdAt: iso(-8),
@@ -520,36 +462,36 @@ export const OPPORTUNITIES: Opportunity[] = [
   opp({
     id: 'op_den_qualified',
     code: 'FCG-DEN-3022',
-    name: 'Mile High Bakery — Production Floor',
+    name: 'Mile High Bakery — HVAC Maintenance',
     accountId: 'ac_verano',
     locationId: 'loc_den',
     category: 'commercial',
     stage: 'qualified',
     ownerId: 'u_nina',
     value: 45_600,
-    sqft: 3_700,
+    estimatedQuantity: 3_700,
     address: '4200 Fox St, Denver, CO',
     zip: '80216',
     createdAt: iso(-5),
     stageEnteredAt: iso(-1),
-    source: 'Apollo',
+    source: 'External provider',
   }),
   opp({
-    id: 'op_hartley_garage',
+    id: 'op_hartley_hvac',
     code: 'FCG-CHI-1060',
-    name: 'Hartley Residence — 3-Car Garage',
+    name: 'Hartley Residence — HVAC Tune-up',
     accountId: 'ac_hartley',
     locationId: 'loc_chi',
     category: 'residential',
     stage: 'site_visit_scheduled',
     ownerId: 'u_bj',
     value: 5_400,
-    sqft: 720,
+    estimatedQuantity: 720,
     address: '812 Prairie Ave, Wheaton, IL',
     zip: '60187',
     createdAt: iso(-6),
     stageEnteredAt: iso(-1),
-    systemIds: ['pb_polyaspartic_garage'],
+    catalogItemIds: ['svc_hvac_tuneup'],
     source: 'Ad Campaign',
     visitAt: iso(0, 14),
   }),
@@ -563,8 +505,8 @@ export const OPPORTUNITIES: Opportunity[] = [
     stage: 'site_visit_scheduled',
     ownerId: 'u_nina',
     value: 71_000,
-    sqft: 8_200,
-    coveLf: 0,
+    estimatedQuantity: 8_200,
+    secondaryQuantity: 0,
     address: '5900 E 64th Ave, Commerce City, CO',
     zip: '80022',
     createdAt: iso(-9),
@@ -575,15 +517,15 @@ export const OPPORTUNITIES: Opportunity[] = [
   opp({
     id: 'op_lakeside_brewhouse',
     code: 'FCG-CHI-1057',
-    name: 'Lakeside Brewing — Brewhouse Floor',
+    name: 'Lakeside Brewing — Equipment Installation',
     accountId: 'ac_lakeside',
     locationId: 'loc_chi',
     category: 'commercial',
     stage: 'site_visit_completed',
     ownerId: 'u_carla',
     value: 38_500,
-    sqft: 3_200,
-    coveLf: 240,
+    estimatedQuantity: 3_200,
+    secondaryQuantity: 240,
     address: '2140 N Clybourn Ave, Chicago, IL',
     zip: '60614',
     createdAt: iso(-11),
@@ -594,7 +536,7 @@ export const OPPORTUNITIES: Opportunity[] = [
   opp({
     id: 'op_summit_cleanroom',
     code: 'FCG-DEN-3007',
-    name: 'Summit Aerospace — Clean Room Floor',
+    name: 'Summit Aerospace — Electrical Upgrade',
     accountId: 'ac_summit',
     locationId: 'loc_den',
     category: 'industrial',
@@ -602,14 +544,14 @@ export const OPPORTUNITIES: Opportunity[] = [
     ownerId: 'u_nina',
     estimatorId: 'u_grant',
     value: 94_800,
-    sqft: 5_100,
-    coveLf: 380,
+    estimatedQuantity: 5_100,
+    secondaryQuantity: 380,
     address: '18400 E Colfax Ave, Aurora, CO',
     zip: '80011',
     createdAt: iso(-17),
     stageEnteredAt: iso(-2),
-    systemIds: ['pb_mma', 'pb_moisture_mitigation'],
-    source: 'Apollo',
+    catalogItemIds: ['svc_electrical_upgrade', 'svc_site_protection'],
+    source: 'External provider',
   }),
   opp({
     id: 'op_southline_bottling',
@@ -622,19 +564,19 @@ export const OPPORTUNITIES: Opportunity[] = [
     ownerId: 'u_devin',
     estimatorId: 'u_priya',
     value: 128_000,
-    sqft: 9_200,
-    coveLf: 540,
+    estimatedQuantity: 9_200,
+    secondaryQuantity: 540,
     address: '1801 Cobb Pkwy, Marietta, GA',
     zip: '30060',
     createdAt: iso(-19),
     stageEnteredAt: iso(-1),
-    systemIds: ['pb_urethane_cement', 'pb_moisture_mitigation'],
-    source: 'Apollo',
+    catalogItemIds: ['svc_commercial_cleaning', 'svc_site_protection'],
+    source: 'External provider',
   }),
   opp({
     id: 'op_qdoba_westloop',
     code: 'FCG-CHI-1038',
-    name: 'Qdoba — West Loop Kitchen Recoat',
+    name: 'Qdoba — West Loop Kitchen Service',
     accountId: 'ac_qdoba',
     locationId: 'loc_chi',
     category: 'commercial',
@@ -642,31 +584,31 @@ export const OPPORTUNITIES: Opportunity[] = [
     ownerId: 'u_carla',
     estimatorId: 'u_marcus',
     value: 27_800,
-    sqft: 1_650,
-    coveLf: 180,
+    estimatedQuantity: 1_650,
+    secondaryQuantity: 180,
     address: '820 W Randolph St, Chicago, IL',
     zip: '60607',
     createdAt: iso(-26),
     stageEnteredAt: iso(-6),
-    systemIds: ['pb_urethane_cement', 'pb_cove_base'],
+    catalogItemIds: ['svc_commercial_cleaning', 'svc_access_equipment'],
     source: 'Referral',
   }),
   opp({
-    id: 'op_verano_garage',
+    id: 'op_verano_exterior',
     code: 'FCG-DEN-3019',
-    name: 'Verano Residence — Garage & Patio',
+    name: 'Verano Residence — Exterior Service',
     accountId: 'ac_verano',
     locationId: 'loc_den',
     category: 'residential',
     stage: 'proposal_sent',
     ownerId: 'u_nina',
     value: 7_900,
-    sqft: 980,
+    estimatedQuantity: 980,
     address: '5540 S Bemis St, Littleton, CO',
     zip: '80120',
     createdAt: iso(-13),
     stageEnteredAt: iso(-3),
-    systemIds: ['pb_polyaspartic_garage', 'pb_flake_broadcast'],
+    catalogItemIds: ['svc_pressure_washing', 'svc_site_protection'],
     source: 'National Website',
   }),
   opp({
@@ -680,13 +622,13 @@ export const OPPORTUNITIES: Opportunity[] = [
     temperature: 'hot',
     ownerId: 'u_bj',
     value: 52_700,
-    sqft: 3_100,
-    coveLf: 220,
+    estimatedQuantity: 3_100,
+    secondaryQuantity: 220,
     address: '1455 S Halsted St, Chicago, IL',
     zip: '60607',
     createdAt: iso(-34),
     stageEnteredAt: iso(-9),
-    systemIds: ['pb_urethane_cement'],
+    catalogItemIds: ['svc_commercial_cleaning'],
     reminderAt: iso(2),
     source: 'Phone-in',
   }),
@@ -700,12 +642,12 @@ export const OPPORTUNITIES: Opportunity[] = [
     stage: 'delayed',
     ownerId: 'u_carla',
     value: 31_200,
-    sqft: 1_800,
+    estimatedQuantity: 1_800,
     address: '1720 Sherman Ave, Evanston, IL',
     zip: '60201',
     createdAt: iso(-48),
     stageEnteredAt: iso(-15),
-    systemIds: ['pb_urethane_cement'],
+    catalogItemIds: ['svc_commercial_cleaning'],
     reminderAt: iso(210),
     source: 'Referral',
   }),
@@ -719,15 +661,15 @@ export const OPPORTUNITIES: Opportunity[] = [
     stage: 'delayed',
     ownerId: 'u_nina',
     value: 210_000,
-    sqft: 14_500,
-    coveLf: 900,
+    estimatedQuantity: 14_500,
+    secondaryQuantity: 900,
     address: '9200 Brighton Rd, Henderson, CO',
     zip: '80640',
     createdAt: iso(-70),
     stageEnteredAt: iso(-25),
-    systemIds: ['pb_mma', 'pb_cove_base'],
+    catalogItemIds: ['svc_electrical_upgrade', 'svc_access_equipment'],
     reminderAt: iso(430),
-    source: 'Apollo',
+    source: 'External provider',
   }),
   opp({
     id: 'op_chi_lost',
@@ -739,7 +681,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     stage: 'lost',
     ownerId: 'u_carla',
     value: 44_000,
-    sqft: 2_900,
+    estimatedQuantity: 2_900,
     address: '900 N Kingsbury St, Chicago, IL',
     zip: '60610',
     createdAt: iso(-88),
@@ -750,14 +692,14 @@ export const OPPORTUNITIES: Opportunity[] = [
   opp({
     id: 'op_atl_lost',
     code: 'FCG-ATL-2005',
-    name: 'Buckhead Grill — Kitchen Recoat',
+    name: 'Buckhead Grill — Kitchen Service',
     accountId: 'ac_dogwood',
     locationId: 'loc_atl',
     category: 'commercial',
     stage: 'lost',
     ownerId: 'u_devin',
     value: 29_400,
-    sqft: 1_900,
+    estimatedQuantity: 1_900,
     address: '3060 Peachtree Rd NW, Atlanta, GA',
     zip: '30305',
     createdAt: iso(-96),
@@ -775,7 +717,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     stage: 'lost',
     ownerId: 'u_nina',
     value: 26_800,
-    sqft: 2_600,
+    estimatedQuantity: 2_600,
     address: '3200 E 1st Ave, Denver, CO',
     zip: '80206',
     createdAt: iso(-84),
@@ -796,14 +738,14 @@ export const OPPORTUNITIES: Opportunity[] = [
     ownerId: 'u_devin',
     estimatorId: 'u_priya',
     value: 78_400,
-    sqft: 4_600,
-    coveLf: 410,
+    estimatedQuantity: 4_600,
+    secondaryQuantity: 410,
     address: '550 Peachtree St NE, Atlanta, GA',
     zip: '30308',
     createdAt: iso(-40),
     stageEnteredAt: iso(-1),
-    systemIds: ['pb_urethane_cement', 'pb_cove_base', 'pb_concrete_prep'],
-    source: 'Apollo',
+    catalogItemIds: ['svc_commercial_cleaning', 'svc_access_equipment', 'svc_site_preparation'],
+    source: 'External provider',
   }),
   opp({
     id: 'op_atl_scheduled',
@@ -817,13 +759,13 @@ export const OPPORTUNITIES: Opportunity[] = [
     estimatorId: 'u_priya',
     pmId: 'u_omar',
     value: 34_200,
-    sqft: 3_900,
+    estimatedQuantity: 3_900,
     address: '550 Peachtree St NE, Atlanta, GA',
     zip: '30308',
     createdAt: iso(-50),
     stageEnteredAt: iso(-3),
-    systemIds: ['pb_industrial_epoxy', 'pb_concrete_prep'],
-    source: 'Apollo',
+    catalogItemIds: ['svc_plumbing_repair', 'svc_site_preparation'],
+    source: 'External provider',
   }),
   opp({
     id: 'op_continental_freezer',
@@ -837,14 +779,14 @@ export const OPPORTUNITIES: Opportunity[] = [
     estimatorId: 'u_marcus',
     pmId: 'u_dana',
     value: 142_000,
-    sqft: 8_900,
-    coveLf: 520,
+    estimatedQuantity: 8_900,
+    secondaryQuantity: 520,
     address: '6600 S Cicero Ave, Bedford Park, IL',
     zip: '60638',
     createdAt: iso(-55),
     stageEnteredAt: iso(-2),
-    systemIds: ['pb_mma', 'pb_cove_base', 'pb_concrete_prep'],
-    source: 'Apollo',
+    catalogItemIds: ['svc_electrical_upgrade', 'svc_access_equipment', 'svc_site_preparation'],
+    source: 'External provider',
   }),
   opp({
     id: 'op_den_ready',
@@ -858,18 +800,18 @@ export const OPPORTUNITIES: Opportunity[] = [
     estimatorId: 'u_grant',
     pmId: 'u_pat',
     value: 63_400,
-    sqft: 4_800,
+    estimatedQuantity: 4_800,
     address: '18400 E Colfax Ave, Aurora, CO',
     zip: '80011',
     createdAt: iso(-58),
     stageEnteredAt: iso(-1),
-    systemIds: ['pb_industrial_epoxy', 'pb_concrete_prep'],
-    source: 'Apollo',
+    catalogItemIds: ['svc_plumbing_repair', 'svc_site_preparation'],
+    source: 'External provider',
   }),
   opp({
     id: 'op_midwest_plant2',
     code: 'FCG-CHI-1019',
-    name: 'Midwest Foods — Plant 2 Process Floor',
+    name: 'Midwest Foods — Plant 2 Facility Service',
     accountId: 'ac_midwest',
     locationId: 'loc_chi',
     category: 'industrial',
@@ -878,13 +820,13 @@ export const OPPORTUNITIES: Opportunity[] = [
     estimatorId: 'u_marcus',
     pmId: 'u_dana',
     value: 186_500,
-    sqft: 12_400,
-    coveLf: 740,
+    estimatedQuantity: 12_400,
+    secondaryQuantity: 740,
     address: '3400 Channahon Rd, Joliet, IL',
     zip: '60431',
     createdAt: iso(-72),
     stageEnteredAt: iso(-2),
-    systemIds: ['pb_urethane_cement', 'pb_cove_base', 'pb_moisture_mitigation', 'pb_concrete_prep'],
+    catalogItemIds: ['svc_commercial_cleaning', 'svc_access_equipment', 'svc_site_protection', 'svc_site_preparation'],
     source: 'Repeat',
   }),
   opp({
@@ -899,12 +841,12 @@ export const OPPORTUNITIES: Opportunity[] = [
     estimatorId: 'u_marcus',
     pmId: 'u_dana',
     value: 22_900,
-    sqft: 3_400,
+    estimatedQuantity: 3_400,
     address: '1200 Skokie Blvd, Northbrook, IL',
     zip: '60062',
     createdAt: iso(-64),
     stageEnteredAt: iso(-1),
-    systemIds: ['pb_polyurea'],
+    catalogItemIds: ['svc_equipment_install'],
     source: 'Phone-in',
   }),
   opp({
@@ -919,13 +861,13 @@ export const OPPORTUNITIES: Opportunity[] = [
     estimatorId: 'u_marcus',
     pmId: 'u_dana',
     value: 96_300,
-    sqft: 5_600,
-    coveLf: 340,
+    estimatedQuantity: 5_600,
+    secondaryQuantity: 340,
     address: '4400 W Fullerton Ave, Chicago, IL',
     zip: '60639',
     createdAt: iso(-95),
     stageEnteredAt: iso(-1),
-    systemIds: ['pb_urethane_cement', 'pb_cove_base'],
+    catalogItemIds: ['svc_commercial_cleaning', 'svc_access_equipment'],
     source: 'Referral',
   }),
   opp({
@@ -940,12 +882,12 @@ export const OPPORTUNITIES: Opportunity[] = [
     estimatorId: 'u_marcus',
     pmId: 'u_dana',
     value: 33_400,
-    sqft: 2_100,
+    estimatedQuantity: 2_100,
     address: '1550 E Golf Rd, Schaumburg, IL',
     zip: '60173',
     createdAt: iso(-120),
     stageEnteredAt: iso(-12),
-    systemIds: ['pb_polyurea', 'pb_concrete_prep'],
+    catalogItemIds: ['svc_equipment_install', 'svc_site_preparation'],
     source: 'Repeat',
   }),
   opp({
@@ -960,13 +902,13 @@ export const OPPORTUNITIES: Opportunity[] = [
     estimatorId: 'u_priya',
     pmId: 'u_omar',
     value: 57_300,
-    sqft: 11_000,
+    estimatedQuantity: 11_000,
     address: '1801 Cobb Pkwy, Marietta, GA',
     zip: '30060',
     createdAt: iso(-140),
     stageEnteredAt: iso(-20),
-    systemIds: ['pb_industrial_epoxy'],
-    source: 'Apollo',
+    catalogItemIds: ['svc_plumbing_repair'],
+    source: 'External provider',
   }),
 ]
 
@@ -984,21 +926,25 @@ export const SITE_VISIT_RESPONSES: SiteVisitResponse[] = [
     completedById: 'u_bj',
     values: {
       facility_type: 'Food processing',
-      area_name: 'Plant 3 process floor and packaging',
-      sqft: 9400,
-      cove_lf: 620,
-      cove_height: '6 inch',
+      area_name: 'Plant 3 process site and packaging',
+      service_type: 'Facility cleaning and equipment service',
+      estimatedQuantity: 9400,
+      access_lf: 620,
+      access_height: '6 inch',
       drains: 14,
-      substrate: 'Quarry tile',
+      existing_condition: 'Quarry tile',
+      asset_inventory: 'Process rooms 301–305, packaging hall 310, wash bay 308, and 14 service points',
+      utilities: 'Customer-provided power and water are available during the service window',
+      condition_photo: 'Site condition photos attached',
       removal: true,
-      slab_condition: 'Minor spalling',
+      site_condition: 'Minor spalling',
       flatness: false,
       chemical: 'Daily caustic washdown, peracetic acid sanitiser, animal fats and process oils. CIP chemicals at the filler.',
       temp_min: 34,
       temp_max: 180,
       thermal_shock: true,
       traffic: 'Forklift',
-      moisture_test: true,
+      site_protection_test: true,
       rh: 88,
       ph: 9,
       bond_test: true,
@@ -1006,10 +952,11 @@ export const SITE_VISIT_RESPONSES: SiteVisitResponse[] = [
       night_work: true,
       operating_hours: 'Mon–Fri 05:00–22:00',
       safety: 'USDA facility. Full GMP protocol, hairnets and captive footwear. Hot work permit required for shot blasting. Escort needed for all non-badged personnel.',
+      access: 'Two equipment lines remain in place; escorted loading-dock access is required',
       equipment_moved: 'Two spiral freezers remain in place and must be worked around. Filler line 3 will be disconnected by plant maintenance.',
       ventilation: true,
       plans_available: true,
-      spec_finish: 'Urethane mortar, 3/16 inch, USDA compliant',
+      spec_finish: 'Commercial service mortar, 3/16 inch, USDA compliant',
       decision_maker: 'Gary Holcomb, Plant Maintenance Director — capital authority to $250k',
       timeline: 'Wants completion before the Q4 production ramp in October',
     },
@@ -1022,20 +969,20 @@ export const SITE_VISIT_RESPONSES: SiteVisitResponse[] = [
     values: {
       facility_type: 'Beverage / bottling',
       area_name: 'Brewhouse and keg wash',
-      sqft: 3200,
-      cove_lf: 240,
-      cove_height: '4 inch',
+      estimatedQuantity: 3200,
+      access_lf: 240,
+      access_height: '4 inch',
       drains: 6,
-      substrate: 'Sealed concrete',
+      existing_condition: 'Sealed site',
       removal: false,
-      slab_condition: 'Sound',
+      site_condition: 'Sound',
       flatness: true,
       chemical: 'Caustic keg wash, hot wort spillage, PAA sanitiser',
       temp_min: 40,
       temp_max: 200,
       thermal_shock: true,
       traffic: 'Pallet jack',
-      moisture_test: true,
+      site_protection_test: true,
       rh: 71,
       shutdown: 'Closed Mondays. Single-day turnaround required.',
       night_work: false,
@@ -1049,19 +996,19 @@ export const SITE_VISIT_RESPONSES: SiteVisitResponse[] = [
     },
   },
   {
-    opportunityId: 'op_hartley_garage',
+    opportunityId: 'op_hartley_hvac',
     formId: 'svf_residential',
     completedAt: null,
     completedById: null,
-    values: { bays: '3', length: 30, width: 24, sqft: 720 },
+    values: { bays: '3', length: 30, width: 24, estimatedQuantity: 720 },
   },
 ]
 
 /* ========================================================================== */
-/* AI takeoff                                                                 */
+/* Document scope extraction                                                                 */
 /* ========================================================================== */
 
-export const TAKEOFFS: Takeoff[] = [
+export const SCOPE_EXTRACTIONS: ScopeExtraction[] = [
   {
     id: 'tk_1',
     opportunityId: 'op_midwest_plant3',
@@ -1070,19 +1017,19 @@ export const TAKEOFFS: Takeoff[] = [
     status: 'ready',
     confidence: 0.91,
     relevantPages: [
-      { page: 47, sheet: 'A-201', reason: 'Plant 3 floor plan with room schedule and finish tags' },
-      { page: 49, sheet: 'A-204', reason: 'Enlarged process floor plan with drain and trench layout' },
-      { page: 88, sheet: 'A-611', reason: 'Finish schedule identifying urethane mortar in wet areas' },
-      { page: 152, sheet: 'P-301', reason: 'Drain and trench locations affecting cove and termination detail' },
+      { page: 47, sheet: 'A-201', reason: 'Plant 3 site plan with room schedule and finish tags' },
+      { page: 49, sheet: 'A-204', reason: 'Enlarged process site plan with drain and trench layout' },
+      { page: 88, sheet: 'A-611', reason: 'Finish schedule identifying commercial service mortar in wet areas' },
+      { page: 152, sheet: 'P-301', reason: 'Drain and trench locations affecting access and termination detail' },
     ],
-    areas: [
-      { id: 'ta1', name: 'Process floor (Rooms 301–305)', sqft: 6_180, coveLf: 410, specifiedFinish: 'Urethane mortar 3/16"' },
-      { id: 'ta2', name: 'Packaging hall (Room 310)', sqft: 2_450, coveLf: 155, specifiedFinish: 'Urethane mortar 3/16"' },
-      { id: 'ta3', name: 'Wash bay (Room 308)', sqft: 770, coveLf: 55, specifiedFinish: 'Urethane mortar 1/4" with quartz' },
+    sections: [
+      { id: 'ta1', name: 'Process site (Rooms 301–305)', estimatedQuantity: 6_180, secondaryQuantity: 410, specification: 'Commercial service mortar 3/16"' },
+      { id: 'ta2', name: 'Packaging hall (Room 310)', estimatedQuantity: 2_450, secondaryQuantity: 155, specification: 'Commercial service mortar 3/16"' },
+      { id: 'ta3', name: 'Wash bay (Room 308)', estimatedQuantity: 770, secondaryQuantity: 55, specification: 'Commercial service mortar 1/4" with quartz' },
     ],
-    recommendedSystemId: 'pb_urethane_cement',
+    recommendedCatalogItemId: 'svc_commercial_cleaning',
     notes:
-      'Finish schedule on A-611 specifies a USDA-compliant urethane mortar in all wet process areas. Drain density on P-301 is high (14 points), so allow additional cove and termination labour. Room 308 is called out at a heavier build than the rest.',
+      'Finish schedule on A-611 specifies a USDA-compliant commercial service mortar in all wet process areas. Drain density on P-301 is high (14 points), so allow additional access and termination labour. Room 308 is called out at a heavier build than the rest.',
   },
 ]
 
@@ -1091,11 +1038,11 @@ export const TAKEOFFS: Takeoff[] = [
 /* ========================================================================== */
 
 export const ARTIFACTS: Artifact[] = [
-  { id: 'ar_1', opportunityId: 'op_midwest_plant3', kind: 'photo', name: 'Process floor — existing quarry tile, east bay', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: 'CompanyCam · auto-matched by GPS', photoPhase: 'before' },
+  { id: 'ar_1', opportunityId: 'op_midwest_plant3', kind: 'photo', name: 'Process site — existing quarry tile, east bay', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: 'CompanyCam · auto-matched by GPS', photoPhase: 'before' },
   { id: 'ar_2', opportunityId: 'op_midwest_plant3', kind: 'photo', name: 'Grout failure and tile lift at trench drain', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: 'CompanyCam · auto-matched by GPS', photoPhase: 'before' },
-  { id: 'ar_3', opportunityId: 'op_midwest_plant3', kind: 'photo', name: 'Cove detail at spiral freezer plinth', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: 'CompanyCam · auto-matched by GPS', photoPhase: 'before' },
-  { id: 'ar_4', opportunityId: 'op_midwest_plant3', kind: 'photo', name: 'Packaging hall — slab condition', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: 'CompanyCam · auto-matched by GPS', photoPhase: 'before' },
-  { id: 'ar_5', opportunityId: 'op_midwest_plant3', kind: 'plan', name: 'MidwestFoods_Plant3_IFC_Set.pdf', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: '214 pages · 4 identified as relevant by AI takeoff' },
+  { id: 'ar_3', opportunityId: 'op_midwest_plant3', kind: 'photo', name: 'Access detail at spiral freezer plinth', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: 'CompanyCam · auto-matched by GPS', photoPhase: 'before' },
+  { id: 'ar_4', opportunityId: 'op_midwest_plant3', kind: 'photo', name: 'Packaging hall — site condition', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: 'CompanyCam · auto-matched by GPS', photoPhase: 'before' },
+  { id: 'ar_5', opportunityId: 'op_midwest_plant3', kind: 'plan', name: 'MidwestFoods_Plant3_IFC_Set.pdf', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: '214 pages · 4 identified as relevant by Document scope extraction' },
   { id: 'ar_6', opportunityId: 'op_midwest_plant3', kind: 'form', name: 'Industrial Site Visit Form — completed', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: 'All required fields answered on site' },
   {
     id: 'ar_7',
@@ -1106,24 +1053,24 @@ export const ARTIFACTS: Artifact[] = [
     addedById: 'u_bj',
     addedAt: iso(-6),
     internal: true,
-    body: 'Slab RH tested at 88%, so mitigation is mandatory — do not let this get value-engineered out. Floor does not drain properly near the filler; re-pitching is genuinely needed but it is out of our scope, so flag it in writing before we price. Gary has budget authority to $250k and wants it done before the October ramp. Two weekend windows only.',
+    body: 'Site RH tested at 88%, so mitigation is mandatory — do not let this get value-engineered out. Facility does not drain properly near the filler; re-pitching is genuinely needed but it is out of our scope, so flag it in writing before we price. Gary has budget authority to $250k and wants it done before the October ramp. Two weekend windows only.',
   },
-  { id: 'ar_8', opportunityId: 'op_midwest_plant3', kind: 'doc', name: 'Urethane Cement 3/16" — TDS rev 6.0', stageAdded: 'estimate_in_progress', addedById: 'u_marcus', addedAt: iso(-2), meta: 'Auto-attached when the system was selected' },
-  { id: 'ar_9', opportunityId: 'op_midwest_plant3', kind: 'doc', name: 'Trailer load list — urethane cement, 9,400 sq ft', stageAdded: 'estimate_in_progress', addedById: 'u_marcus', addedAt: iso(-2), meta: 'Auto-generated from the estimate line items' },
-  { id: 'ar_10', opportunityId: 'op_midwest_plant3', kind: 'map', name: 'Installation map — Plant 3 pour sequence', stageAdded: 'estimate_in_progress', addedById: 'u_marcus', addedAt: iso(-2), meta: 'Derived from the AI takeoff area breakdown' },
+  { id: 'ar_8', opportunityId: 'op_midwest_plant3', kind: 'doc', name: 'Commercial service Cement 3/16" — TDS rev 6.0', stageAdded: 'estimate_in_progress', addedById: 'u_marcus', addedAt: iso(-2), meta: 'Auto-attached when the catalogue item was selected' },
+  { id: 'ar_9', opportunityId: 'op_midwest_plant3', kind: 'doc', name: 'Trailer load list — commercial service cement, 9,400 units', stageAdded: 'estimate_in_progress', addedById: 'u_marcus', addedAt: iso(-2), meta: 'Auto-generated from the estimate line items' },
+  { id: 'ar_10', opportunityId: 'op_midwest_plant3', kind: 'map', name: 'Installation map — Plant 3 pour sequence', stageAdded: 'estimate_in_progress', addedById: 'u_marcus', addedAt: iso(-2), meta: 'Derived from the Document scope extraction area breakdown' },
 
-  { id: 'ar_20', opportunityId: 'op_midwest_plant2', kind: 'photo', name: 'Plant 2 — floor as found', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-60), photoPhase: 'before', meta: 'CompanyCam' },
+  { id: 'ar_20', opportunityId: 'op_midwest_plant2', kind: 'photo', name: 'Plant 2 — site as found', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-60), photoPhase: 'before', meta: 'CompanyCam' },
   { id: 'ar_21', opportunityId: 'op_midwest_plant2', kind: 'photo', name: 'Plant 2 — day 2 prep complete, CSP 3', stageAdded: 'awarded', addedById: 'u_keith', addedAt: iso(-1), photoPhase: 'progress', meta: 'CompanyCam' },
   { id: 'ar_22', opportunityId: 'op_midwest_plant2', kind: 'plan', name: 'Plant 2 — architectural set', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-60), meta: 'Sheets A-201 and A-204 relevant' },
   { id: 'ar_23', opportunityId: 'op_midwest_plant2', kind: 'map', name: 'Installation map — Plant 2', stageAdded: 'awarded', addedById: 'u_dana', addedAt: iso(-4), meta: 'Pour sequence and exclusion zones' },
 
   { id: 'ar_30', opportunityId: 'op_chi_completion', kind: 'photo', name: 'Weight room — before', stageAdded: 'site_visit_completed', addedById: 'u_carla', addedAt: iso(-40), photoPhase: 'before' },
-  { id: 'ar_31', opportunityId: 'op_chi_completion', kind: 'photo', name: 'Weight room — completed floor', stageAdded: 'awarded', addedById: 'u_keith', addedAt: iso(-1), photoPhase: 'after' },
+  { id: 'ar_31', opportunityId: 'op_chi_completion', kind: 'photo', name: 'Weight room — completed site', stageAdded: 'awarded', addedById: 'u_keith', addedAt: iso(-1), photoPhase: 'after' },
   { id: 'ar_32', opportunityId: 'op_continental_freezer', kind: 'form', name: 'Client Expectation Checklist — completed', stageAdded: 'awarded', addedById: 'u_dana', addedAt: iso(-6), meta: '6 of 6 items' },
 ]
 
 /**
- * Photos follow the project from the first site visit to the finished floor.
+ * Photos follow the project from the first site visit to the finished site.
  * Rather than hand-writing that set for every record, each sold job gets the
  * photo history its stage implies — a job in progress has before and progress
  * shots, a job in completion review also has after shots.
@@ -1171,8 +1118,8 @@ ARTIFACTS.push(
     const crew = o.pmId ?? rep
     const jobStatus = SEEDED_JOB_STATUS[o.id] ?? 'scheduling_required'
     const out: Artifact[] = [
-      photo(o, 'Existing floor as found', 'before', 'site_visit_completed', -45, rep),
-      photo(o, 'Substrate and drainage detail', 'before', 'site_visit_completed', -45, rep),
+      photo(o, 'Existing site as found', 'before', 'site_visit_completed', -45, rep),
+      photo(o, 'Site condition and drainage detail', 'before', 'site_visit_completed', -45, rep),
       {
         id: `ar_${++arSeq}`,
         opportunityId: o.id,
@@ -1181,14 +1128,14 @@ ARTIFACTS.push(
         stageAdded: 'site_visit_completed',
         addedById: rep,
         addedAt: iso(-45),
-        meta: 'Relevant sheets identified during takeoff',
+        meta: 'Relevant sheets identified during scope extraction',
       },
     ]
     if (jobStatusIndex(jobStatus) >= jobStatusIndex('in_progress')) {
       out.push(photo(o, 'Prep complete to the specified CSP profile', 'progress', 'awarded', -3, crew))
     }
     if (jobStatusIndex(jobStatus) >= jobStatusIndex('completion_review')) {
-      out.push(photo(o, 'Completed floor from the before-shot angles', 'after', 'awarded', -1, crew))
+      out.push(photo(o, 'Completed site from the before-shot angles', 'after', 'awarded', -1, crew))
     }
     return out
   }),
@@ -1213,41 +1160,41 @@ export const ESTIMATES: Estimate[] = [
     token: 'p3x8k2',
     depositPct: 40,
     internalNotes:
-      'Two weekend windows only. Re-pitching at the filler is excluded in writing. Allow extra cove labour for 14 drain points.',
+      'Two weekend windows only. Re-pitching at the filler is excluded in writing. Allow extra access labour for 14 drain points.',
     options: [
       {
         id: 'eo_1',
-        label: 'Process Floor & Packaging Hall',
-        kind: 'area',
+        label: 'Process Facility & Packaging Hall',
+        kind: 'scope',
         recommended: true,
         lineItems: [
-          { id: 'li_1', priceBookId: 'pb_concrete_prep', name: 'Concrete Surface Preparation', description: 'Remove existing quarry tile and thinset. Shot blast to CSP 3. Joint and spall repair throughout.', qty: 8630, unit: 'sq ft', unitPrice: 2.1 },
-          { id: 'li_2', priceBookId: 'pb_moisture_mitigation', name: 'Moisture Mitigation System', description: 'Single-coat epoxy vapour barrier. Required — slab tested at 88% RH during the site visit.', qty: 8630, unit: 'sq ft', unitPrice: 3.25 },
-          { id: 'li_3', priceBookId: 'pb_urethane_cement', name: 'Urethane Cement', description: 'Heavy-duty urethane cement, 3/16" nominal. Thermal-shock and caustic-washdown resistant. USDA compliant, per the A-611 finish schedule.', qty: 8630, unit: 'sq ft', unitPrice: 12.75 },
-          { id: 'li_4', priceBookId: 'pb_cove_base', name: 'Integral Cove Base', description: '6" integral coved base in matching resin at all wall and equipment plinths, including 14 drain and trench terminations.', qty: 565, unit: 'lin ft', unitPrice: 28.0 },
-          { id: 'li_5', priceBookId: 'pb_mobilization', name: 'Mobilization & Night Work Premium', description: 'Weekend shutdown installation across two consecutive windows, Friday 22:00 to Sunday 20:00.', qty: 2, unit: 'ea', unitPrice: 1850.0 },
+          { id: 'li_1', priceBookId: 'svc_site_preparation', name: 'Site Surface Preparation', description: 'Remove existing quarry tile and thinset. Shot blast to CSP 3. Joint and spall repair throughout.', qty: 8630, unit: 'units', unitPrice: 2.1 },
+          { id: 'li_2', priceBookId: 'svc_site_protection', name: 'Site protection Mitigation System', description: 'Single-service pass repair vapour barrier. Required — site tested at 88% RH during the site visit.', qty: 8630, unit: 'units', unitPrice: 3.25 },
+          { id: 'li_3', priceBookId: 'svc_commercial_cleaning', name: 'Commercial service Cement', description: 'Heavy-duty commercial service cement, 3/16" nominal. Thermal-shock and caustic-washdown resistant. USDA compliant, per the A-611 finish schedule.', qty: 8630, unit: 'units', unitPrice: 12.75 },
+          { id: 'li_4', priceBookId: 'svc_access_equipment', name: 'Integral Access Base', description: '6" integral accessd base in matching resin at all wall and equipment plinths, including 14 drain and trench terminations.', qty: 565, unit: 'units', unitPrice: 28.0 },
+          { id: 'li_5', priceBookId: 'svc_mobilization', name: 'Mobilization & Night Work Premium', description: 'Weekend shutdown installation across two consecutive windows, Friday 22:00 to Sunday 20:00.', qty: 2, unit: 'ea', unitPrice: 1850.0 },
         ],
       },
       {
         id: 'eo_2',
         label: 'Wash Bay — Heavy Duty Build',
-        kind: 'area',
+        kind: 'scope',
         recommended: true,
         lineItems: [
-          { id: 'li_6', priceBookId: 'pb_concrete_prep', name: 'Concrete Surface Preparation', description: 'Tile removal and shot blast to CSP 3.', qty: 770, unit: 'sq ft', unitPrice: 2.1 },
-          { id: 'li_7', priceBookId: 'pb_urethane_cement', name: 'Urethane Cement', description: '1/4" urethane mortar with broadcast quartz for slip resistance, per the A-611 call-out for Room 308.', qty: 770, unit: 'sq ft', unitPrice: 15.5 },
-          { id: 'li_8', priceBookId: 'pb_cove_base', name: 'Integral Cove Base', description: '6" integral coved base.', qty: 55, unit: 'lin ft', unitPrice: 28.0 },
+          { id: 'li_6', priceBookId: 'svc_site_preparation', name: 'Site Surface Preparation', description: 'Tile removal and shot blast to CSP 3.', qty: 770, unit: 'units', unitPrice: 2.1 },
+          { id: 'li_7', priceBookId: 'svc_commercial_cleaning', name: 'Commercial service Cement', description: '1/4" commercial service mortar with broadcast quartz for slip resistance, per the A-611 call-out for Room 308.', qty: 770, unit: 'units', unitPrice: 15.5 },
+          { id: 'li_8', priceBookId: 'svc_access_equipment', name: 'Integral Access Base', description: '6" integral accessd base.', qty: 55, unit: 'units', unitPrice: 28.0 },
         ],
       },
       {
         id: 'eo_3',
-        label: 'Budget Alternative — Industrial Epoxy',
+        label: 'Budget Alternative — Industrial Repair',
         kind: 'alternative',
         recommended: false,
         lineItems: [
-          { id: 'li_9', priceBookId: 'pb_concrete_prep', name: 'Concrete Surface Preparation', description: 'Remove existing quarry tile and thinset. Shot blast to CSP 2.', qty: 8630, unit: 'sq ft', unitPrice: 2.1 },
-          { id: 'li_10', priceBookId: 'pb_industrial_epoxy', name: 'Industrial Epoxy System', description: 'Lower-cost alternative. Not rated for the thermal shock of daily steam washdown — expect a materially shorter service life in this environment.', qty: 8630, unit: 'sq ft', unitPrice: 6.8 },
-          { id: 'li_11', priceBookId: 'pb_cove_base', name: 'Integral Cove Base', description: '4" integral coved base.', qty: 565, unit: 'lin ft', unitPrice: 28.0 },
+          { id: 'li_9', priceBookId: 'svc_site_preparation', name: 'Site Surface Preparation', description: 'Remove existing quarry tile and thinset. Shot blast to CSP 2.', qty: 8630, unit: 'units', unitPrice: 2.1 },
+          { id: 'li_10', priceBookId: 'svc_plumbing_repair', name: 'Industrial Repair System', description: 'Lower-cost alternative. Not rated for the thermal shock of daily steam washdown — expect a materially shorter service life in this environment.', qty: 8630, unit: 'units', unitPrice: 6.8 },
+          { id: 'li_11', priceBookId: 'svc_access_equipment', name: 'Integral Access Base', description: '4" integral accessd base.', qty: 565, unit: 'units', unitPrice: 28.0 },
         ],
       },
     ],
@@ -1270,12 +1217,12 @@ export const ESTIMATES: Estimate[] = [
       {
         id: 'eo_s1',
         label: 'Bottling Hall',
-        kind: 'area',
+        kind: 'scope',
         recommended: true,
         lineItems: [
-          { id: 'li_s1', priceBookId: 'pb_concrete_prep', name: 'Concrete Surface Preparation', description: 'Shot blast to CSP 3, joint repair.', qty: 9200, unit: 'sq ft', unitPrice: 2.1 },
-          { id: 'li_s2', priceBookId: 'pb_moisture_mitigation', name: 'Moisture Mitigation System', description: 'Epoxy vapour barrier.', qty: 9200, unit: 'sq ft', unitPrice: 3.25 },
-          { id: 'li_s3', priceBookId: 'pb_urethane_cement', name: 'Urethane Cement', description: 'USDA compliant urethane mortar.', qty: 9200, unit: 'sq ft', unitPrice: 12.75 },
+          { id: 'li_s1', priceBookId: 'svc_site_preparation', name: 'Site Surface Preparation', description: 'Shot blast to CSP 3, joint repair.', qty: 9200, unit: 'units', unitPrice: 2.1 },
+          { id: 'li_s2', priceBookId: 'svc_site_protection', name: 'Site protection Mitigation System', description: 'Repair vapour barrier.', qty: 9200, unit: 'units', unitPrice: 3.25 },
+          { id: 'li_s3', priceBookId: 'svc_commercial_cleaning', name: 'Commercial service Cement', description: 'USDA compliant commercial service mortar.', qty: 9200, unit: 'units', unitPrice: 12.75 },
         ],
       },
     ],
@@ -1298,19 +1245,19 @@ export const ESTIMATES: Estimate[] = [
       {
         id: 'eo_q1',
         label: 'Kitchen & Line',
-        kind: 'area',
+        kind: 'scope',
         recommended: true,
         lineItems: [
-          { id: 'li_q1', priceBookId: 'pb_concrete_prep', name: 'Concrete Surface Preparation', description: 'Grind to CSP 3.', qty: 1650, unit: 'sq ft', unitPrice: 2.1 },
-          { id: 'li_q2', priceBookId: 'pb_urethane_cement', name: 'Urethane Cement', description: 'USDA compliant urethane mortar.', qty: 1650, unit: 'sq ft', unitPrice: 12.75 },
-          { id: 'li_q3', priceBookId: 'pb_cove_base', name: 'Integral Cove Base', description: '4" integral cove.', qty: 180, unit: 'lin ft', unitPrice: 28.0 },
+          { id: 'li_q1', priceBookId: 'svc_site_preparation', name: 'Site Surface Preparation', description: 'Grind to CSP 3.', qty: 1650, unit: 'units', unitPrice: 2.1 },
+          { id: 'li_q2', priceBookId: 'svc_commercial_cleaning', name: 'Commercial service Cement', description: 'USDA compliant commercial service mortar.', qty: 1650, unit: 'units', unitPrice: 12.75 },
+          { id: 'li_q3', priceBookId: 'svc_access_equipment', name: 'Integral Access Base', description: '4" integral access.', qty: 180, unit: 'units', unitPrice: 28.0 },
         ],
       },
     ],
   },
   {
     id: 'est_verano',
-    opportunityId: 'op_verano_garage',
+    opportunityId: 'op_verano_exterior',
     templateId: 'pt_residential',
     status: 'sent',
     approvedById: 'u_grant',
@@ -1325,21 +1272,21 @@ export const ESTIMATES: Estimate[] = [
     options: [
       {
         id: 'eo_v1',
-        label: 'Garage — Full Flake',
+        label: 'Exterior cleaning',
         kind: 'alternative',
         recommended: true,
         lineItems: [
-          { id: 'li_v1', priceBookId: 'pb_polyaspartic_garage', name: 'Polyaspartic Garage Floor Coating', description: 'Full-broadcast polyaspartic system with Domino flake blend.', qty: 720, unit: 'sq ft', unitPrice: 7.5 },
+          { id: 'li_v1', priceBookId: 'svc_hvac_tuneup', name: 'HVAC Exterior Facility Service', description: 'Full-broadcast HVAC system with Domino flake blend.', qty: 720, unit: 'units', unitPrice: 7.5 },
         ],
       },
       {
         id: 'eo_v2',
-        label: 'Garage + Patio — Full Flake',
+        label: 'Exterior cleaning and protection',
         kind: 'alternative',
         recommended: false,
         lineItems: [
-          { id: 'li_v2', priceBookId: 'pb_polyaspartic_garage', name: 'Polyaspartic Garage Floor Coating', description: 'Full-broadcast polyaspartic system with Domino flake blend.', qty: 720, unit: 'sq ft', unitPrice: 7.5 },
-          { id: 'li_v3', priceBookId: 'pb_flake_broadcast', name: 'Flake Broadcast System', description: 'Matching flake system extended to the rear patio.', qty: 260, unit: 'sq ft', unitPrice: 8.25 },
+          { id: 'li_v2', priceBookId: 'svc_hvac_tuneup', name: 'HVAC Exterior Facility Service', description: 'Full-broadcast HVAC system with Domino flake blend.', qty: 720, unit: 'units', unitPrice: 7.5 },
+          { id: 'li_v3', priceBookId: 'svc_filter_package', name: 'Flake Broadcast System', description: 'Matching flake system extended to the rear patio.', qty: 260, unit: 'units', unitPrice: 8.25 },
         ],
       },
     ],
@@ -1350,13 +1297,13 @@ export const ESTIMATES: Estimate[] = [
  * Every sold job carries the estimate it was sold on. The client's complaint
  * is that the crew has to ring the salesperson to find out what was actually
  * quoted, so no operations record is allowed to exist without one — these are
- * built from the systems already on the opportunity rather than hand-written.
+ * built from the catalogue items already on the opportunity rather than hand-written.
  */
 function soldEstimate(o: Opportunity, signedDaysAgo: number): Estimate {
   const short = o.id.replace('op_', '')
-  const items = o.systemIds.map((pbId, i) => {
+  const items = o.catalogItemIds.map((pbId, i) => {
     const pb = PRICE_BOOK_BY_ID[pbId]
-    const qty = pb.unit === 'lin ft' ? o.coveLf : pb.unit === 'ea' ? 1 : o.sqft
+    const qty = ['visit', 'unit', 'day', 'each'].includes(pb.unit) ? 1 : pb.id === 'svc_access_equipment' ? o.secondaryQuantity || 1 : o.estimatedQuantity
     return {
       id: `li_${short}_${i}`,
       priceBookId: pbId,
@@ -1385,13 +1332,31 @@ function soldEstimate(o: Opportunity, signedDaysAgo: number): Estimate {
       {
         id: `eo_${short}`,
         label: o.name.split('—').pop()?.trim() ?? 'Scope of work',
-        kind: 'area',
+        kind: 'scope',
         recommended: true,
         selectedByCustomer: true,
         lineItems: items,
       },
     ],
   }
+}
+
+for (const estimate of ESTIMATES) {
+  estimate.options = estimate.options.map((option) => ({
+    ...option,
+    lineItems: option.lineItems.map((lineItem) => {
+      const item = PRICE_BOOK_BY_ID[lineItem.priceBookId]
+      return item
+        ? {
+            ...lineItem,
+            name: item.name,
+            description: item.description,
+            unit: item.unit,
+            unitPrice: item.unitPrice,
+          }
+        : lineItem
+    }),
+  }))
 }
 
 const SOLD: Estimate[] = OPPORTUNITIES.filter(
@@ -1416,7 +1381,7 @@ export const ESTIMATE_BY_OPP = Object.fromEntries(ESTIMATES.map((e) => [e.opport
 
 /**
  * Seeded order lines run through the same derivation the UI uses, so a change
- * to a coverage rate can never leave the demo data quietly contradicting the
+ * to a accessrage rate can never leave the demo data quietly contradicting the
  * calculation shown on screen.
  */
 let mlSeq = 0
@@ -1440,9 +1405,9 @@ export const MATERIAL_ORDERS: MaterialOrder[] = [
     status: 'delivered',
     submittedAt: iso(-18),
     neededBy: iso(-3),
-    fmsOrderId: 'FMS-4471',
+    purchaseOrderId: 'PO-4471',
     trackingRef: '1Z-994-DEN-0031',
-    lines: [line('pb_industrial_epoxy', 4_800), line('pb_moisture_mitigation', 4_800)],
+    lines: [line('svc_plumbing_repair', 4_800), line('svc_site_protection', 4_800)],
   },
   {
     id: 'mo_2',
@@ -1450,9 +1415,9 @@ export const MATERIAL_ORDERS: MaterialOrder[] = [
     status: 'delivered',
     submittedAt: iso(-30),
     neededBy: iso(-4),
-    fmsOrderId: 'FMS-4402',
+    purchaseOrderId: 'PO-4402',
     trackingRef: '1Z-994-CHI-0118',
-    lines: [line('pb_urethane_cement', 12_400), line('pb_cove_base', 740)],
+    lines: [line('svc_commercial_cleaning', 12_400), line('svc_access_equipment', 740)],
   },
   {
     id: 'mo_3',
@@ -1460,9 +1425,9 @@ export const MATERIAL_ORDERS: MaterialOrder[] = [
     status: 'shipped',
     submittedAt: iso(-9),
     neededBy: iso(3),
-    fmsOrderId: 'FMS-4488',
+    purchaseOrderId: 'PO-4488',
     trackingRef: '1Z-994-ATL-0072',
-    lines: [line('pb_industrial_epoxy', 3_900)],
+    lines: [line('svc_plumbing_repair', 3_900)],
   },
 ]
 
@@ -1527,7 +1492,7 @@ export const JOBS: Job[] = [
     progress: 35,
     dailyLogs: [
       { id: 'dl_1', date: iso(-2), note: 'Mobilised, tile removal started in the east bay. Two spiral freezers protected and masked.', byId: 'u_keith' },
-      { id: 'dl_2', date: iso(-1), note: 'Tile removal complete. Shot blasting to CSP 3 finished across 6,000 sq ft. Slab spalling worse than expected near the filler.', byId: 'u_keith' },
+      { id: 'dl_2', date: iso(-1), note: 'Tile removal complete. Shot blasting to CSP 3 finished across 6,000 units. Site spalling worse than expected near the filler.', byId: 'u_keith' },
     ],
   },
   {
@@ -1564,7 +1529,7 @@ export const JOBS: Job[] = [
     pmId: 'u_dana',
     crewIds: ['u_ray'],
     progress: 100,
-    dailyLogs: [{ id: 'dl_3', date: iso(-1), note: 'Final coat down, customer walked the floor and signed off.', byId: 'u_keith' }],
+    dailyLogs: [{ id: 'dl_3', date: iso(-1), note: 'Final service pass down, customer walked the site and signed off.', byId: 'u_keith' }],
   },
   {
     id: 'job_5',
@@ -1584,9 +1549,9 @@ export const CHANGE_ORDERS: ChangeOrder[] = [
   {
     id: 'co_1',
     opportunityId: 'op_chi_completion',
-    description: 'Added mezzanine landing and stair nosing, discovered on site and requested by the customer.',
+    description: 'Added mezzanine landing and stair nosing, disaccessred on site and requested by the customer.',
     qty: 240,
-    unit: 'sq ft',
+    unit: 'units',
     amount: 2_040,
     raisedById: 'u_keith',
     raisedAt: iso(-3),
@@ -1598,9 +1563,9 @@ export const CHANGE_ORDERS: ChangeOrder[] = [
   {
     id: 'co_3',
     opportunityId: 'op_chi_ready_invoice',
-    description: 'Second coat extended into the keg wash alcove at the customer request.',
+    description: 'Second service pass extended into the keg wash alaccess at the customer request.',
     qty: 310,
-    unit: 'sq ft',
+    unit: 'units',
     amount: 4_185,
     raisedById: 'u_keith',
     raisedAt: iso(-6),
@@ -1614,7 +1579,7 @@ export const CHANGE_ORDERS: ChangeOrder[] = [
     opportunityId: 'op_midwest_plant2',
     description: 'Additional spall repair at the filler line beyond the hairline crack fill allowance in the contract.',
     qty: 180,
-    unit: 'sq ft',
+    unit: 'units',
     amount: 3_240,
     raisedById: 'u_keith',
     raisedAt: iso(-1),
@@ -1629,9 +1594,9 @@ export const ISSUES: Issue[] = [
   {
     id: 'is_1',
     opportunityId: 'op_midwest_plant2',
-    title: 'Slab spalling worse than surveyed near filler line 3',
+    title: 'Site spalling worse than surveyed near filler line 3',
     detail:
-      'Once the tile came up, roughly 180 sq ft around the filler showed deep spalling. Needs repair mortar before the mitigation coat or the finish will telegraph. Change order raised.',
+      'Once the tile came up, roughly 180 units around the filler showed deep spalling. Needs repair mortar before the mitigation service pass or the finish will telegraph. Change order raised.',
     severity: 'high',
     raisedById: 'u_keith',
     raisedAt: iso(-1),
@@ -1641,7 +1606,7 @@ export const ISSUES: Issue[] = [
     id: 'is_2',
     opportunityId: 'op_midwest_plant2',
     title: 'Plant maintenance has not disconnected filler line 3',
-    detail: 'Blocking access to about 400 sq ft. Escalated to the plant maintenance director.',
+    detail: 'Blocking access to about 400 units. Escalated to the plant maintenance director.',
     severity: 'medium',
     raisedById: 'u_keith',
     raisedAt: iso(-1),
@@ -1711,11 +1676,11 @@ export const REMINDERS: Reminder[] = [
   {
     id: 'rm_2', opportunityId: 'op_den_delayed', dueAt: iso(430), ownerId: 'u_nina', done: false,
     reason: 'Budget cycle', expectedPeriod: '2028 capex',
-    note: 'Freezer retrofit deferred to the 2028 capital plan. Ken confirmed the spec is written around our MMA system — stay in front of it.',
+    note: 'Freezer retrofit deferred to the 2028 capital plan. Ken confirmed the spec is written around our electrical service system — stay in front of it.',
   },
   {
     id: 'rm_3', opportunityId: 'op_chi_followup', dueAt: iso(2), ownerId: 'u_bj', done: false,
-    note: 'Third follow-up. Owner is comparing against a local epoxy contractor — lead with the washdown warranty and service life.',
+    note: 'Third follow-up. Owner is comparing against a local repair contractor — lead with the washdown warranty and service life.',
   },
 ]
 
@@ -1735,7 +1700,7 @@ export const ACTIVITY: Activity[] = [
   { id: 'act_5', opportunityId: 'op_midwest_plant3', at: iso(-6), actorId: 'u_bj', kind: 'artifact', text: 'Added 4 photos from CompanyCam, auto-matched to this job by GPS.' },
   { id: 'act_6', opportunityId: 'op_midwest_plant3', at: iso(-6, 15), actorId: 'u_bj', kind: 'artifact', text: 'Uploaded MidwestFoods_Plant3_IFC_Set.pdf — 214 pages.' },
   { id: 'act_7', opportunityId: 'op_midwest_plant3', at: iso(-6, 16), actorId: 'u_bj', kind: 'checklist', text: 'Completed the Industrial Site Visit Form on site — all required fields answered.' },
-  { id: 'act_8', opportunityId: 'op_midwest_plant3', at: iso(-5), actorId: 'u_marcus', kind: 'system', text: 'AI takeoff identified 4 relevant sheets from 214 pages and extracted 3 areas totalling 9,400 sq ft.' },
-  { id: 'act_9', opportunityId: 'op_midwest_plant3', at: iso(-2), actorId: 'u_marcus', kind: 'stage', text: 'Moved to Estimating. Spec sheet, load list and install map auto-attached for urethane cement.' },
-  { id: 'act_10', opportunityId: 'op_midwest_plant2', at: iso(-1), actorId: 'u_keith', kind: 'issue', text: 'Raised a high-severity issue — slab spalling worse than surveyed near filler line 3.' },
+  { id: 'act_8', opportunityId: 'op_midwest_plant3', at: iso(-5), actorId: 'u_marcus', kind: 'system', text: 'Document scope extraction identified 4 relevant sheets from 214 pages and extracted 3 areas totalling 9,400 units.' },
+  { id: 'act_9', opportunityId: 'op_midwest_plant3', at: iso(-2), actorId: 'u_marcus', kind: 'stage', text: 'Moved to Estimating. Spec sheet, load list and install map auto-attached for commercial service cement.' },
+  { id: 'act_10', opportunityId: 'op_midwest_plant2', at: iso(-1), actorId: 'u_keith', kind: 'issue', text: 'Raised a high-severity issue — site spalling worse than surveyed near filler line 3.' },
 ]

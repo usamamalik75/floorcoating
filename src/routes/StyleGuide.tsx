@@ -28,7 +28,7 @@ export function StyleGuide() {
         <header>
           <h1 className="font-display text-2xl text-primary">Design System</h1>
           <p className="mt-1 max-w-2xl text-base text-secondary">
-            Industrial trade-pro, built on the verified FCG brand palette. Every colour below is a
+            A neutral, configurable service-operations design system. Every colour below is a
             token reference — no component in this codebase contains a hex value.
           </p>
         </header>
@@ -173,14 +173,14 @@ export function StyleGuide() {
               <div className="space-y-3 p-4">
                 <Input placeholder="Search projects…" />
                 <Select defaultValue="">
-                  <option value="">Select a floor system…</option>
-                  <option>Urethane Cement</option>
-                  <option>MMA High Performance</option>
+                  <option value="">Select a catalogue item…</option>
+                  <option>Commercial Cleaning</option>
+                  <option>electrical service High Performance</option>
                 </Select>
                 <Checkbox
                   checked={checked}
                   onChange={setChecked}
-                  label="Moisture test the slab"
+                  label="Site condition test the surface"
                   description="Calcium chloride or RH probe."
                 />
               </div>
@@ -191,9 +191,9 @@ export function StyleGuide() {
               <div className="space-y-3 p-4">
                 <dl className="grid grid-cols-3 gap-3">
                   <KeyValue label="Value">$48,600</KeyValue>
-                  <KeyValue label="Area">2,850 sq ft</KeyValue>
+                  <KeyValue label="Quantity">2,850 units</KeyValue>
                   <KeyValue label="Code" mono>
-                    FCG-CHI-1042
+                    JOB-CHI-1042
                   </KeyValue>
                 </dl>
                 <div>

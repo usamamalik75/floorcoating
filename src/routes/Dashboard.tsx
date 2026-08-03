@@ -6,7 +6,6 @@ import {
   ArrowRight,
   BellRing,
   Boxes,
-  Building2,
   CalendarClock,
   CheckCircle2,
   ClipboardCheck,
@@ -14,12 +13,12 @@ import {
   HardHat,
   Receipt,
   ScanSearch,
-  TrendingUp,
   Users,
 } from 'lucide-react'
-import { useStore, money, estimateTotal, ROYALTY_RATE } from '@/store/useStore'
+import { useStore, money, estimateTotal } from '@/store/useStore'
+import { assignedTo } from '@/domain/jobs'
 import { useScopedOpportunities, useViewer } from '@/store/selectors'
-import { LOCATIONS, LOCATION_BY_ID, TODAY, USER_BY_ID } from '@/data/seed'
+import { LOCATION_BY_ID, TODAY, USER_BY_ID } from '@/data/seed'
 import { STAGE_BY_ID, stageLabel } from '@/domain/stages'
 import type { Opportunity, StageId } from '@/domain/types'
 import { Badge, Button, Card, CardHeader, EmptyState, StageChip } from '@/components/ui'
@@ -45,7 +44,7 @@ export function Dashboard() {
   }
 
   const common = {
-    franchisor: <FranchisorHome />,
+    admin: <CompanyHome />,
     owner: <OwnerHome />,
     sales: <SalesHome />,
     estimator: <EstimatorHome />,
@@ -162,7 +161,7 @@ function List({
   )
 }
 
-/* ---------- 1. Franchisor ------------------------------------------------ */
+/* ---------- 1. Company administrator ------------------------------------------------ */
 
 function isOpenOpportunity(
   o: Opportunity,
@@ -177,88 +176,8 @@ function isOpenOpportunity(
   return true
 }
 
-function FranchisorHome() {
-  const s = useStore()
-  const open = s.opportunities.filter((o) => isOpenOpportunity(o, s.jobs))
-  const invoiced = s.invoices.reduce((sum, i) => sum + i.amount, 0)
-  const pendingRequests = s.prospectRequests.filter((r) => r.status === 'pending_approval')
-  const pendingOrders = s.materialOrders.filter((m) => m.status === 'submitted')
-
-  return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Network pipeline" value={money(open.reduce((a, o) => a + o.value, 0), true)} sub={`${open.length} live opportunities`} icon={<TrendingUp size={12} />} to="/admin" />
-        <Stat label="Invoiced revenue" value={money(invoiced, true)} sub={`Royalty accrued ${money(invoiced * ROYALTY_RATE, true)}`} icon={<Receipt size={12} />} to="/admin" />
-        <Stat label="Locations" value={LOCATIONS.length} sub="1 corporate, 2 franchise" icon={<Building2 size={12} />} to="/fms/locations" />
-        <Stat
-          label="Awaiting your approval"
-          value={pendingRequests.length + pendingOrders.length}
-          sub={`${pendingRequests.length} prospecting, ${pendingOrders.length} material`}
-          tone={pendingRequests.length + pendingOrders.length > 0 ? 'warning' : undefined}
-          icon={<ClipboardCheck size={12} />}
-          to="/admin"
-        />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <List
-          title="Prospecting requests awaiting approval"
-          subtitle="Locations requesting data-provider lists"
-          icon={<ScanSearch size={14} />}
-          action={
-            <Link to="/prospecting">
-              <Button size="sm">Review</Button>
-            </Link>
-          }
-          empty="Nothing pending."
-          items={pendingRequests.map((r) => (
-            <div key={r.id} className="flex items-center gap-3 border-b border-subtle px-4 py-2.5 last:border-0">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-base font-medium text-primary">
-                  {r.vertical} within {r.radiusMiles} miles of {r.originCity}
-                </p>
-                <p className="text-sm text-muted">
-                  {LOCATION_BY_ID[r.locationId].name} · {USER_BY_ID[r.requestedById]?.name} · ~
-                  {r.estimatedCount} companies
-                </p>
-              </div>
-              <Badge tone="warning">Pending</Badge>
-            </div>
-          ))}
-        />
-
-        <List
-          title="Territory performance"
-          subtitle="Win rate and open pipeline by location"
-          icon={<Building2 size={14} />}
-          empty=""
-          items={LOCATIONS.map((l) => {
-            const mine = s.opportunities.filter((o) => o.locationId === l.id)
-            const won = mine.filter((o) => o.stage === 'awarded')
-            const lost = mine.filter((o) => o.stage === 'lost')
-            const rate = won.length + lost.length > 0 ? Math.round((won.length / (won.length + lost.length)) * 100) : 0
-            const openValue = mine
-              .filter((o) => isOpenOpportunity(o, s.jobs))
-              .reduce((a, o) => a + o.value, 0)
-            return (
-              <div key={l.id} className="flex items-center gap-3 border-b border-subtle px-4 py-2.5 last:border-0">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-base font-medium text-primary">{l.name}</p>
-                  <p className="text-sm text-muted">
-                    {l.city}, {l.state} · opened {format(new Date(l.openedAt), 'MMM yyyy')}
-                  </p>
-                </div>
-                <span className="w-16 text-right font-mono text-sm text-secondary tabular">{rate}% win</span>
-                <span className="w-20 text-right font-mono text-sm text-primary tabular">
-                  {money(openValue, true)}
-                </span>
-              </div>
-            )
-          })}
-        />
-      </div>
-    </div>
-  )
+function CompanyHome() {
+  return <OwnerHome />
 }
 
 /* ---------- 2. Location owner ------------------------------------------- */
@@ -326,12 +245,15 @@ function SalesHome() {
   const s = useStore()
   const viewer = useViewer()!
   const mine = s.opportunities.filter((o) => o.ownerId === viewer.id)
+  const myThreads = s.messageThreads.filter((thread) => mine.some((opp) => opp.id === thread.opportunityId))
   const todayVisits = mine.filter((o) => o.visitAt && isSameDay(new Date(o.visitAt), TODAY))
   const dueReminders = s.reminders.filter(
     (r) => !r.done && r.ownerId === viewer.id && isBefore(new Date(r.dueAt), new Date(TODAY.getTime() + 7 * 86_400_000)),
   )
   const openProposals = mine.filter((o) => ['proposal_sent', 'follow_up'].includes(o.stage))
   const newLeads = s.opportunities.filter((o) => o.stage === 'new_lead' && o.locationId === viewer.locationId)
+  const drafts = myThreads.filter((thread) => thread.messages.some((message) => message.status === 'draft'))
+  const noResponse = myThreads.filter((thread) => thread.status === 'waiting')
 
   return (
     <div className="space-y-5">
@@ -340,6 +262,8 @@ function SalesHome() {
         <Stat label="My open pipeline" value={money(mine.filter((o) => isOpenOpportunity(o, s.jobs)).reduce((a, o) => a + o.value, 0), true)} sub={`${mine.length} records`} to="/sales" />
         <Stat label="Proposals out" value={openProposals.length} sub={money(openProposals.reduce((a, o) => a + o.value, 0), true)} to="/sales" />
         <Stat label="Follow-ups due" value={dueReminders.length} tone={dueReminders.length ? 'warning' : undefined} sub="Next 7 days" icon={<BellRing size={12} />} />
+        <Stat label="Drafts waiting" value={drafts.length} sub="Saved in communications" to="/communications" />
+        <Stat label="No response" value={noResponse.length} tone={noResponse.length ? 'warning' : undefined} sub="Customer has not replied yet" to="/communications" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -397,6 +321,29 @@ function SalesHome() {
           empty="No open proposals."
           items={openProposals.map((o) => <OppRow key={o.id} o={o} />)}
         />
+        <List
+          title="Communication drafts"
+          icon={<BellRing size={14} />}
+          empty="No drafts waiting."
+          action={
+            <Link to="/communications">
+              <Button size="sm">Open communications</Button>
+            </Link>
+          }
+          items={drafts.map((thread) => {
+            const opp = mine.find((candidate) => candidate.id === thread.opportunityId)
+            return opp ? <OppRow key={thread.id} o={opp} right={<Badge tone="neutral">Draft</Badge>} /> : null
+          })}
+        />
+        <List
+          title="Awaiting customer response"
+          icon={<AlertTriangle size={14} />}
+          empty="No customer replies outstanding."
+          items={noResponse.map((thread) => {
+            const opp = mine.find((candidate) => candidate.id === thread.opportunityId)
+            return opp ? <OppRow key={thread.id} o={opp} right={<Badge tone="warning">Waiting</Badge>} /> : null
+          })}
+        />
       </div>
     </div>
   )
@@ -410,7 +357,7 @@ function EstimatorHome() {
   const queue = opps.filter((o) => o.stage === 'site_visit_completed')
   const inProgress = opps.filter((o) => o.stage === 'estimate_in_progress')
   const forApproval = opps.filter((o) => o.stage === 'estimate_ready')
-  const takeoffs = s.takeoffs.filter((t) => t.status === 'ready')
+  const scopeExtractions = s.scopeExtractions.filter((t) => t.status === 'ready')
 
   return (
     <div className="space-y-5">
@@ -418,7 +365,7 @@ function EstimatorHome() {
         <Stat label="Waiting to be estimated" value={queue.length} sub="Site visit complete" tone={queue.length ? 'warning' : undefined} />
         <Stat label="Estimates in progress" value={inProgress.length} />
         <Stat label="Awaiting my approval" value={forApproval.length} tone={forApproval.length ? 'warning' : undefined} icon={<ClipboardCheck size={12} />} />
-        <Stat label="AI takeoffs to review" value={takeoffs.length} icon={<ScanSearch size={12} />} />
+        <Stat label="Scope extractions to review" value={scopeExtractions.length} icon={<ScanSearch size={12} />} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -432,7 +379,7 @@ function EstimatorHome() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-base font-medium text-primary">{o.name}</p>
                 <p className="truncate text-sm text-muted">
-                  {o.sqft.toLocaleString()} sq ft{o.coveLf > 0 && ` · ${o.coveLf} lin ft cove`}
+                  {o.estimatedQuantity.toLocaleString()} units{o.secondaryQuantity > 0 && ` · ${o.secondaryQuantity} units secondary quantity`}
                 </p>
               </div>
               <Link to={`/estimate/${o.id}`}>
@@ -465,11 +412,11 @@ function EstimatorHome() {
         />
 
         <List
-          title="AI takeoffs ready for verification"
+          title="Scope extractions ready for verification"
           subtitle="Extracted from architectural sets — an estimator must confirm"
           icon={<ScanSearch size={14} />}
-          empty="No takeoffs pending."
-          items={takeoffs.map((t) => {
+          empty="No scope extractions pending."
+          items={scopeExtractions.map((t) => {
             const o = s.opportunities.find((x) => x.id === t.opportunityId)
             if (!o) return null
             return (
@@ -480,7 +427,7 @@ function EstimatorHome() {
                     {t.fileName} · {t.relevantPages.length} of {t.pageCount} pages relevant
                   </p>
                 </div>
-                <Link to={`/estimate/${o.id}#takeoff`}>
+                <Link to={`/estimate/${o.id}#scopeExtraction`}>
                   <Button size="sm">Verify</Button>
                 </Link>
               </div>
@@ -517,7 +464,7 @@ function PmHome() {
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Needs dates and a crew" value={toSchedule.length} tone={toSchedule.length ? 'warning' : undefined} icon={<CalendarClock size={12} />} to="/schedule" />
-        <Stat label="Material to order" value={materialNeeded.length} icon={<Boxes size={12} />} to="/jobs" />
+        <Stat label="Purchasing required" value={materialNeeded.length} icon={<Boxes size={12} />} to="/jobs" />
         <Stat label="Active installations" value={active.length} icon={<HardHat size={12} />} to="/jobs" />
         <Stat label="Open issues" value={openIssues.length} tone={openIssues.length ? 'warning' : undefined} icon={<AlertTriangle size={12} />} />
       </div>
@@ -544,17 +491,17 @@ function PmHome() {
         />
 
         <List
-          title="Material orders to raise"
-          subtitle="Quantities are derived from the sold system"
+          title="Purchase orders to raise"
+          subtitle="Requirements are derived from the sold quote"
           icon={<Boxes size={14} />}
-          empty="No material outstanding."
+          empty="No purchasing outstanding."
           items={materialNeeded.map((o) => (
             <div key={o.id} className="flex items-center gap-3 border-b border-subtle px-4 py-2.5 last:border-0">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-base font-medium text-primary">{o.name}</p>
-                <p className="text-sm text-muted">{o.sqft.toLocaleString()} sq ft</p>
+                <p className="text-sm text-muted">{o.estimatedQuantity.toLocaleString()} units</p>
               </div>
-              <Link to={`/opportunities/${o.id}/material`}>
+              <Link to={`/opportunities/${o.id}/purchasing`}>
                 <Button size="sm" variant="primary">
                   Prepare order
                 </Button>
@@ -621,7 +568,7 @@ function PmHome() {
 function CrewHome() {
   const s = useStore()
   const viewer = useViewer()!
-  const myJobs = s.jobs.filter((j) => j.crewLeaderId === viewer.id || j.crewIds.includes(viewer.id))
+  const myJobs = s.jobs.filter((j) => assignedTo(j, viewer.id))
   const today = myJobs.filter(
     (j) => new Date(j.start) <= TODAY && new Date(j.end) >= TODAY,
   )

@@ -18,6 +18,7 @@ import {
   Mail,
   Map as MapIcon,
   MapPin,
+  MessageSquare,
   PenLine,
   Phone,
   Plus,
@@ -33,7 +34,7 @@ import { formForCategory } from '@/data/siteVisitForms'
 import { ACCOUNT_BY_ID, LOCATION_BY_ID, USER_BY_ID } from '@/data/seed'
 import { PRICE_BOOK_BY_ID } from '@/data/priceBook'
 import { estimateTotal, money, optionTotal, useStore } from '@/store/useStore'
-import { useChangeOrdersFor, useChecks, useIssuesFor } from '@/store/selectors'
+import { useChangeOrdersFor, useChecks, useIssuesFor, useMessageThreads, usePaymentRequests } from '@/store/selectors'
 import { StageGate } from '@/components/domain/StageGate'
 import { StageStepper } from '@/components/domain/StageStepper'
 import { NextActionPanel } from '@/components/domain/NextActionPanel'
@@ -65,6 +66,7 @@ const TABS = [
   { id: 'proposals', label: 'Proposals', icon: FileSignature },
   { id: 'documents', label: 'Documents', icon: ClipboardCheck },
   { id: 'photos', label: 'Photos', icon: Camera },
+  { id: 'messages', label: 'Messages', icon: MessageSquare },
   { id: 'notes', label: 'Notes', icon: StickyNote },
   { id: 'history', label: 'History', icon: StickyNote },
   { id: 'job', label: 'Job', icon: HardHat, awardedOnly: true },
@@ -91,6 +93,9 @@ export function OpportunityRecord() {
 
   const [gateTo, setGateTo] = useState<StageId | null>(null)
   const [showNext, setShowNext] = useState(true)
+  const [messageChannel, setMessageChannel] = useState<'email' | 'sms'>('email')
+  const [messageSubject, setMessageSubject] = useState('')
+  const [messageBody, setMessageBody] = useState('')
   const tab = params.get('tab') ?? 'overview'
 
   const opp = s.opportunities.find((o) => o.id === id)
@@ -100,6 +105,8 @@ export function OpportunityRecord() {
   const materialOrder = s.materialOrders.find((m) => m.opportunityId === id)
   const invoices = s.invoices.filter((i) => i.opportunityId === id)
   const reminder = s.reminders.find((r) => r.opportunityId === id && !r.done)
+  const threads = useMessageThreads(id)
+  const paymentRequests = usePaymentRequests(id)
   const mine = s.artifacts.filter((a) => a.opportunityId === id)
   const visit = s.siteVisits.find((v) => v.opportunityId === id)
   const log = s.activity.filter((a) => a.opportunityId === id).slice().reverse()
@@ -125,6 +132,7 @@ export function OpportunityRecord() {
   const account = ACCOUNT_BY_ID[opp.accountId]
   const location = LOCATION_BY_ID[opp.locationId]
   const def = STAGE_BY_ID[opp.stage]
+  const thread = threads[0]
   const jobReached = (status: JobStatus) =>
     Boolean(job && jobStatusIndex(job.status) >= jobStatusIndex(status))
 
@@ -223,8 +231,8 @@ export function OpportunityRecord() {
                   <KeyValue label="Category">
                     <span className="capitalize">{opp.category}</span>
                   </KeyValue>
-                  <KeyValue label="Area">{opp.sqft.toLocaleString()} sq ft</KeyValue>
-                  <KeyValue label="Cove">{opp.coveLf > 0 ? `${opp.coveLf} lin ft` : '—'}</KeyValue>
+                  <KeyValue label="Estimated quantity">{opp.estimatedQuantity.toLocaleString()} units</KeyValue>
+                  <KeyValue label="Secondary quantity">{opp.secondaryQuantity > 0 ? `${opp.secondaryQuantity} units` : '—'}</KeyValue>
                   <KeyValue label="Source">{opp.source}</KeyValue>
                   <KeyValue label="Sales rep">{USER_BY_ID[opp.ownerId]?.name ?? 'Unassigned'}</KeyValue>
                   <KeyValue label="Estimator">
@@ -326,8 +334,8 @@ export function OpportunityRecord() {
                   <div className="divide-y divide-(--border-subtle)">
                     {est.options.map((o) => (
                       <div key={o.id} className="flex items-center gap-3 px-4 py-2.5">
-                        <Badge tone={o.kind === 'area' ? 'info' : 'attention'}>
-                          {o.kind === 'area' ? 'Area' : 'Alternative'}
+                        <Badge tone={o.kind === 'scope' ? 'info' : 'attention'}>
+                          {o.kind === 'scope' ? 'Area' : 'Alternative'}
                         </Badge>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-base font-medium text-primary">{o.label}</p>
@@ -409,9 +417,9 @@ export function OpportunityRecord() {
             <div className={tab === 'documents' ? 'space-y-6' : 'hidden'}>
             <Section
               id="material"
-              title="Material"
+              title="Purchasing"
               action={
-                <Link to={`/opportunities/${opp.id}/material`}>
+                <Link to={`/opportunities/${opp.id}/purchasing`}>
                   <Button size="sm">
                     <Boxes size={12} />
                     {materialOrder ? 'Open order' : 'Prepare order'}
@@ -422,14 +430,14 @@ export function OpportunityRecord() {
               {!materialOrder ? (
                 <Card>
                   <EmptyState
-                    title="No material order yet"
-                    description="Quantities are derived from the sold system, area, cove, coats and waste allowance."
+                    title="No purchase order yet"
+                    description="Requirements are derived from the sold scope and configured resource rules."
                   />
                 </Card>
               ) : (
                 <Card>
                   <CardHeader
-                    title={materialOrder.fmsOrderId ?? 'Draft order'}
+                    title={materialOrder.purchaseOrderId ?? 'Draft order'}
                     subtitle={`Needed by ${format(new Date(materialOrder.neededBy), 'd MMM yyyy')}`}
                     icon={<Boxes size={14} />}
                     actions={
@@ -542,7 +550,7 @@ export function OpportunityRecord() {
               <ChecklistCard
                 opportunityId={opp.id}
                 templateId="cl_closeout"
-                subtitle="The system asks these questions so nobody has to remember them."
+                subtitle="The workflow asks these questions so the team has a consistent record."
               />
               {jobReached('completion_review') && (
                 <Card className="mt-3 p-4">
@@ -567,6 +575,7 @@ export function OpportunityRecord() {
                 <Card>
                   {invoices.map((inv) => {
                     const paidAmt = inv.payments.reduce((a, p) => a + p.amount, 0)
+                    const paymentLink = paymentRequests.find((request) => request.invoiceId === inv.id)
                     return (
                       <div key={inv.id} className="border-b border-subtle p-4 last:border-0">
                         <div className="flex items-center gap-3">
@@ -595,6 +604,29 @@ export function OpportunityRecord() {
                           <p className="mt-1.5 text-sm text-muted">
                             {money(paidAmt)} received · {money(inv.amount - paidAmt)} outstanding
                           </p>
+                        )}
+                        {paymentLink && (
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
+                            <Badge
+                              tone={
+                                paymentLink.status === 'paid'
+                                  ? 'success'
+                                  : paymentLink.status === 'failed'
+                                    ? 'danger'
+                                    : 'warning'
+                              }
+                            >
+                              {paymentLink.status}
+                            </Badge>
+                            <span>Hosted payment link ready</span>
+                            <Link
+                              to={`/pay/${paymentLink.token}`}
+                              target="_blank"
+                              className="font-medium text-brand hover:underline"
+                            >
+                              Open customer page
+                            </Link>
+                          </div>
                         )}
                       </div>
                     )
@@ -634,6 +666,117 @@ export function OpportunityRecord() {
                     ))}
                 </Card>
               )}
+            </Section>
+            </div>
+
+            {/* == Messages tab == */}
+            <div className={tab === 'messages' ? 'space-y-6' : 'hidden'}>
+            <Section id="messages" title="Messages">
+              <Card>
+                <CardHeader
+                  title="Customer thread"
+                  subtitle={`${account?.contactName} · ${account?.email ?? account?.phone ?? 'No contact method'}`}
+                  icon={<MessageSquare size={14} />}
+                  actions={
+                    <Link to="/communications">
+                      <Button size="sm">Open hub</Button>
+                    </Link>
+                  }
+                />
+                {thread ? (
+                  <div className="space-y-3 p-4">
+                    {thread.messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={cn(
+                          'max-w-[85%] rounded-md px-3 py-2',
+                          message.direction === 'outbound'
+                            ? 'ml-auto bg-action-soft'
+                            : 'border border-subtle bg-surface-inset',
+                        )}
+                      >
+                        <div className="flex items-center gap-2 text-xs text-muted">
+                          <span>{message.channel.toUpperCase()}</span>
+                          <span>·</span>
+                          <span>{message.status}</span>
+                          <span>·</span>
+                          <span>{format(new Date(message.at), 'd MMM · HH:mm')}</span>
+                        </div>
+                        {message.subject && <p className="mt-1 text-sm font-medium text-primary">{message.subject}</p>}
+                        <p className="mt-1 whitespace-pre-wrap text-sm text-secondary">{message.body}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    title="No messages yet"
+                    description="Proposal sends, follow-ups, and payment reminders can all live on one customer thread."
+                  />
+                )}
+              </Card>
+
+              <Card className="p-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <FieldRow label="Channel">
+                    <Select value={messageChannel} onChange={(e) => setMessageChannel(e.target.value as 'email' | 'sms')}>
+                      <option value="email">Email</option>
+                      <option value="sms">SMS</option>
+                    </Select>
+                  </FieldRow>
+                  {messageChannel === 'email' && (
+                    <FieldRow label="Subject">
+                      <Input value={messageSubject} onChange={(e) => setMessageSubject(e.target.value)} placeholder="Message subject" />
+                    </FieldRow>
+                  )}
+                  <FieldRow label="Message" className="sm:col-span-2">
+                    <Textarea
+                      rows={4}
+                      value={messageBody}
+                      onChange={(e) => setMessageBody(e.target.value)}
+                      placeholder="Draft a follow-up, payment reminder, or scheduling note..."
+                    />
+                  </FieldRow>
+                </div>
+                <div className="mt-3 flex gap-2 border-t border-subtle pt-3">
+                  <Button
+                    onClick={() => {
+                      if (!messageBody.trim()) return
+                      s.sendMessage(opp.id, {
+                        channel: messageChannel,
+                        subject: messageChannel === 'email' ? messageSubject : undefined,
+                        body: messageBody,
+                        contactName: account?.contactName ?? 'Customer',
+                        contactEmail: account?.email,
+                        contactPhone: account?.phone,
+                        status: 'draft',
+                      })
+                      setMessageBody('')
+                      setMessageSubject('')
+                    }}
+                  >
+                    Save draft
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      if (!messageBody.trim()) return
+                      s.sendMessage(opp.id, {
+                        channel: messageChannel,
+                        subject: messageChannel === 'email' ? messageSubject : undefined,
+                        body: messageBody,
+                        contactName: account?.contactName ?? 'Customer',
+                        contactEmail: account?.email,
+                        contactPhone: account?.phone,
+                        status: 'sent',
+                      })
+                      setMessageBody('')
+                      setMessageSubject('')
+                    }}
+                  >
+                    Send now
+                  </Button>
+                </div>
+              </Card>
             </Section>
             </div>
 
@@ -813,7 +956,7 @@ function ChecklistCard({
         icon={<ClipboardCheck size={14} />}
         actions={
           <>
-            {tpl.managedByFranchisor && <Badge tone="info">Network standard</Badge>}
+            {tpl.managedByCompany && <Badge tone="info">Company standard</Badge>}
             <Badge tone={done === tpl.items.length ? 'success' : 'neutral'}>
               {done}/{tpl.items.length}
             </Badge>
@@ -845,7 +988,7 @@ function ChangeOrders({ opportunityId }: { opportunityId: string }) {
   const [open, setOpen] = useState(false)
   const [description, setDescription] = useState('')
   const [qty, setQty] = useState(0)
-  const [unit, setUnit] = useState('sq ft')
+  const [unit, setUnit] = useState('unit')
   const [amount, setAmount] = useState(0)
   const [days, setDays] = useState(0)
   const [note, setNote] = useState('')
@@ -965,7 +1108,7 @@ function ChangeOrders({ opportunityId }: { opportunityId: string }) {
           </FieldRow>
           <FieldRow label="Unit">
             <Select value={unit} onChange={(e) => setUnit(e.target.value)}>
-              <option value="sq ft">sq ft</option>
+              <option value="unit">unit</option>
               <option value="lin ft">lin ft</option>
               <option value="ea">ea</option>
             </Select>

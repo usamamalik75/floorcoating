@@ -1,9 +1,8 @@
 import { format } from 'date-fns'
 import { CheckCircle2 } from 'lucide-react'
 import type { Estimate, Opportunity } from '@/domain/types'
-import { PRICE_BOOK_BY_ID, TEMPLATE_BY_ID } from '@/data/priceBook'
 import { ACCOUNT_BY_ID, LOCATION_BY_ID } from '@/data/seed'
-import { estimateTotal, money, optionTotal } from '@/store/useStore'
+import { estimateTotal, money, optionTotal, useStore } from '@/store/useStore'
 import { Logo } from '@/components/layout/Logo'
 import { cn } from '@/lib/cn'
 
@@ -37,8 +36,11 @@ export function ProposalDocument({
 }) {
   const account = ACCOUNT_BY_ID[opportunity.accountId]
   const location = LOCATION_BY_ID[opportunity.locationId]
-  const template = TEMPLATE_BY_ID[estimate.templateId]
-  const areas = estimate.options.filter((o) => o.kind === 'area')
+  const priceBookItems = useStore((s) => s.priceBookItems)
+  const proposalTemplates = useStore((s) => s.proposalTemplates)
+  const priceBookById = Object.fromEntries(priceBookItems.map((item) => [item.id, item])) as Record<string, typeof priceBookItems[number]>
+  const template = proposalTemplates.find((candidate) => candidate.id === estimate.templateId)
+  const scopes = estimate.options.filter((o) => o.kind === 'scope')
   const alternatives = estimate.options.filter((o) => o.kind === 'alternative')
 
   const chosen =
@@ -47,19 +49,19 @@ export function ProposalDocument({
     alternatives.find((o) => o.recommended)
 
   const total =
-    optionTotal(areas.flatMap((o) => o.lineItems)) + (chosen ? optionTotal(chosen.lineItems) : 0)
+    optionTotal(scopes.flatMap((o) => o.lineItems)) + (chosen ? optionTotal(chosen.lineItems) : 0)
 
-  const systems = [
+  const catalogueItems = [
     ...new Set(estimate.options.flatMap((o) => o.lineItems.map((l) => l.priceBookId))),
   ]
-    .map((id) => PRICE_BOOK_BY_ID[id])
+    .map((id) => priceBookById[id])
     .filter(Boolean)
 
-  // The template and each system carry their own exclusions and they overlap.
+  // The template and each catalogue item carry their own exclusions and they overlap.
   // The customer should read one clean list, keeping the fuller wording.
   const exclusions = dedupe([
     ...(template?.exclusions ?? []),
-    ...systems.flatMap((s) => s.exclusions),
+    ...catalogueItems.flatMap((s) => s.exclusions),
   ])
 
   return (
@@ -87,7 +89,7 @@ export function ProposalDocument({
           {[
             ['Prepared for', account?.contactName ?? ''],
             ['Site address', opportunity.address],
-            ['Area', `${opportunity.sqft.toLocaleString()} sq ft`],
+            ['Area', `${opportunity.estimatedQuantity.toLocaleString()} units`],
             ['Project type', opportunity.category],
           ].map(([label, value]) => (
             <div key={label}>
@@ -99,7 +101,7 @@ export function ProposalDocument({
 
         {/* Scope */}
         <h2 className="mt-6 mb-2 font-display text-lg">Scope of work</h2>
-        {areas.map((opt) => (
+        {scopes.map((opt) => (
           <div key={opt.id} className="mb-4">
             <div className="flex items-baseline justify-between gap-4 border-b border-[#e5e5e5] pb-1">
               <h3 className="font-semibold">{opt.label}</h3>
@@ -187,12 +189,12 @@ export function ProposalDocument({
           </div>
         </div>
 
-        {/* Systems */}
-        {systems.length > 0 && (
+        {/* Catalogue items */}
+        {catalogueItems.length > 0 && (
           <>
-            <h2 className="mt-6 mb-2 font-display text-lg">Floor systems specified</h2>
+            <h2 className="mt-6 mb-2 font-display text-lg">Products and services included</h2>
             <div className="space-y-2">
-              {systems.map((s) => (
+              {catalogueItems.map((s) => (
                 <div key={s.id} className="flex gap-3">
                   <span
                     className="mt-0.5 h-12 w-12 shrink-0 rounded border border-[#e5e5e5]"

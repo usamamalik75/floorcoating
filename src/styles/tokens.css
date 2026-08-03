@@ -1,18 +1,18 @@
 /* ==========================================================================
-   FCG Operations Platform — Design Tokens
+   Service Operations Platform — Design Tokens
    ==========================================================================
    Three layers, strictly ordered. Components may ONLY reference layer 2 and
    layer 3. Nothing in the app should ever reach for a layer-1 primitive.
 
      Layer 1  primitives   raw values, no meaning       --burgundy-600
      Layer 2  semantic     what the UI consumes         --action-primary
-     Layer 3  domain       FCG-specific meaning         --stage-awarded-solid
+     Layer 3  domain       workflow-specific meaning         --stage-awarded-solid
 
    Dark mode re-maps layer 2 and 3 only. Layer 1 never changes.
 
    Brand source of truth: the FCG logo mark is a single-colour glyph in
-   #7E2F3F, verified by sampling logo pixels on floorcoatingsgroup.com and
-   floorcoatingsfranchise.com. Supporting neutrals #2F0910, #323A45 and
+   #7E2F3F, verified by sampling logo pixels on the default workspace and
+   the default theme. Supporting neutrals #2F0910, #323A45 and
    #A4ABAC are lifted from the same sites.
    ========================================================================== */
 
@@ -112,9 +112,9 @@
   --radius-full: 999px;
 
   /* ---- Type ---------------------------------------------------------- */
-  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', monospace;
-  --font-display: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
 
   --text-2xs: 10px;
   --text-xs: 11px;
@@ -141,10 +141,19 @@
   /* Surfaces separate by border, not by shadow. */
   --surface-base: var(--white);
   --surface-raised: var(--white);
-  --surface-sunken: var(--steel-100);
-  --surface-inset: var(--steel-50);
+  --surface-sunken: var(--steel-50); /* Brighten up light mode */
+  --surface-inset: var(--steel-100);
   --surface-overlay: rgba(19, 24, 32, 0.5);
   --surface-chrome: var(--burgundy-950);
+  
+  /* Glassmorphism */
+  --surface-glass: rgba(255, 255, 255, 0.7);
+  --surface-glass-chrome: rgba(47, 9, 16, 0.85); /* Burgundy-950 with transparency */
+  --glass-border: rgba(255, 255, 255, 0.3);
+  
+  /* Glows */
+  --glow-primary: 0 4px 14px 0 rgba(126, 47, 63, 0.39);
+  --glow-accent: 0 4px 14px 0 rgba(180, 98, 42, 0.39);
 
   --border-subtle: var(--steel-200);
   --border-strong: var(--steel-300);
@@ -195,10 +204,19 @@
 .dark {
   --surface-base: var(--steel-950);
   --surface-raised: var(--steel-900);
-  --surface-sunken: #0d1117;
+  --surface-sunken: #090b0f; /* Deeper dark mode */
   --surface-inset: var(--steel-900);
   --surface-overlay: rgba(0, 0, 0, 0.7);
-  --surface-chrome: #1a0508;
+  --surface-chrome: rgba(26, 5, 8, 0.95); /* Deep rich burgundy */
+
+  /* Glassmorphism */
+  --surface-glass: rgba(19, 24, 32, 0.6);
+  --surface-glass-chrome: rgba(26, 5, 8, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+
+  /* Glows */
+  --glow-primary: 0 4px 20px 0 rgba(168, 69, 91, 0.4);
+  --glow-accent: 0 4px 20px 0 rgba(200, 115, 56, 0.4);
 
   --border-subtle: #2a323d;
   --border-strong: #3b444f;
@@ -363,6 +381,9 @@
   --color-surface-sunken: var(--surface-sunken);
   --color-surface-inset: var(--surface-inset);
   --color-surface-chrome: var(--surface-chrome);
+  --color-surface-glass: var(--surface-glass);
+  --color-surface-glass-chrome: var(--surface-glass-chrome);
+  --color-glass-border: var(--glass-border);
 
   --color-subtle: var(--border-subtle);
   --color-strong: var(--border-strong);
@@ -449,6 +470,9 @@
   --spacing-row: var(--row-h);
   --spacing-control: var(--control-h);
   --spacing-touch: var(--touch-min);
+
+  --shadow-glow-primary: var(--glow-primary);
+  --shadow-glow-accent: var(--glow-accent);
 
   --ease-out: var(--ease-out);
 }

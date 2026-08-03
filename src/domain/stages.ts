@@ -21,7 +21,7 @@ export const STAGES: StageDef[] = [
     isAnchor: true,
     probability: 0,
     purpose:
-      'A company we want to work with, but there is no active interest or opportunity yet. Imported in bulk from a prospecting request.',
+      'A company we want to work with, but there is no active interest or opportunity yet. Imported from an external source or added manually.',
     gates: [],
     notify: [],
   },
@@ -162,8 +162,8 @@ export const STAGES: StageDef[] = [
       { kind: 'assign', role: 'estimator', label: 'Assign an estimator', blocking: true },
       {
         kind: 'confirm',
-        label: 'Select the floor system',
-        helper: 'Pulls the spec sheet, material requirements, labour assumptions, install checklist, load list and exclusions automatically.',
+        label: 'Select products and services',
+        helper: 'Pulls the spec sheet, resource requirements, labour assumptions, install checklist, load list and exclusions automatically.',
         blocking: true,
       },
     ],
@@ -272,7 +272,7 @@ export const STAGES: StageDef[] = [
     notify: [
       { role: 'pm', message: 'Project awarded — job created, scheduling required' },
       { role: 'accounting', message: 'Project awarded — deposit invoice can be raised' },
-      { role: 'franchisor', message: 'Awarded project recorded in the network rollup' },
+      { role: 'admin', message: 'Awarded job recorded in the company dashboard' },
     ],
   },
   {

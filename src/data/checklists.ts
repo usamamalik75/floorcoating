@@ -3,9 +3,9 @@ import type { ChecklistTemplate } from '@/domain/types'
 /* ==========================================================================
    Checklist templates
    ==========================================================================
-   These are what a stage transition FIRES. Franchisor-managed templates are
+   These are what a stage transition FIRES. Company administrator-managed templates are
    network operating standards — a location can see them but cannot weaken
-   them, which is how the franchisor enforces process across territories.
+   them, which is how the company administrator enforces process across territories.
    ========================================================================== */
 
 export const CHECKLIST_TEMPLATES: ChecklistTemplate[] = [
@@ -13,7 +13,7 @@ export const CHECKLIST_TEMPLATES: ChecklistTemplate[] = [
     id: 'cl_client_expectation',
     name: 'Client Expectation Checklist',
     stage: 'awarded',
-    managedByFranchisor: true,
+    managedByCompany: true,
     items: [
       { id: 'e1', label: 'Confirm signed scope matches the proposal' },
       { id: 'e2', label: 'Confirm start and completion dates in writing' },
@@ -27,10 +27,10 @@ export const CHECKLIST_TEMPLATES: ChecklistTemplate[] = [
     id: 'cl_prep',
     name: 'Project Preparation Checklist',
     stage: 'ready_to_start',
-    managedByFranchisor: true,
+    managedByCompany: true,
     items: [
-      { id: 'p1', label: 'Material ordered from the franchisor' },
-      { id: 'p2', label: 'Material received and verified against the spec sheet' },
+      { id: 'p1', label: 'Required resources ordered through purchasing' },
+      { id: 'p2', label: 'Required resources received and verified against the job scope' },
       { id: 'p3', label: 'Crew leader and installers assigned' },
       { id: 'p4', label: 'Product specifications attached to the job' },
       { id: 'p5', label: 'Installation checklist available on mobile' },
@@ -44,28 +44,28 @@ export const CHECKLIST_TEMPLATES: ChecklistTemplate[] = [
     id: 'cl_install',
     name: 'Installation Checklist',
     stage: 'in_progress',
-    managedByFranchisor: true,
+    managedByCompany: true,
     items: [
-      { id: 'n1', label: 'Verify delivered material matches the spec sheet' },
-      { id: 'n2', label: 'Photograph the floor before any prep begins' },
+      { id: 'n1', label: 'Verify delivered resources match the job scope' },
+      { id: 'n2', label: 'Photograph the service area before any prep begins' },
       { id: 'n3', label: 'Confirm safety requirements and site restrictions' },
       { id: 'n4', label: 'Prep to the specified CSP profile and photograph' },
       { id: 'n5', label: 'Mask and protect adjacent surfaces' },
-      { id: 'n6', label: 'Record ambient and slab temperature before mixing' },
-      { id: 'n7', label: 'Photograph each coat after application' },
-      { id: 'n8', label: 'Install cove base where specified' },
-      { id: 'n9', label: 'Photograph the completed floor from the before-shot angles' },
+      { id: 'n6', label: 'Record ambient and surface temperature before mixing' },
+      { id: 'n7', label: 'Photograph each service pass after application' },
+      { id: 'n8', label: 'Install secondary work base where specified' },
+      { id: 'n9', label: 'Photograph the completed service area from the before-shot angles' },
     ],
   },
   {
     id: 'cl_closeout',
     name: 'Project Closeout Checklist',
     stage: 'completion_review',
-    managedByFranchisor: true,
+    managedByCompany: true,
     items: [
       { id: 'x1', label: 'Final photos uploaded' },
       { id: 'x2', label: 'Installation checklist completed' },
-      { id: 'x3', label: 'Walk the floor with the customer' },
+      { id: 'x3', label: 'Walk the service area with the customer' },
       { id: 'x4', label: 'Customer sign-off received' },
       {
         id: 'x5',

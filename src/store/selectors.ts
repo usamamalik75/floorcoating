@@ -92,3 +92,48 @@ export function routeZip(zip: string) {
   const prefix = zip.slice(0, 3)
   return Object.values(LOCATION_BY_ID).find((l) => l.zips.includes(prefix)) ?? null
 }
+
+export function useWorkspaceTemplate() {
+  return useStore((s) => s.workspaceTemplate)
+}
+
+export function useSiteVisitForms() {
+  return useStore((s) => s.siteVisitForms)
+}
+
+export function useFormForCategory(category?: string) {
+  const forms = useSiteVisitForms()
+  return useMemo(() => forms.find((form) => form.category === category), [forms, category])
+}
+
+export function useChecklistTemplates() {
+  return useStore((s) => s.checklistTemplates)
+}
+
+export function usePriceBookItems() {
+  return useStore((s) => s.priceBookItems)
+}
+
+export function useProposalTemplates() {
+  return useStore((s) => s.proposalTemplates)
+}
+
+export function useStageDefinitions() {
+  return useStore((s) => s.stageDefinitions)
+}
+
+export function useMessageThreads(opportunityId?: string) {
+  const threads = useStore((s) => s.messageThreads)
+  return useMemo(
+    () => (opportunityId ? threads.filter((thread) => thread.opportunityId === opportunityId) : threads),
+    [threads, opportunityId],
+  )
+}
+
+export function usePaymentRequests(opportunityId?: string) {
+  const requests = useStore((s) => s.paymentRequests)
+  return useMemo(
+    () => (opportunityId ? requests.filter((request) => request.opportunityId === opportunityId) : requests),
+    [requests, opportunityId],
+  )
+}

@@ -8,14 +8,17 @@ import {
   isSameDay,
   startOfWeek,
 } from 'date-fns'
-import { ChevronLeft, ChevronRight, HardHat, Package, UserPlus } from 'lucide-react'
+import { AlertTriangle, BellRing, ChevronLeft, ChevronRight, Clock3, HardHat, Package, UserPlus } from 'lucide-react'
 import { LOCATIONS, TODAY, USERS, USER_BY_ID } from '@/data/seed'
 import { money, useStore } from '@/store/useStore'
 import { STAGE_BY_ID } from '@/domain/stages'
+import { JOB_ROLE_LABEL, type JobRole } from '@/domain/types'
+import { jobTeam, membersWithRole, primaryFieldLead } from '@/domain/jobs'
 import { Avatar, Badge, Button, Card, CardHeader, EmptyState, Sheet } from '@/components/ui'
 import { cn } from '@/lib/cn'
 
 const WEEKS = 3
+const JOB_ROLES = Object.keys(JOB_ROLE_LABEL) as JobRole[]
 
 /** Small status glyph on the calendar bar, so material risk is visible at a glance. */
 function MaterialGlyph({ opportunityId }: { opportunityId: string }) {
@@ -36,17 +39,17 @@ function MaterialPanel({ opportunityId }: { opportunityId: string }) {
     <div className="rounded-md border border-subtle bg-surface-inset p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 text-base text-primary">
-          <Package size={13} /> Material
+          <Package size={13} /> Purchasing
         </span>
         <Badge tone={order?.status === 'delivered' ? 'success' : order ? 'attention' : 'warning'}>
           {order ? order.status : 'not ordered'}
         </Badge>
       </div>
       <p className="mt-1 text-sm text-muted">
-        Quantities derive from the sold system, area, cove, coats and waste allowance, then route to
-        the Franchise Management System for fulfilment.
+        Requirements come from the sold quote and move to
+        the purchasing queue for fulfilment.
       </p>
-      <Link to={`/opportunities/${opportunityId}/material`}>
+      <Link to={`/opportunities/${opportunityId}/purchasing`}>
         <Button size="sm" className="mt-2">
           {order ? 'Open order' : 'Prepare order'}
         </Button>
@@ -71,7 +74,17 @@ export function Schedule() {
 
   const rows = useMemo(() => {
     return jobs
-      .map((j) => ({ job: j, opp: opportunities.find((o) => o.id === j.opportunityId) }))
+      .map((j) => {
+        const overlapCount = jobs.filter(
+          (other) =>
+            other.id !== j.id &&
+            other.crewLeaderId &&
+            other.crewLeaderId === j.crewLeaderId &&
+            new Date(other.start) <= new Date(j.end) &&
+            new Date(other.end) >= new Date(j.start),
+        ).length
+        return { job: j, opp: opportunities.find((o) => o.id === j.opportunityId), overlapCount }
+      })
       .filter((r) => r.opp)
       .filter((r) => locationFilter === 'all' || r.opp!.locationId === locationFilter)
       .sort((a, b) => new Date(a.job.start).getTime() - new Date(b.job.start).getTime())
@@ -168,7 +181,7 @@ export function Schedule() {
           {rows.length === 0 ? (
             <EmptyState title="Nothing scheduled in this window" />
           ) : (
-            rows.map(({ job, opp }) => {
+            rows.map(({ job, opp, overlapCount }) => {
               const startIdx = differenceInCalendarDays(new Date(job.start), days[0])
               const span = differenceInCalendarDays(new Date(job.end), new Date(job.start)) + 1
               const visible = startIdx < days.length && startIdx + span > 0
@@ -191,15 +204,27 @@ export function Schedule() {
                       {opp!.name}
                     </Link>
                     <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
-                      {job.crewLeaderId ? (
+                      {primaryFieldLead(job) ? (
                         <>
-                          <Avatar name={USER_BY_ID[job.crewLeaderId]?.name ?? '?'} size={15} />
-                          {USER_BY_ID[job.crewLeaderId]?.name}
+                          <Avatar name={USER_BY_ID[primaryFieldLead(job)!]?.name ?? '?'} size={15} />
+                          {USER_BY_ID[primaryFieldLead(job)!]?.name}
                         </>
                       ) : (
                         <span className="text-warning-text">No crew leader</span>
                       )}
                     </p>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {job.dispatchState && (
+                        <Badge tone={job.dispatchState === 'ready' ? 'success' : job.dispatchState === 'at_risk' ? 'warning' : 'neutral'}>
+                          {job.dispatchState.replace('_', ' ')}
+                        </Badge>
+                      )}
+                      {overlapCount > 0 && (
+                        <Badge tone="warning" icon={<AlertTriangle size={9} />}>
+                          {overlapCount} conflict{overlapCount === 1 ? '' : 's'}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
 
                   <div
@@ -220,7 +245,7 @@ export function Schedule() {
                           }}
                         >
                           <span className="truncate text-2xs font-medium">
-                            {opp!.sqft.toLocaleString()} sq ft
+                            {opp!.code}
                           </span>
                           <MaterialGlyph opportunityId={opp!.id} />
                         </button>
@@ -246,7 +271,55 @@ export function Schedule() {
         }
       >
         {selected && (
-          <div className="space-y-4">
+          <div className='space-y-4'>
+            <div>
+              <p className='mb-1.5 flex items-center gap-1.5 text-2xs font-semibold tracking-wider text-muted uppercase'>
+                <UserPlus size={11} /> Job team and responsibilities
+              </p>
+              <p className='mb-3 text-sm text-muted'>
+                Assign several people to a responsibility, or give one person several roles.
+              </p>
+              <div className='space-y-3'>
+                {JOB_ROLES.map((role) => {
+                  const assigned = membersWithRole(selected.job, role)
+                  return (
+                    <div key={role} className='rounded-md border border-subtle bg-surface-raised p-2.5'>
+                      <div className='mb-2 flex items-center justify-between gap-2'>
+                        <span className='text-sm font-semibold text-primary'>{JOB_ROLE_LABEL[role]}</span>
+                        <Badge tone={assigned.length ? 'brand' : 'neutral'}>{assigned.length} assigned</Badge>
+                      </div>
+                      <div className='flex flex-wrap gap-1.5'>
+                        {USERS.filter((u) => !u.locationId || u.locationId === selected.opp!.locationId).map((u) => {
+                          const on = assigned.some((a) => a.userId === u.id)
+                          return (
+                            <button
+                              key={u.id}
+                              type='button'
+                              onClick={() => {
+                                const team = jobTeam(selected.job)
+                                updateJob(selected.job.id, {
+                                  team: on
+                                    ? team.filter((a) => !(a.userId === u.id && a.role === role))
+                                    : [...team, { userId: u.id, role }],
+                                })
+                              }}
+                              className={cn(
+                                'flex items-center gap-1.5 rounded-full border px-2 py-1 text-sm',
+                                on ? 'border-(--action-primary) bg-action-soft text-brand' : 'border-subtle text-secondary',
+                              )}
+                            >
+                              <Avatar name={u.name} size={16} /> {u.name}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <div className='hidden'>
+
             <div>
               <p className="mb-1.5 text-2xs font-semibold tracking-wider text-muted uppercase">
                 Crew leader
@@ -321,11 +394,90 @@ export function Schedule() {
                 })}
               </div>
             </div>
+            </div>
 
             <MaterialPanel opportunityId={selected.opp!.id} />
 
+            <div className="rounded-md border border-subtle bg-surface-inset p-3">
+              <p className="mb-2 text-2xs font-semibold tracking-wider text-muted uppercase">
+                Dispatch controls
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="mb-1 text-sm text-secondary">Dispatch health</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(['unassigned', 'ready', 'at_risk'] as const).map((state) => (
+                      <button
+                        key={state}
+                        type="button"
+                        onClick={() => updateJob(selected.job.id, { dispatchState: state })}
+                        className={cn(
+                          'rounded-full border px-2.5 py-1 text-sm',
+                          selected.job.dispatchState === state
+                            ? 'border-(--action-primary) bg-action-soft text-brand'
+                            : 'border-subtle text-secondary',
+                        )}
+                      >
+                        {state.replace('_', ' ')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1 text-sm text-secondary">Travel buffer</p>
+                  <div className="flex items-center gap-2">
+                    <Clock3 size={14} className="text-muted" />
+                    <input
+                      type="number"
+                      value={selected.job.travelMinutes ?? 30}
+                      onChange={(e) => updateJob(selected.job.id, { travelMinutes: Number(e.target.value) })}
+                      className="h-(--control-h) w-24 rounded-md border border-strong bg-surface-raised px-2 text-base"
+                    />
+                    <span className="text-sm text-muted">minutes</span>
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <p className="mb-1 text-sm text-secondary">Reschedule window</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        updateJob(selected.job.id, {
+                          start: addDays(new Date(selected.job.start), -1).toISOString(),
+                          end: addDays(new Date(selected.job.end), -1).toISOString(),
+                        })
+                      }
+                    >
+                      Move earlier
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        updateJob(selected.job.id, {
+                          start: addDays(new Date(selected.job.start), 1).toISOString(),
+                          end: addDays(new Date(selected.job.end), 1).toISOString(),
+                        })
+                      }
+                    >
+                      Move later
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => updateJob(selected.job.id, { customerNotifiedAt: new Date().toISOString() })}
+                    >
+                      <BellRing size={12} />
+                      Mark customer notified
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <p className="text-sm text-muted">
-              Territory: {LOCATIONS.find((l) => l.id === selected.opp!.locationId)?.name}
+              Location: {LOCATIONS.find((l) => l.id === selected.opp!.locationId)?.name}
+              {selected.job.customerNotifiedAt && ` · customer notified ${format(new Date(selected.job.customerNotifiedAt), 'd MMM')}`}
+              {selected.job.travelMinutes && ` · ${selected.job.travelMinutes} min travel buffer`}
             </p>
           </div>
         )}

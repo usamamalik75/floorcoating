@@ -5,12 +5,15 @@ import {
   AlertTriangle,
   Banknote,
   CheckCircle2,
+  CreditCard,
+  ExternalLink,
   FileCheck2,
   Plus,
   Receipt,
   RefreshCw,
+  Send,
 } from 'lucide-react'
-import { useStore, money, ROYALTY_RATE, estimateTotal } from '@/store/useStore'
+import { useStore, money, estimateTotal } from '@/store/useStore'
 import { useScopedOpportunities, useViewer } from '@/store/selectors'
 import { ACCOUNT_BY_ID, LOCATION_BY_ID, iso } from '@/data/seed'
 import type { Invoice, InvoiceKind, Opportunity } from '@/domain/types'
@@ -53,6 +56,9 @@ export function Accounting() {
   const opps = useScopedOpportunities()
   const recordPayment = useStore((st) => st.recordPayment)
   const setJobStatus = useStore((st) => st.setJobStatus)
+  const paymentRequests = useStore((st) => st.paymentRequests)
+  const createPaymentRequest = useStore((st) => st.createPaymentRequest)
+  const updatePaymentRequestStatus = useStore((st) => st.updatePaymentRequestStatus)
 
   const [raising, setRaising] = useState<Opportunity | null>(null)
   const [paying, setPaying] = useState<Invoice | null>(null)
@@ -65,6 +71,7 @@ export function Accounting() {
 
   const billed = mine.reduce((a, i) => a + i.amount, 0)
   const received = mine.reduce((a, i) => a + i.payments.reduce((p, x) => p + x.amount, 0), 0)
+  const activeRequests = paymentRequests.filter((request) => mine.some((invoice) => invoice.id === request.invoiceId))
 
   const paid = (i: Invoice) => i.payments.reduce((a, p) => a + p.amount, 0)
 
@@ -75,7 +82,7 @@ export function Accounting() {
           <h1 className="font-display text-2xl text-primary">Accounting</h1>
           <p className="mt-0.5 text-base text-muted">
             Invoicing, QuickBooks synchronisation and payment status across{' '}
-            {viewer?.role === 'franchisor' ? 'the network' : 'this location'}.
+            {viewer?.role === 'admin' ? 'the company' : 'this location'}.
           </p>
         </header>
 
@@ -84,7 +91,8 @@ export function Accounting() {
             { label: 'Total billed', value: money(billed, true) },
             { label: 'Received', value: money(received, true) },
             { label: 'Outstanding', value: money(billed - received, true), warn: billed - received > 0 },
-            { label: 'Royalty accrued', value: money(billed * ROYALTY_RATE, true), sub: '5% of gross invoiced' },
+            { label: 'Collection rate', value: billed > 0 ? `${Math.round((received / billed) * 100)}%` : '0%', sub: 'Received against billed' },
+            { label: 'Payment links', value: activeRequests.length, sub: 'Hosted requests in play' },
           ].map((k) => (
             <Card
               key={k.label}
@@ -206,6 +214,7 @@ export function Accounting() {
                 {mine.map((i) => {
                   const o = s.opportunities.find((x) => x.id === i.opportunityId)
                   const acc = o ? ACCOUNT_BY_ID[o.accountId] : undefined
+                  const paymentLink = activeRequests.find((request) => request.invoiceId === i.id)
                   return (
                     <Tr key={i.id}>
                       <Td mono>{i.number}</Td>
@@ -237,14 +246,75 @@ export function Accounting() {
                         >
                           {i.status}
                         </Badge>
+                        {paymentLink && (
+                          <span className="mt-1 block text-xs text-muted">
+                            Link {paymentLink.status} · {paymentLink.channel}
+                          </span>
+                        )}
                       </Td>
                       <Td align="right">
-                        {i.status !== 'paid' && (
-                          <Button size="sm" onClick={() => setPaying(i)}>
-                            <Banknote size={12} />
-                            Record payment
-                          </Button>
-                        )}
+                        <div className="flex justify-end gap-2">
+                          {i.status !== 'paid' && (
+                            <Button size="sm" onClick={() => setPaying(i)}>
+                              <Banknote size={12} />
+                              Record payment
+                            </Button>
+                          )}
+                          {!paymentLink && i.status !== 'paid' && (
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                createPaymentRequest({
+                                  opportunityId: i.opportunityId,
+                                  invoiceId: i.id,
+                                  estimateId: null,
+                                  kind: i.kind === 'deposit' ? 'deposit' : 'invoice',
+                                  amount: i.amount - paid(i),
+                                  channel: 'email',
+                                  recipientName: acc?.contactName ?? 'Customer',
+                                  recipientEmail: acc?.email,
+                                  recipientPhone: acc?.phone,
+                                  note: 'Hosted payment request sent from accounting.',
+                                  status: 'sent',
+                                  processorStatus: 'pending',
+                                  sentAt: new Date().toISOString(),
+                                  viewedAt: null,
+                                  paidAt: null,
+                                })
+                              }
+                            >
+                              <Send size={12} />
+                              Send link
+                            </Button>
+                          )}
+                          {paymentLink && (
+                            <>
+                              <Link to={`/pay/${paymentLink.token}`} target="_blank">
+                                <Button size="sm">
+                                  <ExternalLink size={12} />
+                                  Open link
+                                </Button>
+                              </Link>
+                              {paymentLink.status !== 'paid' && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    updatePaymentRequestStatus(
+                                      paymentLink.id,
+                                      'paid',
+                                      'Accounting marked the hosted payment as settled.',
+                                      { method: 'ACH' },
+                                    )
+                                  }
+                                >
+                                  <CreditCard size={12} />
+                                  Mark hosted paid
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </Td>
                     </Tr>
                   )
@@ -310,7 +380,7 @@ function RaiseInvoice({
             onClick={() => {
               createInvoice({
                 opportunityId: opportunity.id,
-                number: `FCG-INV-${2100 + count}`,
+                number: `JOB-INV-${2100 + count}`,
                 kind,
                 amount,
                 status: 'sent',

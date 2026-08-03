@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Service Operations Platform - SRS</title>
+    <style>
+      :root {
+        --bg: #f5f6f8;
+        --surface: #ffffff;
+        --surface-alt: #f0f2f5;
+        --text: #1f2937;
+        --muted: #5b6472;
+        --line: #d8dde6;
+        --brand: #7e2f3f;
+        --brand-soft: #f5e9ed;
+        --success: #1f7a4d;
+        --warn: #b26b00;
+        --info: #275dad;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.55;
+      }
+
+      .page {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 32px 24px 72px;
+      }
+
+      .hero,
+      section,
+      .toc {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 24px;
+        margin-bottom: 20px;
+      }
+
+      .hero {
+        border-top: 6px solid var(--brand);
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0 0 12px;
+        line-height: 1.2;
+      }
+
+      h1 {
+        font-size: 30px;
+      }
+
+      h2 {
+        font-size: 22px;
+        color: var(--brand);
+      }
+
+      h3 {
+        font-size: 17px;
+      }
+
+      p,
+      li {
+        color: var(--text);
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .badge-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 14px 0 0;
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        background: var(--surface-alt);
+        border: 1px solid var(--line);
+      }
+
+      .badge.brand {
+        background: var(--brand-soft);
+        color: var(--brand);
+        border-color: #e2bcc6;
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      }
+
+      .grid.three {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px;
+        background: var(--surface-alt);
+      }
+
+      .card h3 {
+        margin-bottom: 8px;
+      }
+
+      .toc ol {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 14px;
+      }
+
+      th,
+      td {
+        border: 1px solid var(--line);
+        padding: 10px 12px;
+        vertical-align: top;
+        text-align: left;
+        font-size: 14px;
+      }
+
+      th {
+        background: var(--surface-alt);
+      }
+
+      .status {
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .status.ready {
+        color: var(--success);
+      }
+
+      .status.simulated {
+        color: var(--warn);
+      }
+
+      .status.future {
+        color: var(--info);
+      }
+
+      ul,
+      ol {
+        margin-top: 8px;
+      }
+
+      .note {
+        border-left: 4px solid var(--brand);
+        background: var(--brand-soft);
+        padding: 12px 14px;
+        border-radius: 8px;
+        margin-top: 12px;
+      }
+
+      .small {
+        font-size: 13px;
+      }
+
+      @media print {
+        body {
+          background: #ffffff;
+        }
+
+        .page {
+          max-width: none;
+          padding: 0;
+        }
+
+        .hero,
+        section,
+        .toc {
+          border-radius: 0;
+          box-shadow: none;
+          page-break-inside: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <h1>Software Requirements Specification</h1>
+        <p class="muted">
+          Project: Unified Service Operations Platform
+        </p>
+        <p>
+          This document defines the proposed business and functional requirements for a unified
+          CRM-to-field-service platform intended to bring customer acquisition, estimating,
+          scheduling, field execution, invoicing, and administrative control into one connected system.
+        </p>
+        <div class="badge-row">
+          <span class="badge brand">Client Submission</span>
+          <span class="badge">Proposed Scope</span>
+          <span class="badge">Interactive Prototype Phase</span>
+          <span class="badge">Future Production Delivery</span>
+        </div>
+      </header>
+
+      <div class="toc">
+        <h2>Table of Contents</h2>
+        <ol>
+          <li>Introduction</li>
+          <li>Business Goal and Product Scope</li>
+          <li>User Roles</li>
+          <li>Target End-to-End Workflow</li>
+          <li>Functional Requirements</li>
+          <li>Administrative and Configuration Requirements</li>
+          <li>Reporting Requirements</li>
+          <li>Non-Functional Requirements</li>
+          <li>Items Reserved for Later Phases</li>
+          <li>Client Review and Sign-Off Guidance</li>
+        </ol>
+      </div>
+
+      <section>
+        <h2>1. Introduction</h2>
+        <p>
+          The purpose of this SRS is to describe the system that will be designed and presented
+          for client review. It is intended to confirm that the planned workflow, modules, screens,
+          terminology, and business rules align with the client's operational requirements.
+        </p>
+        <div class="note">
+          <strong>Important:</strong> This document presents the proposed solution in future-state terms.
+          It should be reviewed as a scope and requirement reference for what the platform will provide.
+        </div>
+      </section>
+
+      <section>
+        <h2>2. Business Goal and Product Scope</h2>
+        <div class="grid two">
+          <div class="card">
+            <h3>Primary Goal</h3>
+            <p>
+              The platform will provide one connected system where a customer record can move from
+              enquiry through qualification, assessment, estimate, proposal, scheduling, field work,
+              invoicing, and payment tracking.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Business Problem Being Solved</h3>
+            <p>
+              The solution will reduce fragmented handoffs between CRM tools, estimating workflows,
+              spreadsheets, dispatch coordination, and accounting follow-up by consolidating them into
+              one operational product.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Target Use Case</h3>
+            <p>
+              The system will support quote-driven service businesses managing structured work such as
+              commercial, industrial, and project-based jobs that require assessments, proposals,
+              teams, materials, scheduling, and customer approval.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Delivery Intent</h3>
+            <p>
+              The initial interactive phase will be used to validate workflow coverage and business fit,
+              after which backend, live integrations, and production infrastructure may be planned separately.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>3. User Roles</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Role</th>
+              <th>Purpose in System</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Administrator</td>
+              <td>Will configure standards, fields, templates, workflows, and company-level views.</td>
+            </tr>
+            <tr>
+              <td>Owner</td>
+              <td>Will review operational performance, open pipeline, and overall business status.</td>
+            </tr>
+            <tr>
+              <td>Sales Representative</td>
+              <td>Will own lead follow-up, qualification, visit scheduling, proposal follow-up, and customer communication.</td>
+            </tr>
+            <tr>
+              <td>Estimator</td>
+              <td>Will build estimates, review site data, select catalogue items, and approve proposal readiness.</td>
+            </tr>
+            <tr>
+              <td>Project Manager</td>
+              <td>Will own awarded work, scheduling readiness, issue escalation, and delivery oversight.</td>
+            </tr>
+            <tr>
+              <td>Crew Leader / Technician</td>
+              <td>Will execute field work, checklists, photos, issues, progress logging, and on-site customer coordination.</td>
+            </tr>
+            <tr>
+              <td>Accounting</td>
+              <td>Will raise invoices, track balances, issue payment links, and monitor collections.</td>
+            </tr>
+            <tr>
+              <td>Customer</td>
+              <td>Will review proposals, sign scope, complete sign-off, and pay through hosted payment experiences.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>4. Target End-to-End Workflow</h2>
+        <ol>
+          <li>A lead will be captured and routed to the correct territory or location.</li>
+          <li>The lead will be qualified and assigned to a sales owner.</li>
+          <li>A site visit or sales call will be scheduled and completed using guided forms.</li>
+          <li>An estimate will be built from site data and configured company standards.</li>
+          <li>A proposal will be reviewed, approved, and sent to the customer.</li>
+          <li>The customer will review options, sign electronically, and proceed to deposit or payment steps.</li>
+          <li>The job will be scheduled, staffed, and tracked operationally.</li>
+          <li>The field team will record progress, issues, checklists, and completion evidence.</li>
+          <li>Accounting will raise invoices and monitor hosted payment requests.</li>
+          <li>The customer will complete sign-off and payment tracking will be visible internally.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>5. Functional Requirements</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Requirement</th>
+              <th>Planned Delivery Status</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>FR-001</td>
+              <td>The system shall capture leads through a dedicated intake flow and route them by territory.</td>
+              <td class="status ready">Planned in scope</td>
+              <td>The solution will include company/contact capture, source tracking, zip-based routing, and assignment handoff.</td>
+            </tr>
+            <tr>
+              <td>FR-002</td>
+              <td>The system shall allow opportunities to move through a gated sales pipeline.</td>
+              <td class="status ready">Planned in scope</td>
+              <td>Stage transitions will include assignment, confirmation, readiness, follow-up, and delay/loss handling.</td>
+            </tr>
+            <tr>
+              <td>FR-003</td>
+              <td>The system shall provide guided assessment or site-visit forms linked to opportunities.</td>
+              <td class="status ready">Planned in scope</td>
+              <td>The workflow will support category-specific forms, required fields, draft save, submission, and linked artifacts.</td>
+            </tr>
+            <tr>
+              <td>FR-004</td>
+              <td>The system shall generate estimates from configured products and services.</td>
+              <td class="status ready">Planned in scope</td>
+              <td>The estimate workflow will support line items, options, alternatives, recommendation logic, and internal notes.</td>
+            </tr>
+            <tr>
+              <td>FR-005</td>
+              <td>The system shall support internal estimate approval before customer delivery.</td>
+              <td class="status ready">Planned in scope</td>
+              <td>Approval readiness will be validated against record data before proposal send.</td>
+            </tr>
+            <tr>
+              <td>FR-006</td>
+              <td>The system shall provide customer-facing proposal review and signature workflow.</td>
+              <td class="status ready">Planned in scope</td>
+              <td>The customer journey will include secure proposal review, option selection, electronic signature, and status updates.</td>
+            </tr>
+            <tr>
+              <td>FR-007</td>
+              <td>The system shall provide a communication workspace for follow-ups and customer messages.</td>
+              <td class="status simulated">Planned for interactive phase</td>
+              <td>The communications workflow will include inbox, threads, drafts, send actions, and opportunity-level messaging views.</td>
+            </tr>
+            <tr>
+              <td>FR-008</td>
+              <td>The system shall allow proposal send workflows from the estimate builder.</td>
+              <td class="status simulated">Planned for interactive phase</td>
+              <td>Users will be able to prepare a proposal message flow with timeline visibility and delivery options.</td>
+            </tr>
+            <tr>
+              <td>FR-009</td>
+              <td>The system shall create job workflows after award and support scheduling operations.</td>
+              <td class="status ready">Planned in scope</td>
+              <td>Jobs will be created after award and surfaced in schedule and job-management views.</td>
+            </tr>
+            <tr>
+              <td>FR-010</td>
+              <td>The system shall provide a dispatch-style scheduling workspace.</td>
+              <td class="status simulated">Planned for interactive phase</td>
+              <td>The scheduling experience will include calendar planning, team assignment, dispatch state, travel buffer, and reschedule controls.</td>
+            </tr>
+            <tr>
+              <td>FR-011</td>
+              <td>The system shall provide a mobile-style field execution experience.</td>
+              <td class="status simulated">Planned for interactive phase</td>
+              <td>The field experience will include job sheet, scope reference, checklists, issue reporting, photo logging, clock states, and sync indicators.</td>
+            </tr>
+            <tr>
+              <td>FR-012</td>
+              <td>The system shall track materials and purchasing against awarded work.</td>
+              <td class="status ready">Planned in scope</td>
+              <td>The system will support material requirement views, purchasing status, and order progression.</td>
+            </tr>
+            <tr>
+              <td>FR-013</td>
+              <td>The system shall support customer completion sign-off.</td>
+              <td class="status ready">Planned in scope</td>
+              <td>The customer journey will include completion sign-off and related change-order acknowledgement.</td>
+            </tr>
+            <tr>
+              <td>FR-014</td>
+              <td>The system shall provide invoicing and payment tracking views for accounting.</td>
+              <td class="status ready">Planned in scope</td>
+              <td>Accounting users will be able to review billed/received status, raise invoices, and track balances.</td>
+            </tr>
+            <tr>
+              <td>FR-015</td>
+              <td>The system shall provide hosted payment request experiences for customers.</td>
+              <td class="status simulated">Planned for interactive phase</td>
+              <td>The customer payment journey will include hosted payment-link screens and internal status tracking.</td>
+            </tr>
+            <tr>
+              <td>FR-016</td>
+              <td>The system shall show communications and payment progress back on the opportunity record.</td>
+              <td class="status ready">Planned in scope</td>
+              <td>The opportunity record will surface customer thread history and payment-link status.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>6. Administrative and Configuration Requirements</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Requirement</th>
+              <th>Planned Delivery Status</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>AR-001</td>
+              <td>The system shall allow editing of workspace terminology and shared field definitions.</td>
+              <td class="status simulated">Planned for interactive phase</td>
+              <td>The administrative builder will allow editing of workspace labels and configurable fields.</td>
+            </tr>
+            <tr>
+              <td>AR-002</td>
+              <td>The system shall allow editing of guided site-visit forms.</td>
+              <td class="status simulated">Planned for interactive phase</td>
+              <td>The administrative builder will allow editing of form names, sections, labels, and helper text.</td>
+            </tr>
+            <tr>
+              <td>AR-003</td>
+              <td>The system shall allow editing of price book / catalogue items.</td>
+              <td class="status simulated">Planned for interactive phase</td>
+              <td>The administrative builder will allow editing of service names, pricing, and descriptions.</td>
+            </tr>
+            <tr>
+              <td>AR-004</td>
+              <td>The system shall allow editing of proposal templates.</td>
+              <td class="status simulated">Planned for interactive phase</td>
+              <td>The administrative builder will allow editing of deposit percentage, validity, exclusions, and terms.</td>
+            </tr>
+            <tr>
+              <td>AR-005</td>
+              <td>The system shall allow editing of checklist templates.</td>
+              <td class="status simulated">Planned for interactive phase</td>
+              <td>The administrative builder will allow editing of checklist labels and supporting helper text.</td>
+            </tr>
+            <tr>
+              <td>AR-006</td>
+              <td>The system shall allow editing of stage definitions and gate labels.</td>
+              <td class="status simulated">Planned for interactive phase</td>
+              <td>The administrative builder will allow editing of stage purpose, probability, and gate copy.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>7. Reporting Requirements</h2>
+        <ul>
+          <li>The system shall display role-based dashboards for operational visibility.</li>
+          <li>The system shall display sales, job, finance, and location performance summaries.</li>
+          <li>The system shall show follow-ups due, open proposals, and communication queues.</li>
+          <li>The system shall show invoice and payment status across the business.</li>
+        </ul>
+        <div class="note">
+          Initial reporting will focus on workflow visibility and management summaries.
+          Advanced analytics, forecasting, and production business intelligence may be handled in later phases.
+        </div>
+      </section>
+
+      <section>
+        <h2>8. Non-Functional Requirements</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Requirement</th>
+              <th>Planned Delivery Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>NFR-001</td>
+              <td>The system shall be navigable through a modern, responsive browser UI.</td>
+              <td class="status ready">Planned in scope</td>
+            </tr>
+            <tr>
+              <td>NFR-002</td>
+              <td>The system shall support role-based viewing experiences.</td>
+              <td class="status ready">Planned in scope</td>
+            </tr>
+            <tr>
+              <td>NFR-003</td>
+              <td>The interactive phase shall preserve session state for demonstration continuity.</td>
+              <td class="status ready">Planned in scope</td>
+            </tr>
+            <tr>
+              <td>NFR-004</td>
+              <td>The system shall clearly separate internal workflows from customer-facing screens.</td>
+              <td class="status ready">Planned in scope</td>
+            </tr>
+            <tr>
+              <td>NFR-005</td>
+              <td>The interactive phase shall communicate business flows clearly enough for requirement sign-off.</td>
+              <td class="status ready">Planned in scope</td>
+            </tr>
+            <tr>
+              <td>NFR-006</td>
+              <td>Backend services, authentication, and live integrations may be scheduled as a later production phase.</td>
+              <td class="status future">Future production phase</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>9. Items Reserved for Later Phases</h2>
+        <ul>
+          <li>Backend APIs and long-term database persistence</li>
+          <li>User authentication and production-grade permission enforcement</li>
+          <li>Live email and SMS connectivity</li>
+          <li>Live payment gateway connectivity</li>
+          <li>Live accounting, calendar, and file-system integrations</li>
+          <li>Production mobile offline synchronization architecture</li>
+          <li>Audit logging, governance, and production reporting depth</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>10. Client Review and Sign-Off Guidance</h2>
+        <p>
+          The client should review this specification against the following questions:
+        </p>
+        <ol>
+          <li>Does the proposed workflow match the intended business process from lead through payment?</li>
+          <li>Are all major modules represented in the correct sequence and ownership model?</li>
+          <li>Does the terminology align with the client's business vocabulary?</li>
+          <li>Do the planned customer-facing and internal screens reflect expected behavior?</li>
+          <li>Do the planned admin builders reflect the required level of configurability?</li>
+          <li>Are any required modules, fields, screens, or handoffs missing from scope?</li>
+        </ol>
+
+        <div class="note">
+          <strong>Sign-Off Statement:</strong> If the client confirms that the workflow, modules,
+          and screen expectations described in this document reflect the intended business requirements,
+          then this specification may be treated as the approved scope for the interactive delivery phase.
+        </div>
+      </section>
+
+      <section>
+        <h2>Document Summary</h2>
+        <p>
+          This SRS defines a proposed unified CRM, estimating, operations, field-service, and finance
+          workflow platform intended to consolidate fragmented systems into one connected product experience.
+        </p>
+        <p>
+          The initial delivery phase will focus on requirement visibility, workflow confirmation,
+          and business-fit validation. Production infrastructure and live integrations may follow
+          in later implementation phases if approved.
+        </p>
+        <p class="muted small">
+          Prepared as a client-ready scope and requirements document.
+        </p>
+      </section>
+    </div>
+  </body>
+</html>

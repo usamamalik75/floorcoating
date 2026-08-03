@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -12,8 +12,8 @@ import {
   Send,
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
-import { useArtifactsFor } from '@/store/selectors'
-import { formForCategory, requiredFields } from '@/data/siteVisitForms'
+import { useArtifactsFor, useFormForCategory } from '@/store/selectors'
+import { requiredFields } from '@/data/siteVisitForms'
 import { ACCOUNT_BY_ID } from '@/data/seed'
 import type { SiteVisitField } from '@/domain/types'
 import {
@@ -33,7 +33,7 @@ import { cn } from '@/lib/cn'
 /* ==========================================================================
    Guided site visit
    ==========================================================================
-   Completed on a phone or tablet, standing on the floor being quoted. The
+   Completed on a phone or tablet, standing on the service area being quoted. The
    form is section-paged rather than one long scroll because reps fill this in
    while walking a plant.
 
@@ -52,10 +52,7 @@ export function SiteVisit() {
   const viewerId = useStore((s) => s.viewerId)
   const artifacts = useArtifactsFor(id)
 
-  const form = useMemo(
-    () => (opportunity ? formForCategory(opportunity.category) : undefined),
-    [opportunity],
-  )
+  const form = useFormForCategory(opportunity?.category)
 
   const [values, setValues] = useState<Record<string, string | number | boolean>>({})
   const [section, setSection] = useState(0)
@@ -165,7 +162,7 @@ export function SiteVisit() {
             <h2 className="mb-1 font-display text-lg text-primary">Photos and documents</h2>
             <p className="mb-3 text-sm text-muted">
               Photos attach to this project for its whole life, from site condition through to the
-              finished floor.
+              finished service area.
             </p>
             <div className="flex flex-wrap gap-2">
               <Button

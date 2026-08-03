@@ -6,6 +6,10 @@ import type {
   Artifact,
   ChangeOrder,
   ChecklistInstance,
+  ChecklistTemplate,
+  CommunicationChannel,
+  CommunicationTemplate,
+  CommunicationThread,
   Estimate,
   Invoice,
   Issue,
@@ -13,15 +17,22 @@ import type {
   JobStatus,
   MaterialOrder,
   Opportunity,
-  ProspectRequest,
+  PaymentRequest,
+  PriceBookItem,
+  ProposalTemplate,
   Reminder,
   Role,
+  SiteVisitForm,
   SiteVisitResponse,
+  StageDef,
   StageId,
-  Takeoff,
+  ScopeExtraction,
 } from '@/domain/types'
 import { ROLE_LABEL } from '@/domain/types'
-import { formForCategory } from '@/data/siteVisitForms'
+import { WORKSPACE_TEMPLATE, type WorkspaceTemplate } from '@/config/workspace'
+import { CHECKLIST_TEMPLATES } from '@/data/checklists'
+import { PRICE_BOOK, PROPOSAL_TEMPLATES } from '@/data/priceBook'
+import { formForCategory, SITE_VISIT_FORMS } from '@/data/siteVisitForms'
 import {
   ACCOUNTS,
   ACTIVITY,
@@ -34,14 +45,14 @@ import {
   JOBS,
   MATERIAL_ORDERS,
   OPPORTUNITIES,
-  PROSPECT_REQUESTS,
   REMINDERS,
   SITE_VISIT_RESPONSES,
-  TAKEOFFS,
+  SCOPE_EXTRACTIONS,
   USERS,
   iso,
 } from '@/data/seed'
 import { STAGE_BY_ID, stageLabel } from '@/domain/stages'
+import { STAGES } from '@/domain/stages'
 
 let seq = 1000
 const nextId = (prefix: string) => `${prefix}_${++seq}`
@@ -53,6 +64,8 @@ export interface MoveMeta {
   expectedPeriod?: string
   assigneeId?: string
   reason?: string
+  followUpChannel?: CommunicationChannel
+  followUpRecipient?: string
 }
 
 interface State {
@@ -65,12 +78,20 @@ interface State {
   reminders: Reminder[]
   checklists: ChecklistInstance[]
   activity: Activity[]
-  prospectRequests: ProspectRequest[]
   siteVisits: SiteVisitResponse[]
-  takeoffs: Takeoff[]
+  scopeExtractions: ScopeExtraction[]
   materialOrders: MaterialOrder[]
   changeOrders: ChangeOrder[]
   issues: Issue[]
+  workspaceTemplate: WorkspaceTemplate
+  siteVisitForms: SiteVisitForm[]
+  checklistTemplates: ChecklistTemplate[]
+  priceBookItems: PriceBookItem[]
+  proposalTemplates: ProposalTemplate[]
+  stageDefinitions: StageDef[]
+  messageThreads: CommunicationThread[]
+  communicationTemplates: CommunicationTemplate[]
+  paymentRequests: PaymentRequest[]
 
   viewerId: string
   locationFilter: string | 'all'
@@ -99,7 +120,7 @@ interface State {
   rejectEstimate: (id: string, note: string) => void
   signEstimate: (id: string, signedBy: string, selectedOptionId?: string) => void
 
-  acceptTakeoff: (takeoffId: string) => void
+  acceptScopeExtraction: (scopeExtractionId: string) => void
 
   scheduleJob: (job: Omit<Job, 'id'>) => void
   updateJob: (jobId: string, next: Partial<Job>) => void
@@ -116,10 +137,38 @@ interface State {
 
   createInvoice: (i: Omit<Invoice, 'id'>) => void
   recordPayment: (invoiceId: string, amount: number, method: 'Check' | 'ACH' | 'Card') => void
+  createPaymentRequest: (request: Omit<PaymentRequest, 'id' | 'events' | 'token'> & { token?: string }) => string
+  updatePaymentRequestStatus: (
+    id: string,
+    status: PaymentRequest['status'],
+    detail?: string,
+    options?: { recordInvoicePayment?: boolean; method?: 'Check' | 'ACH' | 'Card' },
+  ) => void
+  upsertMessageThread: (thread: CommunicationThread) => void
+  sendMessage: (
+    opportunityId: string,
+    input: {
+      channel: CommunicationChannel
+      body: string
+      subject?: string
+      contactName: string
+      contactEmail?: string
+      contactPhone?: string
+      status?: 'draft' | 'sent'
+    },
+  ) => string
+  markThreadStatus: (threadId: string, status: CommunicationThread['status']) => void
+  addInboundMessage: (
+    threadId: string,
+    input: { channel: CommunicationChannel; body: string; subject?: string; at?: string },
+  ) => void
+  updateWorkspaceTemplate: (next: WorkspaceTemplate) => void
+  upsertSiteVisitForm: (form: SiteVisitForm) => void
+  upsertChecklistTemplate: (template: ChecklistTemplate) => void
+  upsertPriceBookItem: (item: PriceBookItem) => void
+  upsertProposalTemplate: (template: ProposalTemplate) => void
+  upsertStageDefinition: (stage: StageDef) => void
 
-  submitProspectRequest: (r: Omit<ProspectRequest, 'id'>) => void
-  decideProspectRequest: (id: string, approve: boolean, approverId: string) => void
-  importProspects: (id: string) => void
 
   logActivity: (opportunityId: string, kind: Activity['kind'], text: string) => void
   reset: () => void
@@ -137,8 +186,62 @@ export interface LeadInput {
   source: Opportunity['source']
   message: string
   locationId: string
-  sqft: number
+  estimatedQuantity: number
 }
+
+const createCommunicationTemplates = (): CommunicationTemplate[] => [
+  {
+    id: 'tmpl_followup_email',
+    name: 'Proposal follow-up email',
+    channel: 'email',
+    subject: 'Checking in on your proposal',
+    body:
+      'Hi {{contactName}},\n\nI wanted to follow up on the proposal and answer any questions before we lock in dates.\n\nBest,\n{{ownerName}}',
+  },
+  {
+    id: 'tmpl_followup_sms',
+    name: 'Proposal follow-up text',
+    channel: 'sms',
+    body: 'Hi {{contactName}}, just checking in on the proposal. Happy to answer any questions and hold dates for you.',
+  },
+  {
+    id: 'tmpl_payment_email',
+    name: 'Payment request email',
+    channel: 'email',
+    subject: 'Your payment link is ready',
+    body:
+      'Hi {{contactName}},\n\nYour payment link is ready. Once the deposit is received we can confirm scheduling.\n\nThank you,\n{{ownerName}}',
+  },
+]
+
+const createMessageThreads = (): CommunicationThread[] =>
+  OPPORTUNITIES.slice(0, 4).map((opp, index) => {
+    const account = ACCOUNTS.find((a) => a.id === opp.accountId)
+    return {
+      id: `thread_${opp.id}`,
+      opportunityId: opp.id,
+      contactName: account?.contactName ?? 'Customer',
+      contactEmail: account?.email,
+      contactPhone: account?.phone,
+      lastChannel: index % 2 === 0 ? 'email' : 'sms',
+      status: index === 0 ? 'waiting' : 'open',
+      messages: [
+        {
+          id: `msg_${opp.id}_1`,
+          at: new Date(opp.createdAt).toISOString(),
+          channel: index % 2 === 0 ? 'email' : 'sms',
+          direction: 'outbound',
+          status: 'sent',
+          subject: index % 2 === 0 ? 'Intro and next steps' : undefined,
+          body:
+            index % 2 === 0
+              ? 'Thanks for reaching out. We have your project details and will confirm the next step shortly.'
+              : 'Thanks for contacting us. We received your request and will confirm the next step shortly.',
+          byId: opp.ownerId || 'u_nic',
+        },
+      ],
+    }
+  })
 
 const initial = () => ({
   accounts: structuredClone(ACCOUNTS),
@@ -150,12 +253,20 @@ const initial = () => ({
   reminders: structuredClone(REMINDERS),
   checklists: structuredClone(CHECKLIST_INSTANCES),
   activity: structuredClone(ACTIVITY),
-  prospectRequests: structuredClone(PROSPECT_REQUESTS),
   siteVisits: structuredClone(SITE_VISIT_RESPONSES),
-  takeoffs: structuredClone(TAKEOFFS),
+  scopeExtractions: structuredClone(SCOPE_EXTRACTIONS),
   materialOrders: structuredClone(MATERIAL_ORDERS),
   changeOrders: structuredClone(CHANGE_ORDERS),
   issues: structuredClone(ISSUES),
+  workspaceTemplate: structuredClone(WORKSPACE_TEMPLATE),
+  siteVisitForms: structuredClone(SITE_VISIT_FORMS),
+  checklistTemplates: structuredClone(CHECKLIST_TEMPLATES),
+  priceBookItems: structuredClone(PRICE_BOOK),
+  proposalTemplates: structuredClone(PROPOSAL_TEMPLATES),
+  stageDefinitions: structuredClone(STAGES),
+  messageThreads: createMessageThreads(),
+  communicationTemplates: createCommunicationTemplates(),
+  paymentRequests: [],
 })
 
 /**
@@ -164,7 +275,7 @@ const initial = () => ({
  * seed invalidates it and "Reset demo" always returns to the story's start.
  */
 const STORAGE_KEY = 'fcg-prototype'
-const STORAGE_VERSION = 2
+const STORAGE_VERSION = 4
 
 const createState: StateCreator<State> = (set, get) => ({
   ...initial(),
@@ -178,7 +289,7 @@ const createState: StateCreator<State> = (set, get) => ({
     const user = USERS.find((u) => u.id === id)
     set({
       viewerId: id,
-      // Anyone but the franchisor is scoped to their own territory.
+      // Team members are scoped to their location; administrators can view all locations.
       locationFilter: user?.locationId ?? 'all',
       // Field roles land in the field-density experience automatically.
       density: user?.role === 'tech' || user?.role === 'crew_leader' ? 'field' : 'comfortable',
@@ -196,7 +307,7 @@ const createState: StateCreator<State> = (set, get) => ({
     if (!o) return
 
     const from = o.stage
-    const def = STAGE_BY_ID[to]
+    const def = get().stageDefinitions.find((stage) => stage.id === to) ?? STAGE_BY_ID[to]
 
     set({
       opportunities: opportunities.map((x) =>
@@ -238,6 +349,19 @@ const createState: StateCreator<State> = (set, get) => ({
           },
         ],
       }))
+
+      if (meta.followUpChannel) {
+        const account = get().accounts.find((a) => a.id === o.accountId)
+        get().sendMessage(opportunityId, {
+          channel: meta.followUpChannel,
+          body: meta.reminderNote || `Follow-up scheduled for ${stageLabel(to, o.category)}.`,
+          contactName: account?.contactName ?? 'Customer',
+          contactEmail: account?.email,
+          contactPhone: account?.phone,
+          status: 'draft',
+          subject: meta.followUpChannel === 'email' ? 'Follow-up scheduled' : undefined,
+        })
+      }
     }
 
     def.notify.forEach((n) =>
@@ -246,7 +370,7 @@ const createState: StateCreator<State> = (set, get) => ({
 
     // Stage changes create related module records — they do not redirect the user.
     if (to === 'site_visit_scheduled' || to === 'site_visit_required') {
-      const form = formForCategory(o.category)
+      const form = get().siteVisitForms.find((candidate) => candidate.category === o.category) ?? formForCategory(o.category)
       if (form && !get().siteVisits.some((v) => v.opportunityId === opportunityId)) {
         set((s) => ({
           siteVisits: [
@@ -279,6 +403,11 @@ const createState: StateCreator<State> = (set, get) => ({
           crewLeaderId: null,
           pmId: o.pmId,
           crewIds: [],
+          team: [
+            { userId: o.ownerId, role: 'sales_owner' },
+            ...(o.estimatorId ? [{ userId: o.estimatorId, role: 'estimator' as const }] : []),
+            ...(o.pmId ? [{ userId: o.pmId, role: 'project_manager' as const }] : []),
+          ],
           progress: 0,
           dailyLogs: [],
         })
@@ -309,7 +438,7 @@ const createState: StateCreator<State> = (set, get) => ({
 
       get().createInvoice({
         opportunityId,
-        number: `FCG-INV-${2100 + get().invoices.length}`,
+        number: `JOB-INV-${2100 + get().invoices.length}`,
         kind: 'final',
         amount: due,
         status: 'sent',
@@ -321,7 +450,7 @@ const createState: StateCreator<State> = (set, get) => ({
       get().logActivity(
         opportunityId,
         'money',
-        `Final invoice synced to QuickBooks — contract plus ${approvedCo > 0 ? 'approved change orders ' : ''}less deposit. Royalty accrued at 5% of gross.`,
+        `Final invoice synced to QuickBooks — contract plus ${approvedCo > 0 ? 'approved change orders ' : ''}less deposit.`,
       )
     }
 
@@ -385,7 +514,7 @@ const createState: StateCreator<State> = (set, get) => ({
       set((s) => ({ accounts: [...s.accounts, created] }))
     }
 
-    const code = `FCG-${input.locationId.replace('loc_', '').toUpperCase()}-${1100 + get().opportunities.length}`
+    const code = `JOB-${input.locationId.replace('loc_', '').toUpperCase()}-${1100 + get().opportunities.length}`
     const id = nextId('op')
     set((s) => ({
       opportunities: [
@@ -403,13 +532,13 @@ const createState: StateCreator<State> = (set, get) => ({
           estimatorId: null,
           pmId: null,
           value: 0,
-          sqft: input.sqft,
-          coveLf: 0,
+          estimatedQuantity: input.estimatedQuantity,
+          secondaryQuantity: 0,
           address: `${input.city}, ${input.state}`,
           zip: input.zip,
           createdAt: new Date().toISOString(),
           stageEnteredAt: new Date().toISOString(),
-          systemIds: [],
+          catalogItemIds: [],
           reminderAt: null,
           source: input.source,
           visitAt: null,
@@ -463,11 +592,11 @@ const createState: StateCreator<State> = (set, get) => ({
 
     // Measurements captured on site flow straight into the record, so the
     // estimator never re-keys them.
-    const sqft = Number(values.sqft)
-    const cove = Number(values.cove_lf)
+    const estimatedQuantity = Number(values.estimatedQuantity)
+    const secondaryQuantityValue = Number(values.secondary_quantity)
     get().patchOpportunity(opportunityId, {
-      ...(Number.isFinite(sqft) && sqft > 0 ? { sqft } : {}),
-      ...(Number.isFinite(cove) && cove > 0 ? { coveLf: cove } : {}),
+      ...(Number.isFinite(estimatedQuantity) && estimatedQuantity > 0 ? { estimatedQuantity } : {}),
+      ...(Number.isFinite(secondaryQuantityValue) && secondaryQuantityValue > 0 ? { secondaryQuantity: secondaryQuantityValue } : {}),
     })
 
     if (complete) {
@@ -570,19 +699,19 @@ const createState: StateCreator<State> = (set, get) => ({
     return id
   },
 
-  acceptTakeoff: (takeoffId) => {
-    const tk = get().takeoffs.find((t) => t.id === takeoffId)
+  acceptScopeExtraction: (scopeExtractionId) => {
+    const tk = get().scopeExtractions.find((t) => t.id === scopeExtractionId)
     if (!tk) return
     set((s) => ({
-      takeoffs: s.takeoffs.map((t) => (t.id === takeoffId ? { ...t, status: 'accepted' as const } : t)),
+      scopeExtractions: s.scopeExtractions.map((t) => (t.id === scopeExtractionId ? { ...t, status: 'accepted' as const } : t)),
     }))
-    const sqft = tk.areas.reduce((s, a) => s + a.sqft, 0)
-    const cove = tk.areas.reduce((s, a) => s + a.coveLf, 0)
-    get().patchOpportunity(tk.opportunityId, { sqft, coveLf: cove })
+    const estimatedQuantity = tk.sections.reduce((s, a) => s + a.estimatedQuantity, 0)
+    const secondaryQuantityValue = tk.sections.reduce((s, a) => s + a.secondaryQuantity, 0)
+    get().patchOpportunity(tk.opportunityId, { estimatedQuantity, secondaryQuantity: secondaryQuantityValue })
     get().logActivity(
       tk.opportunityId,
       'system',
-      `AI takeoff accepted by the estimator — ${sqft.toLocaleString()} sq ft and ${cove} lin ft of cove written to the record.`,
+      `Document-assisted scope accepted by the estimator — ${estimatedQuantity.toLocaleString()} units and ${secondaryQuantityValue} secondary units written to the record.`,
     )
   },
 
@@ -624,18 +753,18 @@ const createState: StateCreator<State> = (set, get) => ({
   submitMaterialOrder: (id) => {
     const mo = get().materialOrders.find((m) => m.id === id)
     if (!mo) return
-    const fmsId = `FMS-${4500 + get().materialOrders.length}`
+    const purchaseOrderId = `PO-${4500 + get().materialOrders.length}`
     set((s) => ({
       materialOrders: s.materialOrders.map((m) =>
         m.id === id
-          ? { ...m, status: 'submitted' as const, submittedAt: new Date().toISOString(), fmsOrderId: fmsId }
+          ? { ...m, status: 'submitted' as const, submittedAt: new Date().toISOString(), purchaseOrderId }
           : m,
       ),
     }))
     get().logActivity(
       mo.opportunityId,
       'system',
-      `Material order ${fmsId} submitted to the franchisor via the Franchise Management System.`,
+      `Purchase order ${purchaseOrderId} submitted to purchasing.`,
     )
   },
 
@@ -651,7 +780,7 @@ const createState: StateCreator<State> = (set, get) => ({
           : m,
       ),
     }))
-    get().logActivity(mo.opportunityId, 'system', `Material order ${mo.fmsOrderId ?? ''} is now ${next}.`)
+    get().logActivity(mo.opportunityId, 'system', `Purchase order ${mo.purchaseOrderId ?? ''} is now ${next}.`)
   },
 
   addChangeOrder: (c) => {
@@ -713,59 +842,201 @@ const createState: StateCreator<State> = (set, get) => ({
     )
   },
 
-  /* ---- Prospecting ---------------------------------------------------- */
+  createPaymentRequest: (request) => {
+    const id = nextId('pr')
+    const token = request.token ?? id.replace('pr_', 'pay_')
+    const created: PaymentRequest = {
+      ...request,
+      id,
+      token,
+      events: [
+        {
+          id: nextId('pre'),
+          at: new Date().toISOString(),
+          label: 'Payment request created',
+          detail: `${request.kind === 'deposit' ? 'Deposit' : 'Invoice'} request prepared for ${money(request.amount)}.`,
+        },
+      ],
+    }
+    set((s) => ({ paymentRequests: [...s.paymentRequests, created] }))
+    get().logActivity(
+      request.opportunityId,
+      'money',
+      `${request.kind === 'deposit' ? 'Deposit' : 'Invoice'} payment link prepared for ${money(request.amount)}.`,
+    )
+    return id
+  },
 
-  submitProspectRequest: (r) =>
-    set((s) => ({ prospectRequests: [...s.prospectRequests, { ...r, id: nextId('pr') }] })),
-
-  decideProspectRequest: (id, approve, approverId) =>
+  updatePaymentRequestStatus: (id, status, detail, options) => {
+    const request = get().paymentRequests.find((x) => x.id === id)
+    if (!request) return
+    const at = new Date().toISOString()
     set((s) => ({
-      prospectRequests: s.prospectRequests.map((r) =>
-        r.id === id
+      paymentRequests: s.paymentRequests.map((x) =>
+        x.id === id
           ? {
-              ...r,
-              status: approve ? ('approved' as const) : ('rejected' as const),
-              approvedById: approverId,
-              approvedAt: new Date().toISOString(),
+              ...x,
+              status,
+              processorStatus:
+                status === 'paid'
+                  ? 'succeeded'
+                  : status === 'failed'
+                    ? 'failed'
+                    : status === 'refunded'
+                      ? 'refunded'
+                      : x.processorStatus,
+              sentAt: status === 'sent' && !x.sentAt ? at : x.sentAt,
+              viewedAt: status === 'viewed' && !x.viewedAt ? at : x.viewedAt,
+              paidAt: status === 'paid' ? at : x.paidAt,
+              events: [
+                ...x.events,
+                {
+                  id: nextId('pre'),
+                  at,
+                  label: `Request ${status}`,
+                  detail: detail ?? `Payment request marked ${status}.`,
+                },
+              ],
             }
-          : r,
+          : x,
       ),
+    }))
+
+    if (status === 'paid' && request.invoiceId && options?.recordInvoicePayment !== false) {
+      const invoice = get().invoices.find((inv) => inv.id === request.invoiceId)
+      if (invoice) {
+        const outstanding = Math.max(0, invoice.amount - invoice.payments.reduce((sum, payment) => sum + payment.amount, 0))
+        if (outstanding > 0) {
+          get().recordPayment(request.invoiceId, Math.min(outstanding, request.amount), options?.method ?? 'ACH')
+        }
+      }
+    }
+
+    get().logActivity(request.opportunityId, 'money', detail ?? `Payment request marked ${status}.`)
+  },
+
+  upsertMessageThread: (thread) =>
+    set((s) => ({
+      messageThreads: s.messageThreads.some((existing) => existing.id === thread.id)
+        ? s.messageThreads.map((existing) => (existing.id === thread.id ? thread : existing))
+        : [...s.messageThreads, thread],
     })),
 
-  importProspects: (id) => {
-    const req = get().prospectRequests.find((r) => r.id === id)
-    if (!req) return
-    const n = Math.round(req.estimatedCount * 0.93)
-    const names = [
-      'Cascade Provisions', 'Ridgeline Foods', 'Bayou Bottling', 'Summit Creamery',
-      'Ironwood Packing', 'Valley Fresh Produce', 'Northstar Frozen', 'Copperfield Mills',
-    ]
-    const made: Account[] = names.slice(0, 6).map((name, i) => ({
-      id: nextId('ac'),
-      name,
-      vertical: req.vertical,
-      locationId: req.locationId,
-      contactName: ['Dale Munro', 'Rita Okafor', 'Chris Vance', 'Nadia Ellis', 'Paul Grieve', 'Tess Rowan'][i],
-      contactTitle: req.targetTitles[i % req.targetTitles.length],
-      email: `contact@${name.toLowerCase().replace(/[^a-z]/g, '')}.com`,
-      phone: '(555) 555-0199',
-      city: req.originCity.split(',')[0],
-      state: req.originCity.split(',')[1]?.trim() ?? '',
-      zip: '00000',
-      isNational: false,
-      source: 'Apollo',
-      createdAt: new Date().toISOString(),
-      anchorStage: 'prospect',
-      prospectRequestId: req.id,
-    }))
+  sendMessage: (opportunityId, input) => {
+    const existing = get().messageThreads.find((thread) => thread.opportunityId === opportunityId)
+    const threadId = existing?.id ?? nextId('thread')
+    const message = {
+      id: nextId('msg'),
+      at: new Date().toISOString(),
+      channel: input.channel,
+      direction: 'outbound' as const,
+      status: input.status === 'draft' ? 'draft' as const : 'sent' as const,
+      subject: input.subject,
+      body: input.body,
+      byId: get().viewerId,
+    }
+    const thread: CommunicationThread = existing
+      ? {
+          ...existing,
+          contactName: input.contactName,
+          contactEmail: input.contactEmail,
+          contactPhone: input.contactPhone,
+          lastChannel: input.channel,
+          status: input.status === 'draft' ? 'open' : 'waiting',
+          messages: [...existing.messages, message],
+        }
+      : {
+          id: threadId,
+          opportunityId,
+          contactName: input.contactName,
+          contactEmail: input.contactEmail,
+          contactPhone: input.contactPhone,
+          lastChannel: input.channel,
+          status: input.status === 'draft' ? 'open' : 'waiting',
+          messages: [message],
+        }
+    get().upsertMessageThread(thread)
+    get().logActivity(
+      opportunityId,
+      'system',
+      `${input.status === 'draft' ? 'Drafted' : 'Sent'} ${input.channel.toUpperCase()} message${input.subject ? `: ${input.subject}` : ''}.`,
+    )
+    return thread.id
+  },
 
+  markThreadStatus: (threadId, status) =>
     set((s) => ({
-      accounts: [...s.accounts, ...made],
-      prospectRequests: s.prospectRequests.map((r) =>
-        r.id === id ? { ...r, status: 'imported' as const, importedCount: n } : r,
+      messageThreads: s.messageThreads.map((thread) => (thread.id === threadId ? { ...thread, status } : thread)),
+    })),
+
+  addInboundMessage: (threadId, input) => {
+    const thread = get().messageThreads.find((existing) => existing.id === threadId)
+    if (!thread) return
+    const at = input.at ?? new Date().toISOString()
+    set((s) => ({
+      messageThreads: s.messageThreads.map((existing) =>
+        existing.id === threadId
+          ? {
+              ...existing,
+              lastChannel: input.channel,
+              status: 'open',
+              messages: [
+                ...existing.messages,
+                {
+                  id: nextId('msg'),
+                  at,
+                  channel: input.channel,
+                  direction: 'inbound',
+                  status: 'delivered',
+                  subject: input.subject,
+                  body: input.body,
+                  byId: 'customer',
+                },
+              ],
+            }
+          : existing,
       ),
     }))
+    get().logActivity(thread.opportunityId, 'note', `Customer replied by ${input.channel.toUpperCase()}.`)
   },
+
+  updateWorkspaceTemplate: (next) => set({ workspaceTemplate: next }),
+
+  upsertSiteVisitForm: (form) =>
+    set((s) => ({
+      siteVisitForms: s.siteVisitForms.some((existing) => existing.id === form.id)
+        ? s.siteVisitForms.map((existing) => (existing.id === form.id ? form : existing))
+        : [...s.siteVisitForms, form],
+    })),
+
+  upsertChecklistTemplate: (template) =>
+    set((s) => ({
+      checklistTemplates: s.checklistTemplates.some((existing) => existing.id === template.id)
+        ? s.checklistTemplates.map((existing) => (existing.id === template.id ? template : existing))
+        : [...s.checklistTemplates, template],
+    })),
+
+  upsertPriceBookItem: (item) =>
+    set((s) => ({
+      priceBookItems: s.priceBookItems.some((existing) => existing.id === item.id)
+        ? s.priceBookItems.map((existing) => (existing.id === item.id ? item : existing))
+        : [...s.priceBookItems, item],
+    })),
+
+  upsertProposalTemplate: (template) =>
+    set((s) => ({
+      proposalTemplates: s.proposalTemplates.some((existing) => existing.id === template.id)
+        ? s.proposalTemplates.map((existing) => (existing.id === template.id ? template : existing))
+        : [...s.proposalTemplates, template],
+    })),
+
+  upsertStageDefinition: (stage) =>
+    set((s) => ({
+      stageDefinitions: s.stageDefinitions.some((existing) => existing.id === stage.id)
+        ? s.stageDefinitions.map((existing) => (existing.id === stage.id ? stage : existing))
+        : [...s.stageDefinitions, stage],
+    })),
+
 
   logActivity: (opportunityId, kind, text) =>
     set((s) => ({
@@ -794,12 +1065,20 @@ export const useStore = create<State>()(
       reminders: s.reminders,
       checklists: s.checklists,
       activity: s.activity,
-      prospectRequests: s.prospectRequests,
       siteVisits: s.siteVisits,
-      takeoffs: s.takeoffs,
+      scopeExtractions: s.scopeExtractions,
       materialOrders: s.materialOrders,
       changeOrders: s.changeOrders,
       issues: s.issues,
+      workspaceTemplate: s.workspaceTemplate,
+      siteVisitForms: s.siteVisitForms,
+      checklistTemplates: s.checklistTemplates,
+      priceBookItems: s.priceBookItems,
+      proposalTemplates: s.proposalTemplates,
+      stageDefinitions: s.stageDefinitions,
+      messageThreads: s.messageThreads,
+      communicationTemplates: s.communicationTemplates,
+      paymentRequests: s.paymentRequests,
       viewerId: s.viewerId,
       locationFilter: s.locationFilter,
       density: s.density,
@@ -816,14 +1095,14 @@ function contractTotal(state: State, opportunityId: string) {
 }
 
 /**
- * Areas always add up. Alternatives are a customer choice, so only the
+ * Scope sections always add up. Alternatives are a customer choice, so only the
  * selected one (or the recommended one, pre-signature) counts.
  */
 export function estimateTotal(est: Estimate): number {
-  const areas = est.options.filter((o) => o.kind === 'area')
+  const scopes = est.options.filter((o) => o.kind === 'scope')
   const alts = est.options.filter((o) => o.kind === 'alternative')
   const chosen = alts.find((o) => o.selectedByCustomer) ?? alts.find((o) => o.recommended)
-  return [...areas, ...(chosen ? [chosen] : [])]
+  return [...scopes, ...(chosen ? [chosen] : [])]
     .flatMap((o) => o.lineItems)
     .reduce((s, li) => s + li.qty * li.unitPrice, 0)
 }
@@ -835,8 +1114,6 @@ export const money = (n: number, compact = false) =>
   compact && Math.abs(n) >= 1000
     ? `$${(n / 1000).toFixed(Math.abs(n) >= 100_000 ? 0 : 1)}k`
     : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
-
-export const ROYALTY_RATE = 0.05
 
 export function roleLabel(role: Role) {
   return ROLE_LABEL[role]

@@ -16,7 +16,7 @@
    ========================================================================== */
 
 export type Role =
-  | 'franchisor'
+  | 'admin'
   | 'owner'
   | 'sales'
   | 'estimator'
@@ -26,8 +26,8 @@ export type Role =
   | 'accounting'
 
 export const ROLE_LABEL: Record<Role, string> = {
-  franchisor: 'Franchisor Admin',
-  owner: 'Location Admin',
+  admin: 'Platform Admin',
+  owner: 'Business Owner',
   sales: 'Sales Rep',
   estimator: 'Estimator / Head of Projects',
   pm: 'Project Manager',
@@ -100,8 +100,8 @@ export type JobStatus =
 export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
   scheduling_required: 'Scheduling Required',
   scheduled: 'Scheduled',
-  material_required: 'Material Required',
-  material_ordered: 'Material Ordered',
+  material_required: 'Purchasing Required',
+  material_ordered: 'Resources Ordered',
   ready_to_start: 'Ready to Start',
   in_progress: 'In Progress',
   on_hold: 'On Hold',
@@ -169,7 +169,7 @@ export interface Location {
   ownerId: string
   openedAt: string
   isCorporate: boolean
-  /** Location-specific price multiplier applied over franchisor base pricing. */
+  /** Location-specific price multiplier applied over company administrator base pricing. */
   priceMultiplier: number
 }
 
@@ -202,13 +202,15 @@ export interface Account {
    * put, exactly as described in discovery.
    */
   anchorStage: 'prospect' | 'contact'
-  /** Set when the account arrived via a prospecting import. */
-  prospectRequestId?: string
+  /** Optional batch reference when imported from an external source. */
+  importBatchId?: string
   lastActivityAt?: string
+  /** Industry-specific data belongs to configuration, not the core schema. */
+  customFields?: Record<string, string | number | boolean>
 }
 
 export type LeadSource =
-  | 'Apollo'
+  | 'External provider'
   | 'National Website'
   | 'Location Website'
   | 'Ad Campaign'
@@ -217,27 +219,6 @@ export type LeadSource =
   | 'Referral'
   | 'Manual Entry'
   | 'Repeat'
-
-/* ---- Prospecting ------------------------------------------------------- */
-
-export interface ProspectRequest {
-  id: string
-  locationId: string
-  requestedById: string
-  requestedAt: string
-  vertical: Vertical
-  radiusMiles: number
-  originCity: string
-  minEmployees: number
-  targetTitles: string[]
-  estimatedCount: number
-  status: 'draft' | 'pending_approval' | 'approved' | 'importing' | 'imported' | 'rejected'
-  approvedById: string | null
-  approvedAt: string | null
-  importedCount: number
-  /** Franchisor-set allowance, so prospecting spend stays governed. */
-  creditCost: number
-}
 
 /* ---- Site visit -------------------------------------------------------- */
 
@@ -305,8 +286,8 @@ export interface ChecklistTemplate {
   category?: Category
   /** Fired when an opportunity or job reaches this status. */
   stage: StageId | JobStatus
-  /** Franchisor-controlled templates are locked at the location. */
-  managedByFranchisor: boolean
+  /** Company administrator-controlled templates are locked at the location. */
+  managedByCompany: boolean
   items: ChecklistItem[]
 }
 
@@ -323,27 +304,27 @@ export interface ChecklistInstance {
 export interface PriceBookItem {
   id: string
   name: string
-  system: string
-  unit: 'sq ft' | 'lin ft' | 'ea'
+  catalogueGroup: string
+  unit: string
   unitPrice: number
   description: string
   categories: Category[]
   swatch: string
-  /* Everything below is what auto-populates when the system is selected. */
-  coats: number
-  /** Material units consumed per unit of measure, per coat. Zero = no orderable material. */
-  coveragePerUnit: number
+  /* Everything below auto-populates when a catalogue item is selected. */
+  resourceMultiplier: number
+  /** Material units consumed per quoted unit. Zero means no orderable resource. */
+  materialRate: number
   materialUnit: string
-  /** Franchisor list cost of one material unit, used for the order value. */
+  /** Company cost of one resource unit, used for estimated job cost. */
   materialCost: number
-  wasteAllowance: number
-  labourHoursPerUnit: number
-  specSheet: string
-  installChecklistId: string
-  loadList: string[]
+  contingencyAllowance: number
+  laborHoursPerUnit: number
+  serviceDocument: string
+  jobChecklistId: string
+  requiredResources: string[]
   exclusions: string[]
-  /** Franchisor-managed items cannot be edited at the location. */
-  managedByFranchisor: boolean
+  /** Company-managed items cannot be edited at a location. */
+  managedByCompany: boolean
 }
 
 export interface LineItem {
@@ -358,9 +339,9 @@ export interface LineItem {
 
 export interface EstimateOption {
   id: string
-  /** Either a distinct AREA of the facility, or a price/quality ALTERNATIVE. */
+  /** Either a distinct scope section or a price/quality alternative. */
   label: string
-  kind: 'area' | 'alternative'
+  kind: 'scope' | 'alternative'
   recommended: boolean
   lineItems: LineItem[]
   /** Set when the customer picks between alternatives on the proposal. */
@@ -392,20 +373,20 @@ export interface ProposalTemplate {
   exclusions: string[]
   depositPct: number
   validDays: number
-  managedByFranchisor: boolean
+  managedByCompany: boolean
 }
 
-/* ---- AI takeoff -------------------------------------------------------- */
+/* ---- Document-assisted scope extraction ------------------------------- */
 
-export interface Takeoff {
+export interface ScopeExtraction {
   id: string
   opportunityId: string
   fileName: string
   pageCount: number
   status: 'uploaded' | 'analysing' | 'ready' | 'accepted'
   relevantPages: { page: number; sheet: string; reason: string }[]
-  areas: { id: string; name: string; sqft: number; coveLf: number; specifiedFinish: string }[]
-  recommendedSystemId: string
+  sections: { id: string; name: string; estimatedQuantity: number; secondaryQuantity: number; specification: string }[]
+  recommendedCatalogItemId: string
   confidence: number
   notes: string
 }
@@ -429,8 +410,8 @@ export interface MaterialOrder {
   status: 'draft' | 'submitted' | 'approved' | 'shipped' | 'delivered'
   submittedAt: string | null
   neededBy: string
-  /** Franchise Management System reference — the cross-product handoff. */
-  fmsOrderId: string | null
+  /** Purchasing reference for the job-to-fulfilment handoff. */
+  purchaseOrderId: string | null
   trackingRef: string | null
 }
 
@@ -443,8 +424,46 @@ export interface Job {
   crewLeaderId: string | null
   pmId: string | null
   crewIds: string[]
+  /** Flexible per-job responsibilities. A person may hold more than one role. */
+  team?: JobAssignment[]
   progress: number
+  dispatchState?: 'unassigned' | 'ready' | 'at_risk'
+  syncStatus?: 'synced' | 'pending'
+  clockStatus?: 'not_started' | 'traveling' | 'on_site' | 'wrapped'
+  travelMinutes?: number
+  checkInAt?: string | null
+  checkOutAt?: string | null
+  customerNotifiedAt?: string | null
+  lastDispatchNote?: string
   dailyLogs: { id: string; date: string; note: string; byId: string }[]
+}
+
+export type JobRole =
+  | 'sales_owner'
+  | 'estimator'
+  | 'project_manager'
+  | 'scheduler'
+  | 'field_supervisor'
+  | 'crew_lead'
+  | 'technician'
+  | 'quality_reviewer'
+  | 'billing_owner'
+
+export const JOB_ROLE_LABEL: Record<JobRole, string> = {
+  sales_owner: 'Sales owner',
+  estimator: 'Estimator',
+  project_manager: 'Project manager',
+  scheduler: 'Scheduler',
+  field_supervisor: 'Field supervisor',
+  crew_lead: 'Crew lead',
+  technician: 'Technician',
+  quality_reviewer: 'Quality reviewer',
+  billing_owner: 'Billing owner',
+}
+
+export interface JobAssignment {
+  userId: string
+  role: JobRole
 }
 
 export interface ChangeOrder {
@@ -517,6 +536,77 @@ export interface Activity {
   text: string
 }
 
+export type CommunicationChannel = 'email' | 'sms'
+export type CommunicationDirection = 'inbound' | 'outbound'
+export type CommunicationStatus = 'draft' | 'scheduled' | 'sent' | 'delivered' | 'no_response'
+
+export interface CommunicationMessage {
+  id: string
+  at: string
+  channel: CommunicationChannel
+  direction: CommunicationDirection
+  status: CommunicationStatus
+  subject?: string
+  body: string
+  byId: string
+}
+
+export interface CommunicationThread {
+  id: string
+  opportunityId: string
+  contactName: string
+  contactEmail?: string
+  contactPhone?: string
+  lastChannel: CommunicationChannel
+  status: 'open' | 'waiting' | 'closed'
+  messages: CommunicationMessage[]
+}
+
+export interface CommunicationTemplate {
+  id: string
+  name: string
+  channel: CommunicationChannel
+  subject?: string
+  body: string
+}
+
+export type PaymentRequestStatus =
+  | 'draft'
+  | 'sent'
+  | 'viewed'
+  | 'processing'
+  | 'paid'
+  | 'failed'
+  | 'refunded'
+
+export interface PaymentRequestEvent {
+  id: string
+  at: string
+  label: string
+  detail: string
+}
+
+export interface PaymentRequest {
+  id: string
+  opportunityId: string
+  invoiceId: string | null
+  estimateId: string | null
+  token: string
+  kind: 'deposit' | 'invoice'
+  amount: number
+  channel: 'email' | 'sms' | 'link'
+  recipientName: string
+  recipientEmail?: string
+  recipientPhone?: string
+  note?: string
+  status: PaymentRequestStatus
+  processorStatus: 'pending' | 'succeeded' | 'failed' | 'refunded'
+  sentAt: string | null
+  viewedAt: string | null
+  paidAt: string | null
+  events: PaymentRequestEvent[]
+}
+
 export interface Opportunity {
   id: string
   code: string
@@ -532,16 +622,18 @@ export interface Opportunity {
   estimatorId: string | null
   pmId: string | null
   value: number
-  sqft: number
-  coveLf: number
+  estimatedQuantity: number
+  secondaryQuantity: number
   address: string
   zip: string
   createdAt: string
   stageEnteredAt: string
-  systemIds: string[]
+  catalogItemIds: string[]
   reminderAt: string | null
   source: LeadSource
   /** Scheduled sales call / site visit, set at qualification. */
   visitAt: string | null
   lostReason?: string
+  /** Template-defined values keep the core useful beyond any one trade. */
+  customFields?: Record<string, string | number | boolean>
 }

@@ -14,7 +14,8 @@ import { LOCATIONS, USER_BY_ID } from '@/data/seed'
 import { PRICE_BOOK, PROPOSAL_TEMPLATES } from '@/data/priceBook'
 import { CHECKLIST_TEMPLATES } from '@/data/checklists'
 import { STAGE_BY_ID } from '@/domain/stages'
-import { ROYALTY_RATE, money, useStore } from '@/store/useStore'
+import { money, useStore } from '@/store/useStore'
+import { AdminBuilders } from '@/components/domain/AdminBuilders'
 import {
   Badge,
   Button,
@@ -32,9 +33,9 @@ import {
 import { cn } from '@/lib/cn'
 
 /**
- * The franchisor lens. Everything here is scoped ACROSS territories, which
- * is the one view a franchise owner never gets — and the reason lead routing
- * and royalty accrual have to live in the same system as the pipeline.
+ * The company administrator lens. Everything here is scoped ACROSS territories, which
+ * is the one view a branch owner never gets — and the reason lead routing
+ * and serviceFee accrual have to live in the same system as the pipeline.
  */
 export function Admin() {
   const opportunities = useStore((s) => s.opportunities)
@@ -68,7 +69,7 @@ export function Admin() {
           wonValue: won.reduce((s, o) => s + o.value, 0),
           winRate: won.length + lost.length ? (won.length / (won.length + lost.length)) * 100 : 0,
           revenue,
-          royalty: revenue * ROYALTY_RATE,
+          serviceFee: revenue * 0,
         }
       }),
     [opportunities, jobs, invoices],
@@ -78,9 +79,9 @@ export function Admin() {
     (acc, r) => ({
       openValue: acc.openValue + r.openValue,
       revenue: acc.revenue + r.revenue,
-      royalty: acc.royalty + r.royalty,
+      serviceFee: acc.serviceFee + r.serviceFee,
     }),
-    { openValue: 0, revenue: 0, royalty: 0 },
+    { openValue: 0, revenue: 0, serviceFee: 0 },
   )
 
   const maxOpen = Math.max(...byLocation.map((b) => b.openValue), 1)
@@ -89,9 +90,9 @@ export function Admin() {
     <div className="h-full overflow-y-auto scrollbar-thin">
       <div className="mx-auto max-w-5xl space-y-5 p-4">
         <header>
-          <h1 className="font-display text-xl text-primary">Franchisor</h1>
+          <h1 className="font-display text-xl text-primary">Company administrator</h1>
           <p className="mt-0.5 text-base text-muted">
-            Network-wide view across every territory. Franchise users see only their own.
+            Network-wide view across every territory. Branch users see only their own.
           </p>
         </header>
 
@@ -117,10 +118,10 @@ export function Admin() {
           </Card>
           <Card className="border-(--action-primary) p-4">
             <p className="text-2xs font-semibold tracking-wider text-muted uppercase">
-              Royalty accrued
+              Service fee accrued
             </p>
             <p className="mt-1 font-mono text-2xl font-semibold tabular text-brand">
-              {money(totals.royalty)}
+              {money(totals.serviceFee)}
             </p>
             <p className="mt-1 flex items-center gap-1 text-sm text-muted">
               <Percent size={11} /> 5% of gross sales
@@ -225,7 +226,7 @@ export function Admin() {
                     Win rate
                   </Th>
                   <Th width={110} align="right">
-                    Royalty
+                    Service fee
                   </Th>
                 </tr>
               </thead>
@@ -256,7 +257,7 @@ export function Admin() {
                       {r.winRate.toFixed(0)}%
                     </Td>
                     <Td align="right" mono className="font-medium text-brand">
-                      {money(r.royalty)}
+                      {money(r.serviceFee)}
                     </Td>
                   </Tr>
                 ))}
@@ -265,12 +266,13 @@ export function Admin() {
           </Card>
         </section>
 
-        {/* ---- Operating standards the franchisor controls ---- */}
+        {/* ---- Operating standards the company administrator controls ---- */}
         <NetworkStandards />
+        <AdminBuilders />
 
-        {/* ---- Stage distribution across the network ---- */}
+        {/* ---- Stage distribution across the company ---- */}
         <section className="pb-8">
-          <SectionTitle>Where the network's work is sitting</SectionTitle>
+          <SectionTitle>Where the company's work is sitting</SectionTitle>
           <Card className="p-4">
             <div className="space-y-1.5">
               {Object.values(STAGE_BY_ID)
@@ -313,7 +315,7 @@ export function Admin() {
 /* ==========================================================================
    Network operating standards
    ==========================================================================
-   The franchisor's actual product: one price book, one set of proposal
+   The company administrator's actual product: one price book, one set of proposal
    templates, one set of checklists. Locations apply their own price
    multiplier but cannot weaken a specification or drop a checklist item,
    which is what makes the process consistent across territories.
@@ -354,7 +356,7 @@ function NetworkStandards() {
       {tab === 'pricebook' && (
         <Card>
           <CardHeader
-            title="Floor systems"
+            title="Service Area systems"
             subtitle="Selecting one of these in an estimate pulls its spec sheet, material requirement, labour assumption, install checklist, load list and exclusions automatically."
             icon={<BookOpen size={14} />}
           />
@@ -368,10 +370,10 @@ function NetworkStandards() {
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-base font-medium text-primary">{pb.name}</span>
-                    <span className="block truncate text-sm text-muted">{pb.specSheet}</span>
+                    <span className="block truncate text-sm text-muted">{pb.serviceDocument}</span>
                   </span>
-                  <Badge tone={pb.managedByFranchisor ? 'info' : 'neutral'}>
-                    {pb.managedByFranchisor ? 'Locked' : 'Location editable'}
+                  <Badge tone={pb.managedByCompany ? 'info' : 'neutral'}>
+                    {pb.managedByCompany ? 'Locked' : 'Location editable'}
                   </Badge>
                   <span className="w-24 shrink-0 text-right font-mono text-base text-primary tabular">
                     {money(pb.unitPrice)}
@@ -385,11 +387,11 @@ function NetworkStandards() {
                     </p>
                     <ul className="space-y-0.5 text-sm text-secondary">
                       <li>
-                        {pb.coats} coat{pb.coats === 1 ? '' : 's'} · {pb.coveragePerUnit}{' '}
+                        {pb.resourceMultiplier} resource factor{pb.resourceMultiplier === 1 ? '' : 's'} · {pb.materialRate}{' '}
                         {pb.materialUnit} per {pb.unit}
                       </li>
-                      <li>{Math.round(pb.wasteAllowance * 100)}% waste allowance</li>
-                      <li>{pb.labourHoursPerUnit} labour hours per {pb.unit}</li>
+                      <li>{Math.round(pb.contingencyAllowance * 100)}% waste allowance</li>
+                      <li>{pb.laborHoursPerUnit} labour hours per {pb.unit}</li>
                     </ul>
                     <p className="mt-2 mb-1 text-2xs font-semibold tracking-wider text-muted uppercase">
                       Exclusions
@@ -405,7 +407,7 @@ function NetworkStandards() {
                       Trailer load list
                     </p>
                     <ul className="space-y-0.5 text-sm text-secondary">
-                      {pb.loadList.map((l) => (
+                      {pb.requiredResources.map((l) => (
                         <li key={l}>· {l}</li>
                       ))}
                     </ul>
@@ -426,8 +428,8 @@ function NetworkStandards() {
                 subtitle={`${t.depositPct}% deposit · valid ${t.validDays} days`}
                 icon={<FileText size={14} />}
                 actions={
-                  <Badge tone={t.managedByFranchisor ? 'info' : 'neutral'}>
-                    {t.managedByFranchisor ? 'Network standard' : 'Location'}
+                  <Badge tone={t.managedByCompany ? 'info' : 'neutral'}>
+                    {t.managedByCompany ? 'Company standard' : 'Location'}
                   </Badge>
                 }
               />
@@ -456,8 +458,8 @@ function NetworkStandards() {
                 subtitle={`Fires at ${STAGE_BY_ID[c.stage as keyof typeof STAGE_BY_ID]?.label ?? String(c.stage).replace(/_/g, ' ')}`}
                 icon={<ClipboardCheck size={14} />}
                 actions={
-                  <Badge tone={c.managedByFranchisor ? 'info' : 'neutral'}>
-                    {c.managedByFranchisor ? 'Locked' : 'Location'}
+                  <Badge tone={c.managedByCompany ? 'info' : 'neutral'}>
+                    {c.managedByCompany ? 'Locked' : 'Location'}
                   </Badge>
                 }
               />

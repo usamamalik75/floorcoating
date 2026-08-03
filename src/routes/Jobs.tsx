@@ -11,6 +11,7 @@ import {
   nextJobStatus,
 } from '@/domain/stages'
 import type { JobStatus, Opportunity } from '@/domain/types'
+import { jobTeam, primaryFieldLead } from '@/domain/jobs'
 import {
   Avatar,
   Badge,
@@ -171,10 +172,10 @@ function JobCard({
           <span>{LOCATION_BY_ID[opp.locationId]?.name}</span>
           <span className="font-mono">{money(opp.value, true)}</span>
         </div>
-        {job?.crewLeaderId && (
+        {job && jobTeam(job).length > 0 && (
           <div className="mt-2 flex items-center gap-1.5">
-            <Avatar name={USER_BY_ID[job.crewLeaderId]?.name ?? '?'} size={16} />
-            <span className="text-2xs text-muted">{USER_BY_ID[job.crewLeaderId]?.name}</span>
+            <Avatar name={USER_BY_ID[primaryFieldLead(job) ?? jobTeam(job)[0].userId]?.name ?? '?'} size={16} />
+            <span className="text-2xs text-muted">{jobTeam(job).length} team members</span>
           </div>
         )}
         {progress > 0 && (
@@ -183,6 +184,12 @@ function JobCard({
           </div>
         )}
         <div className="mt-2 flex flex-wrap gap-1">
+          {job?.dispatchState && (
+            <Badge tone={job.dispatchState === 'ready' ? 'success' : job.dispatchState === 'at_risk' ? 'warning' : 'neutral'}>
+              {job.dispatchState.replace('_', ' ')}
+            </Badge>
+          )}
+          {job?.syncStatus === 'pending' && <Badge tone="warning">Pending sync</Badge>}
           {material && (
             <Badge tone="info" icon={<Boxes size={9} />}>
               {material.status}

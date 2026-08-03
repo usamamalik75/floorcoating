@@ -80,7 +80,7 @@ export function OpportunityCard({
             </Badge>
             <span className="flex items-center gap-1 font-mono text-2xs tabular text-muted">
               <Ruler size={10} />
-              {opp.sqft.toLocaleString()}
+              {opp.estimatedQuantity.toLocaleString()}
             </span>
           </span>
         </div>

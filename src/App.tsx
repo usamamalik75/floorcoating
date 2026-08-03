@@ -7,7 +7,6 @@ import {
   Customers,
   Estimates,
   Finance,
-  Materials,
   Proposals,
   Reports,
   Settings,
@@ -18,13 +17,15 @@ import { SiteVisit } from '@/routes/SiteVisit'
 import { EstimateBuilder } from '@/routes/EstimateBuilder'
 import { MaterialOrder } from '@/routes/MaterialOrder'
 import { Schedule } from '@/routes/Schedule'
-import { Prospecting } from '@/routes/Prospecting'
 import { LeadIntake } from '@/routes/LeadIntake'
-import { Admin } from '@/routes/Admin'
-import { FmsCatalogue, FmsLocations, FmsOrders } from '@/routes/Fms'
 import { FieldJob, FieldToday, FieldVisit } from '@/routes/Field'
 import { CustomerProposal, CustomerSignoff } from '@/routes/CustomerProposal'
+import { CustomerPayment } from '@/routes/CustomerPayment'
 import { StyleGuide } from '@/routes/StyleGuide'
+import { Catalogue } from '@/routes/Catalogue'
+import { Purchasing } from '@/routes/Purchasing'
+import { Communications } from '@/routes/Communications'
+import { Admin } from '@/routes/Admin'
 
 export function App() {
   return (
@@ -32,6 +33,7 @@ export function App() {
       <Routes>
         <Route path="/proposal/:token" element={<CustomerProposal />} />
         <Route path="/signoff/:id" element={<CustomerSignoff />} />
+        <Route path="/pay/:token" element={<CustomerPayment />} />
 
         <Route element={<AppShell />}>
           <Route index element={<Dashboard />} />
@@ -40,29 +42,29 @@ export function App() {
           <Route path="/estimates" element={<Estimates />} />
           <Route path="/proposals" element={<Proposals />} />
           <Route path="/jobs" element={<Jobs />} />
-          <Route path="/materials" element={<Materials />} />
+          <Route path="/catalog" element={<Catalogue />} />
+          <Route path="/purchasing" element={<Purchasing />} />
           <Route path="/customers" element={<Customers />} />
           <Route path="/finance" element={<Finance />} />
+          <Route path="/communications" element={<Communications />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/admin" element={<Admin />} />
 
           {/* Legacy redirects */}
           <Route path="/pipeline" element={<Navigate to="/sales" replace />} />
           <Route path="/projects" element={<Navigate to="/jobs" replace />} />
           <Route path="/accounts" element={<Navigate to="/customers" replace />} />
           <Route path="/accounting" element={<Navigate to="/finance" replace />} />
+          <Route path="/materials" element={<Navigate to="/purchasing" replace />} />
 
           <Route path="/intake" element={<LeadIntake />} />
-          <Route path="/prospecting" element={<Prospecting />} />
           <Route path="/opportunities/:id" element={<OpportunityRecord />} />
           <Route path="/opportunities/:id/visit" element={<SiteVisit />} />
+          <Route path="/opportunities/:id/purchasing" element={<MaterialOrder />} />
           <Route path="/opportunities/:id/material" element={<MaterialOrder />} />
           <Route path="/estimate/:id" element={<EstimateBuilder />} />
           <Route path="/schedule" element={<Schedule />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/fms/catalogue" element={<FmsCatalogue />} />
-          <Route path="/fms/orders" element={<FmsOrders />} />
-          <Route path="/fms/locations" element={<FmsLocations />} />
           <Route path="/field" element={<FieldToday />} />
           <Route path="/field/visit/:id" element={<FieldVisit />} />
           <Route path="/field/job/:id" element={<FieldJob />} />
@@ -73,3 +75,4 @@ export function App() {
     </Router>
   )
 }
+

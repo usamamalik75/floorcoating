@@ -1,46 +1,33 @@
-/** Official lockup aspect ratio (300×98). */
-const ASPECT = 300 / 98
-
-const SRC = {
-  red: '/fcg-logo.png',
-  white: '/fcg-logo-white.png',
-} as const
+import { Workflow } from 'lucide-react'
 
 type LogoProps = {
-  /** Image height in px. Width follows the lockup aspect ratio. */
   size?: number
-  /** `white` for dark chrome; `red` for light surfaces. */
-  variant?: keyof typeof SRC
+  variant?: 'red' | 'white'
   className?: string
 }
 
-/** Official FCG lockup — US map + FLOOR COATINGS GROUP. */
+/** Neutral product identity; customer branding can replace this per workspace. */
 export function Logo({ size = 28, variant = 'red', className }: LogoProps) {
-  const height = size
-  const width = Math.round(size * ASPECT)
+  const light = variant === 'white'
   return (
-    <img
-      src={SRC[variant]}
-      alt="Floor Coatings Group"
-      width={width}
-      height={height}
-      className={className ?? 'shrink-0'}
-      draggable={false}
-    />
+    <div className={className ?? 'flex shrink-0 items-center gap-2.5'}>
+      <span className='grid rounded-lg bg-(--action-primary) p-2 text-white shadow-glow-primary'>
+        <Workflow size={Math.max(18, Math.round(size * 0.55))} />
+      </span>
+      <span className={light ? 'text-white' : 'text-primary'}>
+        <span className='block text-base font-bold leading-none tracking-tight'>Service Operations</span>
+        <span className='mt-1 block text-2xs tracking-[0.16em] uppercase opacity-60'>CRM + Field Service</span>
+      </span>
+    </div>
   )
 }
 
-/** Product line under the lockup — Operations Platform or Franchise Management. */
 export function Wordmark({
-  product = 'Operations Platform',
+  product = 'Service Operations',
   className,
 }: {
   product?: string
   className?: string
 }) {
-  return (
-    <div className={className}>
-      <div className="text-2xs leading-none tracking-[0.18em] uppercase opacity-70">{product}</div>
-    </div>
-  )
+  return <div className={className}>{product}</div>
 }

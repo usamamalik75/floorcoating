@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
-import { CheckCircle2, Lock, PenLine, ShieldCheck } from 'lucide-react'
+import { CheckCircle2, CreditCard, Lock, PenLine, ShieldCheck } from 'lucide-react'
 import { useStore, money, estimateTotal } from '@/store/useStore'
 import { useArtifactsFor, useChangeOrdersFor } from '@/store/selectors'
 import { ACCOUNT_BY_ID } from '@/data/seed'
@@ -25,6 +25,9 @@ export function CustomerProposal() {
     s.opportunities.find((o) => o.id === estimate?.opportunityId),
   )
   const sign = useStore((s) => s.signEstimate)
+  const createInvoice = useStore((s) => s.createInvoice)
+  const createPaymentRequest = useStore((s) => s.createPaymentRequest)
+  const paymentRequests = useStore((s) => s.paymentRequests)
 
   const [selected, setSelected] = useState<string | undefined>(undefined)
   const [name, setName] = useState('')
@@ -36,7 +39,7 @@ export function CustomerProposal() {
         <EmptyState
           icon={<Lock size={28} />}
           title="This proposal link is not valid"
-          description="Ask your Floor Coatings Group representative to resend it."
+          description="Ask your service representative to resend it."
         />
       </div>
     )
@@ -53,10 +56,57 @@ export function CustomerProposal() {
     // Signing is the only thing this page does; the award and the handoff to
     // operations belong to the store so every signature path behaves alike.
     sign(estimate.id, name, chosen)
+    const depositAmount = estimateTotal(estimate) * (estimate.depositPct / 100)
+    const depositNumber = `DEP-${estimate.id.replace('est_', '').toUpperCase()}`
+    const hasDepositInvoice = useStore
+      .getState()
+      .invoices.some((invoice) => invoice.opportunityId === estimate.opportunityId && invoice.kind === 'deposit')
+    let invoiceId = useStore
+      .getState()
+      .invoices.find((invoice) => invoice.opportunityId === estimate.opportunityId && invoice.kind === 'deposit')?.id
+    if (!hasDepositInvoice) {
+      createInvoice({
+        opportunityId: estimate.opportunityId,
+        number: depositNumber,
+        kind: 'deposit',
+        amount: depositAmount,
+        status: 'sent',
+        issuedAt: new Date().toISOString(),
+        dueAt: new Date().toISOString(),
+        quickbooksId: `QB-${depositNumber}`,
+        payments: [],
+      })
+      invoiceId = useStore
+        .getState()
+        .invoices.find((invoice) => invoice.opportunityId === estimate.opportunityId && invoice.kind === 'deposit')?.id
+    }
+    const hasRequest = useStore
+      .getState()
+      .paymentRequests.some((request) => request.estimateId === estimate.id && request.kind === 'deposit')
+    if (!hasRequest) {
+      createPaymentRequest({
+        opportunityId: estimate.opportunityId,
+        invoiceId: invoiceId ?? null,
+        estimateId: estimate.id,
+        kind: 'deposit',
+        amount: depositAmount,
+        channel: 'link',
+        recipientName: account?.contactName ?? name,
+        recipientEmail: account?.email,
+        recipientPhone: account?.phone,
+        note: 'Deposit required before scheduling can be confirmed.',
+        status: 'sent',
+        processorStatus: 'pending',
+        sentAt: new Date().toISOString(),
+        viewedAt: null,
+        paidAt: null,
+      })
+    }
     setSigning(false)
   }
 
   const signed = estimate.status === 'signed'
+  const paymentRequest = paymentRequests.find((request) => request.estimateId === estimate.id && request.kind === 'deposit')
 
   return (
     <div className="min-h-screen bg-[#f4f4f5] py-6">
@@ -89,6 +139,19 @@ export function CustomerProposal() {
                     {format(new Date(estimate.signedAt!), 'd MMMM yyyy')}. Your project team has been
                     notified and will contact you to confirm installation dates.
                   </p>
+                  {paymentRequest && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Link to={`/pay/${paymentRequest.token}`}>
+                        <Button variant="primary">
+                          <CreditCard size={14} />
+                          Pay deposit
+                        </Button>
+                      </Link>
+                      <p className="self-center text-sm text-[#5a5a5a]">
+                        Deposit status: <span className="font-medium capitalize">{paymentRequest.status}</span>
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -141,7 +204,7 @@ export function CustomerProposal() {
         </div>
 
         <p className="mt-4 text-center text-xs text-[#8a8a8a]">
-          Floor Coatings Group · This is a prototype. No agreement is created.
+          Service Operations · This is a prototype. No agreement is created.
         </p>
       </div>
     </div>
@@ -205,7 +268,7 @@ export function CustomerSignoff() {
           <div className="px-6 py-5">
             <h2 className="mb-2 font-display text-lg">Completed work</h2>
             <ul className="space-y-1 text-sm text-[#5a5a5a]">
-              <li>{opportunity.sqft.toLocaleString()} sq ft installed at {opportunity.address}</li>
+              <li>{opportunity.estimatedQuantity.toLocaleString()} units installed at {opportunity.address}</li>
               {after.map((a) => (
                 <li key={a.id} className="flex items-center gap-1.5">
                   <CheckCircle2 size={12} className="text-[#2f7d4f]" />
