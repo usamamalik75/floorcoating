@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { format, isToday, parseISO } from 'date-fns'
 import { FileText, MapPin, Ruler } from 'lucide-react'
 import { useStore, money, estimateTotal } from '@/store/useStore'
-import { useScopedOpportunities } from '@/store/selectors'
-import { ACCOUNT_BY_ID, LOCATION_BY_ID, USER_BY_ID } from '@/data/seed'
+import { useScopedOpportunities, useUserDirectory } from '@/store/selectors'
+import { ACCOUNT_BY_ID, LOCATION_BY_ID } from '@/data/seed'
 import { PRICE_BOOK } from '@/data/priceBook'
 import { CHECKLIST_TEMPLATES } from '@/data/checklists'
 import { PROPOSAL_TEMPLATES } from '@/data/priceBook'
@@ -16,6 +16,7 @@ import {
   Button,
   Card,
   EmptyState,
+  Modal,
   SectionTitle,
   Table,
   Td,
@@ -29,7 +30,11 @@ type VisitFilter = 'upcoming' | 'today' | 'completed' | 'all'
 export function SiteVisits() {
   const opps = useScopedOpportunities()
   const visits = useStore((s) => s.siteVisits)
+  const moveStage = useStore((s) => s.moveStage)
+  const navigate = useNavigate()
+  const userById = useUserDirectory()
   const [filter, setFilter] = useState<VisitFilter>('all')
+  const [creating, setCreating] = useState(false)
 
   const rows = useMemo(() => {
     return opps
@@ -57,10 +62,26 @@ export function SiteVisits() {
       })
   }, [opps, visits, filter])
 
+  const candidates = opps.filter(
+    (opp) =>
+      ['new_lead', 'contacted', 'qualified', 'site_visit_required'].includes(opp.stage) &&
+      !visits.some((visit) => visit.opportunityId === opp.id),
+  )
+
   return (
     <ModuleShell
       title="Assessments"
       subtitle="Configurable forms, measurements, files, and photos linked to the opportunity."
+      action={
+        <div className="flex flex-wrap gap-2">
+          <Link to="/intake">
+            <Button size="sm">New lead</Button>
+          </Link>
+          <Button size="sm" variant="primary" onClick={() => setCreating(true)}>
+            New assessment
+          </Button>
+        </div>
+      }
       filters={[
         { id: 'all', label: 'All' },
         { id: 'today', label: 'Today' },
@@ -95,7 +116,7 @@ export function SiteVisits() {
                 <Td className="text-secondary">
                   {opp.visitAt ? format(parseISO(opp.visitAt), 'd MMM · HH:mm') : '—'}
                 </Td>
-                <Td className="text-secondary">{USER_BY_ID[opp.ownerId]?.name}</Td>
+                <Td className="text-secondary">{userById[opp.ownerId]?.name}</Td>
                 <Td>
                   <Badge tone={visit?.completedAt ? 'success' : 'attention'}>
                     {visit?.completedAt ? 'Completed' : stageLabel(opp.stage, opp.category)}
@@ -111,6 +132,37 @@ export function SiteVisits() {
           </tbody>
         </Table>
       )}
+      <Modal
+        open={creating}
+        onClose={() => setCreating(false)}
+        title="Create assessment"
+        subtitle="Start the assessment workflow from an eligible sales opportunity."
+      >
+        <div className="space-y-2">
+          {candidates.length === 0 ? (
+            <EmptyState title="No eligible opportunities" description="Qualify or route a lead first, then create the assessment." />
+          ) : (
+            candidates.map((opp) => (
+              <button
+                key={opp.id}
+                type="button"
+                onClick={() => {
+                  moveStage(opp.id, 'site_visit_required')
+                  setCreating(false)
+                  navigate(`/opportunities/${opp.id}?tab=visits`)
+                }}
+                className="flex w-full items-start justify-between gap-3 rounded-md border border-subtle bg-surface-raised px-3 py-2.5 text-left hover:border-strong"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-primary">{opp.name}</p>
+                  <p className="text-sm text-muted">{ACCOUNT_BY_ID[opp.accountId]?.name}</p>
+                </div>
+                <Badge tone="neutral">{stageLabel(opp.stage, opp.category)}</Badge>
+              </button>
+            ))
+          )}
+        </div>
+      </Modal>
     </ModuleShell>
   )
 }
@@ -118,7 +170,10 @@ export function SiteVisits() {
 export function Estimates() {
   const estimates = useStore((s) => s.estimates)
   const opps = useScopedOpportunities()
+  const moveStage = useStore((s) => s.moveStage)
+  const navigate = useNavigate()
   const [filter, setFilter] = useState('all')
+  const [creating, setCreating] = useState(false)
 
   const statusMap: Record<string, string[]> = {
     all: [],
@@ -132,11 +187,21 @@ export function Estimates() {
   const rows = estimates
     .filter((e) => opps.some((o) => o.id === e.opportunityId))
     .filter((e) => filter === 'all' || statusMap[filter]?.includes(e.status))
+  const candidates = opps.filter(
+    (opp) =>
+      ['site_visit_completed', 'estimate_in_progress', 'estimate_ready'].includes(opp.stage) &&
+      !estimates.some((estimate) => estimate.opportunityId === opp.id),
+  )
 
   return (
     <ModuleShell
       title="Quotes"
       subtitle="Versioned pricing and scope live here; the pipeline tracks progress and approval."
+      action={
+        <Button size="sm" variant="primary" onClick={() => setCreating(true)}>
+          New estimate
+        </Button>
+      }
       filters={[
         { id: 'all', label: 'All' },
         { id: 'draft', label: 'Draft' },
@@ -190,6 +255,37 @@ export function Estimates() {
           </tbody>
         </Table>
       )}
+      <Modal
+        open={creating}
+        onClose={() => setCreating(false)}
+        title="Create estimate"
+        subtitle="Start an estimate from a visit-complete opportunity."
+      >
+        <div className="space-y-2">
+          {candidates.length === 0 ? (
+            <EmptyState title="No eligible opportunities" description="Complete a site visit first, then start the estimate." />
+          ) : (
+            candidates.map((opp) => (
+              <button
+                key={opp.id}
+                type="button"
+                onClick={() => {
+                  moveStage(opp.id, 'estimate_in_progress')
+                  setCreating(false)
+                  navigate(`/estimate/${opp.id}`)
+                }}
+                className="flex w-full items-start justify-between gap-3 rounded-md border border-subtle bg-surface-raised px-3 py-2.5 text-left hover:border-strong"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-primary">{opp.name}</p>
+                  <p className="text-sm text-muted">{opp.code}</p>
+                </div>
+                <Badge tone="neutral">{stageLabel(opp.stage, opp.category)}</Badge>
+              </button>
+            ))
+          )}
+        </div>
+      </Modal>
     </ModuleShell>
   )
 }
@@ -198,6 +294,8 @@ export function Proposals() {
   const estimates = useStore((s) => s.estimates)
   const opps = useScopedOpportunities()
   const [filter, setFilter] = useState('all')
+  const [creating, setCreating] = useState(false)
+  const navigate = useNavigate()
 
   const rows = estimates
     .filter((e) => ['approved', 'sent', 'signed', 'declined'].includes(e.status))
@@ -210,11 +308,19 @@ export function Proposals() {
       if (filter === 'declined') return e.status === 'declined'
       return true
     })
+  const candidates = estimates
+    .filter((estimate) => estimate.status === 'approved')
+    .filter((estimate) => opps.some((opp) => opp.id === estimate.opportunityId))
 
   return (
     <ModuleShell
       title="Proposals"
       subtitle="Customer-facing documents. Acceptance awards the opportunity and creates a Job."
+      action={
+        <Button size="sm" variant="primary" onClick={() => setCreating(true)}>
+          New proposal
+        </Button>
+      }
       filters={[
         { id: 'all', label: 'All' },
         { id: 'draft', label: 'Ready to Send' },
@@ -272,6 +378,40 @@ export function Proposals() {
           </tbody>
         </Table>
       )}
+      <Modal
+        open={creating}
+        onClose={() => setCreating(false)}
+        title="Create proposal"
+        subtitle="Open an approved estimate and continue into the proposal send workflow."
+      >
+        <div className="space-y-2">
+          {candidates.length === 0 ? (
+            <EmptyState title="No approved estimates" description="Approve an estimate first, then create the proposal send flow." />
+          ) : (
+            candidates.map((estimate) => {
+              const opp = opps.find((candidate) => candidate.id === estimate.opportunityId)
+              if (!opp) return null
+              return (
+                <button
+                  key={estimate.id}
+                  type="button"
+                  onClick={() => {
+                    setCreating(false)
+                    navigate(`/estimate/${estimate.opportunityId}`)
+                  }}
+                  className="flex w-full items-start justify-between gap-3 rounded-md border border-subtle bg-surface-raised px-3 py-2.5 text-left hover:border-strong"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-primary">{opp.name}</p>
+                    <p className="text-sm text-muted">{ACCOUNT_BY_ID[opp.accountId]?.name}</p>
+                  </div>
+                  <Badge tone="success">Approved</Badge>
+                </button>
+              )
+            })
+          )}
+        </div>
+      </Modal>
     </ModuleShell>
   )
 }
@@ -494,6 +634,7 @@ function Stat({ label, value, helper }: { label: string; value: string; helper?:
 function ModuleShell({
   title,
   subtitle,
+  action,
   filters,
   active,
   onFilter,
@@ -501,6 +642,7 @@ function ModuleShell({
 }: {
   title: string
   subtitle: string
+  action?: React.ReactNode
   filters: { id: string; label: string }[]
   active: string
   onFilter: (id: string) => void
@@ -510,8 +652,13 @@ function ModuleShell({
     <div className="h-full overflow-y-auto scrollbar-thin">
       <div className="mx-auto max-w-[80rem] px-5 py-5">
         <header className="mb-4">
-          <h1 className="font-display text-2xl text-primary">{title}</h1>
-          <p className="mt-0.5 text-base text-muted">{subtitle}</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <div>
+              <h1 className="font-display text-2xl text-primary">{title}</h1>
+              <p className="mt-0.5 text-base text-muted">{subtitle}</p>
+            </div>
+            <div className="ml-auto">{action}</div>
+          </div>
           <div className="mt-3 flex flex-wrap gap-1">
             {filters.map((f) => (
               <button

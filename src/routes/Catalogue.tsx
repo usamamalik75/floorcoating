@@ -1,20 +1,32 @@
 import { useMemo, useState } from 'react'
-import { BookOpen, Search, Wrench } from 'lucide-react'
-import { PRICE_BOOK } from '@/data/priceBook'
-import { money } from '@/store/useStore'
-import { Badge, Card, Input, Select, Table, Td, Th, Tr } from '@/components/ui'
+import { Link } from 'react-router-dom'
+import { BookOpen, Plus, Search, Wrench } from 'lucide-react'
+import { money, useStore } from '@/store/useStore'
+import type { Category } from '@/domain/types'
+import { Badge, Button, Card, Input, Modal, Select, Table, Td, Th, Tr } from '@/components/ui'
 
 export function Catalogue() {
+  const priceBookItems = useStore((s) => s.priceBookItems)
+  const upsertPriceBookItem = useStore((s) => s.upsertPriceBookItem)
   const [query, setQuery] = useState('')
   const [group, setGroup] = useState('all')
+  const [creating, setCreating] = useState(false)
+  const [draft, setDraft] = useState({
+    name: '',
+    catalogueGroup: 'Coatings',
+    unit: 'sq ft',
+    unitPrice: '0',
+    description: '',
+    category: 'commercial' as Category,
+  })
 
   const groups = useMemo(
-    () => [...new Set(PRICE_BOOK.map((item) => item.catalogueGroup))].sort(),
-    [],
+    () => [...new Set(priceBookItems.map((item) => item.catalogueGroup))].sort(),
+    [priceBookItems],
   )
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    return PRICE_BOOK.filter(
+    return priceBookItems.filter(
       (item) =>
         (group === 'all' || item.catalogueGroup === group) &&
         (!needle ||
@@ -22,7 +34,43 @@ export function Catalogue() {
           item.description.toLowerCase().includes(needle) ||
           item.catalogueGroup.toLowerCase().includes(needle)),
     )
-  }, [group, query])
+  }, [group, priceBookItems, query])
+
+  const createItem = () => {
+    const name = draft.name.trim()
+    if (!name) return
+    const itemId = `catalog_${name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${Date.now().toString(36)}`
+    upsertPriceBookItem({
+      id: itemId,
+      name,
+      catalogueGroup: draft.catalogueGroup.trim() || 'General',
+      unit: draft.unit.trim() || 'unit',
+      unitPrice: Number(draft.unitPrice) || 0,
+      description: draft.description.trim(),
+      categories: [draft.category],
+      swatch: '#8b5cf6',
+      resourceMultiplier: 1,
+      materialRate: 0,
+      materialUnit: 'unit',
+      materialCost: 0,
+      contingencyAllowance: 0,
+      laborHoursPerUnit: 0,
+      serviceDocument: '',
+      jobChecklistId: 'job_general',
+      requiredResources: [],
+      exclusions: [],
+      managedByCompany: true,
+    })
+    setCreating(false)
+    setDraft({
+      name: '',
+      catalogueGroup: draft.catalogueGroup,
+      unit: draft.unit,
+      unitPrice: '0',
+      description: '',
+      category: draft.category,
+    })
+  }
 
   return (
     <div className='h-full overflow-y-auto scrollbar-thin'>
@@ -34,9 +82,18 @@ export function Catalogue() {
               The configurable catalogue used by quotes, proposals, job scopes, and resource planning.
             </p>
           </div>
-          <Badge tone='info' icon={<BookOpen size={10} />}>
-            {PRICE_BOOK.length} active items
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone='info' icon={<BookOpen size={10} />}>
+              {priceBookItems.length} active items
+            </Badge>
+            <Link to="/admin">
+              <Button size="sm" variant="secondary">Open builder</Button>
+            </Link>
+            <Button size="sm" onClick={() => setCreating(true)}>
+              <Plus size={12} />
+              New product / service
+            </Button>
+          </div>
         </header>
 
         <Card className='mb-4 p-3'>
@@ -99,6 +156,88 @@ export function Catalogue() {
             <p className='px-4 py-10 text-center text-sm text-muted'>No catalogue items match these filters.</p>
           )}
         </Card>
+        <Modal
+          open={creating}
+          onClose={() => setCreating(false)}
+          title="Create catalogue item"
+          subtitle="Add a product or service here, then refine the full setup in the catalogue builder."
+        >
+          <div className="grid gap-3">
+            <label className="grid gap-1">
+              <span className="text-sm font-medium text-primary">Name</span>
+              <Input
+                value={draft.name}
+                onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
+                placeholder="Metallic epoxy system"
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="grid gap-1">
+                <span className="text-sm font-medium text-primary">Category</span>
+                <Select
+                  value={draft.catalogueGroup}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, catalogueGroup: event.target.value }))
+                  }
+                >
+                  {[...groups, 'General'].filter((value, index, array) => array.indexOf(value) === index).map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <label className="grid gap-1">
+                <span className="text-sm font-medium text-primary">Unit</span>
+                <Input
+                  value={draft.unit}
+                  onChange={(event) => setDraft((current) => ({ ...current, unit: event.target.value }))}
+                  placeholder="sq ft"
+                />
+              </label>
+              <label className="grid gap-1">
+                <span className="text-sm font-medium text-primary">Sell price</span>
+                <Input
+                  type="number"
+                  value={draft.unitPrice}
+                  onChange={(event) => setDraft((current) => ({ ...current, unitPrice: event.target.value }))}
+                  placeholder="0"
+                />
+              </label>
+            </div>
+            <label className="grid gap-1">
+              <span className="text-sm font-medium text-primary">Primary market</span>
+              <Select
+                value={draft.category}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, category: event.target.value as Category }))
+                }
+              >
+                <option value="residential">Residential</option>
+                <option value="commercial">Commercial</option>
+                <option value="industrial">Industrial</option>
+              </Select>
+            </label>
+            <label className="grid gap-1">
+              <span className="text-sm font-medium text-primary">Description</span>
+              <textarea
+                rows={4}
+                value={draft.description}
+                onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
+                className="w-full rounded-md border border-strong bg-surface-raised px-3 py-2 text-base text-primary outline-none ring-0 placeholder:text-muted/70 focus:border-brand"
+                placeholder="Short packaged scope used by estimators and proposals."
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <Button size="sm" variant="ghost" onClick={() => setCreating(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={createItem} disabled={!draft.name.trim()}>
+                Create item
+              </Button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </div>
   )

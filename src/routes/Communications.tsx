@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
-import { Inbox, Mail, MessageSquare, Reply, Send, Sparkles } from 'lucide-react'
+import { Inbox, Mail, MessageSquare, Plus, Reply, Send, Sparkles } from 'lucide-react'
 import { ACCOUNT_BY_ID } from '@/data/seed'
 import { useStore } from '@/store/useStore'
 import { useMessageThreads, useScopedOpportunities } from '@/store/selectors'
@@ -13,6 +13,7 @@ import {
   EmptyState,
   FieldRow,
   Input,
+  Modal,
   SectionTitle,
   Select,
   Textarea,
@@ -36,11 +37,13 @@ export function Communications() {
   const [templateId, setTemplateId] = useState(templates[0]?.id ?? '')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
+  const [starting, setStarting] = useState(false)
 
   const selected = threads.find((thread) => thread.id === selectedId) ?? threads[0]
   const selectedOpp = opportunities.find((opp) => opp.id === selected?.opportunityId)
   const selectedAccount = selectedOpp ? ACCOUNT_BY_ID[selectedOpp.accountId] : undefined
   const channelTemplates = templates.filter((template) => template.channel === channel)
+  const availableStarts = opportunities.filter((opp) => !threads.some((thread) => thread.opportunityId === opp.id))
 
   const applyTemplate = (id: string) => {
     setTemplateId(id)
@@ -70,14 +73,43 @@ export function Communications() {
     setSubject('')
   }
 
+  const startConversation = (opportunityId: string) => {
+    const opp = opportunities.find((candidate) => candidate.id === opportunityId)
+    if (!opp) return
+    const account = ACCOUNT_BY_ID[opp.accountId]
+    const nextSubject = `Introduction for ${opp.name}`
+    const nextBody = `Hi ${account?.contactName ?? 'Customer'},\n\nI’m starting your project thread so we can keep updates, pricing, and next steps in one place.\n\nThank you,\nYour service team`
+    const threadId = sendMessage(opportunityId, {
+      channel: 'email',
+      subject: nextSubject,
+      body: nextBody,
+      contactName: account?.contactName ?? 'Customer',
+      contactEmail: account?.email,
+      contactPhone: account?.phone,
+      status: 'draft',
+    })
+    setSelectedId(threadId)
+    setChannel('email')
+    setTemplateId('')
+    setSubject(nextSubject)
+    setBody(nextBody)
+    setStarting(false)
+  }
+
   return (
     <div className="h-full overflow-y-auto scrollbar-thin">
       <div className="mx-auto max-w-[88rem] px-5 py-5">
-        <header className="mb-5">
-          <h1 className="font-display text-2xl text-primary">Communications</h1>
-          <p className="mt-0.5 text-base text-muted">
-            Shared email and SMS workflows for follow-ups, proposals, and payment requests.
-          </p>
+        <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="font-display text-2xl text-primary">Communications</h1>
+            <p className="mt-0.5 text-base text-muted">
+              Shared email and SMS workflows for follow-ups, proposals, and payment requests.
+            </p>
+          </div>
+          <Button size="sm" variant="primary" onClick={() => setStarting(true)}>
+            <Plus size={12} />
+            Start conversation
+          </Button>
         </header>
 
         <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
@@ -275,6 +307,33 @@ export function Communications() {
             </div>
           )}
         </div>
+        <Modal
+          open={starting}
+          onClose={() => setStarting(false)}
+          title="Start conversation"
+          subtitle="Open a new email or SMS thread from an active opportunity."
+        >
+          <div className="space-y-2">
+            {availableStarts.length === 0 ? (
+              <EmptyState title="Every opportunity already has a thread" description="Open an existing thread or start from a newly created lead." />
+            ) : (
+              availableStarts.map((opp) => (
+                <button
+                  key={opp.id}
+                  type="button"
+                  onClick={() => startConversation(opp.id)}
+                  className="flex w-full items-start justify-between gap-3 rounded-md border border-subtle bg-surface-raised px-3 py-2.5 text-left hover:border-strong"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-primary">{opp.name}</p>
+                    <p className="text-sm text-muted">{ACCOUNT_BY_ID[opp.accountId]?.name}</p>
+                  </div>
+                  <Badge tone="neutral">{ACCOUNT_BY_ID[opp.accountId]?.contactName ?? 'Customer'}</Badge>
+                </button>
+              ))
+            )}
+          </div>
+        </Modal>
       </div>
     </div>
   )

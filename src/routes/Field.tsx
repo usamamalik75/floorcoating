@@ -21,12 +21,12 @@ import {
   WifiOff,
 } from 'lucide-react'
 import { CHECKLIST_BY_ID } from '@/data/checklists'
-import { ACCOUNT_BY_ID, TODAY, USER_BY_ID } from '@/data/seed'
+import { ACCOUNT_BY_ID, TODAY } from '@/data/seed'
 import { PRICE_BOOK_BY_ID } from '@/data/priceBook'
 import { STAGE_BY_ID, stageLabel } from '@/domain/stages'
 import { money, useStore } from '@/store/useStore'
 import { assignedTo } from '@/domain/jobs'
-import { useArtifactsFor, useIssuesFor } from '@/store/selectors'
+import { useArtifactsFor, useIssuesFor, useViewer } from '@/store/selectors'
 import {
   Badge,
   Button,
@@ -67,18 +67,16 @@ function FieldFrame({
   back?: string
 }) {
   return (
-    <div data-density="field" className="flex h-full justify-center bg-surface-sunken">
-      <div className="flex h-full w-full max-w-md flex-col border-x border-subtle bg-surface-base">
-        <header className="flex shrink-0 items-center gap-2 border-b border-subtle bg-surface-chrome px-3 py-3 text-white">
-          {back && (
-            <Link to={back} className="text-white/70 hover:text-white">
-              <ArrowLeft size={18} />
-            </Link>
-          )}
-          <h1 className="font-display text-lg">{title}</h1>
-        </header>
-        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">{children}</div>
-      </div>
+    <div data-density="field" className="flex h-full flex-col bg-surface-base overflow-hidden">
+      <header className="flex shrink-0 items-center gap-3 border-b border-subtle/50 bg-surface-chrome px-5 py-4 text-white">
+        {back && (
+          <Link to={back} className="text-white/70 hover:text-white transition-colors">
+            <ArrowLeft size={20} />
+          </Link>
+        )}
+        <h1 className="font-display text-xl">{title}</h1>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">{children}</div>
     </div>
   )
 }
@@ -88,8 +86,7 @@ export function FieldToday() {
   const jobs = useStore((s) => s.jobs)
   const opportunities = useStore((s) => s.opportunities)
   const materialOrders = useStore((s) => s.materialOrders)
-
-  const viewer = USER_BY_ID[viewerId]
+  const viewer = useViewer()
 
   const isField = viewer?.role === 'tech' || viewer?.role === 'crew_leader'
   const myJobs = jobs.filter((j) => (isField ? assignedTo(j, viewerId) : true))
@@ -102,39 +99,39 @@ export function FieldToday() {
   )
 
   return (
-    <FieldFrame title="Today">
-      <div className="space-y-4 p-3">
-        <p className="text-base text-muted">
+    <FieldFrame title="Field Operations">
+      <div className="space-y-6 p-5">
+        <p className="text-sm font-medium text-muted">
           {format(TODAY, 'EEEE, MMMM d')} · {viewer?.name}
         </p>
 
         <section>
-          <h2 className="mb-2 text-2xs font-semibold tracking-wider text-muted uppercase">
+          <h2 className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">
             Site visits and sales calls
           </h2>
           {visits.length === 0 ? (
             <EmptyState title="None scheduled" />
           ) : (
-            <div className="space-y-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               {visits.map((o) => (
                 <Link key={o.id} to={`/field/visit/${o.id}`}>
-                  <Card className="p-3 transition-colors hover:border-strong">
+                  <Card className="p-4 transition-colors hover:border-strong hover:shadow-sm">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-md font-medium text-primary">{o.name}</p>
+                      <p className="text-base font-semibold text-primary">{o.name}</p>
                       <StageChip
                         group={STAGE_BY_ID[o.stage].group}
                         label={stageLabel(o.stage, o.category)}
                         dot={false}
                       />
                     </div>
-                    <p className="mt-1 flex items-center gap-1.5 text-base text-muted">
+                    <p className="mt-2 flex items-center gap-1.5 text-sm text-muted">
                       <MapPin size={13} /> {o.address}
                     </p>
-                    <p className="mt-1 flex items-center gap-1.5 text-base text-muted">
+                    <p className="mt-1 flex items-center gap-1.5 text-sm text-muted">
                       <Ruler size={13} /> {o.estimatedQuantity.toLocaleString()} units · {money(o.value, true)}
                     </p>
                     {o.visitAt && (
-                      <p className="mt-1 text-base font-medium text-primary">
+                      <p className="mt-2 text-base font-semibold text-primary">
                         {format(new Date(o.visitAt), 'HH:mm')}
                       </p>
                     )}
@@ -146,20 +143,20 @@ export function FieldToday() {
         </section>
 
         <section>
-          <h2 className="mb-2 text-2xs font-semibold tracking-wider text-muted uppercase">Jobs</h2>
+          <h2 className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">Jobs</h2>
           {myJobs.length === 0 ? (
             <EmptyState title="No jobs assigned" />
           ) : (
-            <div className="space-y-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               {myJobs.map((j) => {
                 const opp = opportunities.find((o) => o.id === j.opportunityId)
                 if (!opp) return null
                 const mo = materialOrders.find((m) => m.opportunityId === opp.id)
                 return (
                   <Link key={j.id} to={`/field/job/${opp.id}`}>
-                    <Card className="p-3 transition-colors hover:border-strong">
+                    <Card className="p-4 transition-colors hover:border-strong hover:shadow-sm">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-md font-medium text-primary">{opp.name}</p>
+                        <p className="text-base font-semibold text-primary">{opp.name}</p>
                         <Badge
                           tone={
                             mo?.status === 'delivered'
@@ -173,13 +170,13 @@ export function FieldToday() {
                           {mo ? MATERIAL_LABEL[mo.status] : 'Not ordered'}
                         </Badge>
                       </div>
-                      <p className="mt-1 flex items-center gap-1.5 text-base text-muted">
+                      <p className="mt-2 flex items-center gap-1.5 text-sm text-muted">
                         <MapPin size={13} /> {opp.address}
                       </p>
-                      <p className="mt-1 text-base text-muted">
+                      <p className="mt-1 text-sm text-muted">
                         {format(new Date(j.start), 'MMM d')} – {format(new Date(j.end), 'MMM d')}
                       </p>
-                      <div className="mt-1 flex flex-wrap gap-1">
+                      <div className="mt-2 flex flex-wrap gap-1">
                         {j.dispatchState && (
                           <Badge tone={j.dispatchState === 'ready' ? 'success' : j.dispatchState === 'at_risk' ? 'warning' : 'neutral'}>
                             {j.dispatchState.replace('_', ' ')}
@@ -187,7 +184,7 @@ export function FieldToday() {
                         )}
                         {j.syncStatus === 'pending' && <Badge tone="warning">Pending sync</Badge>}
                       </div>
-                      <Meter value={j.progress} tone="attention" className="mt-2" />
+                      <Meter value={j.progress} tone="attention" className="mt-3" />
                     </Card>
                   </Link>
                 )

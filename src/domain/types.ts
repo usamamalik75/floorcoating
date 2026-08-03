@@ -209,6 +209,18 @@ export interface Account {
   customFields?: Record<string, string | number | boolean>
 }
 
+export interface ProspectRequest {
+  id: string
+  locationId: string
+  requestedById: string
+  vertical: Vertical
+  originCity: string
+  radiusMiles: number
+  minEmployees: number
+  estimatedCount: number
+  status: 'draft' | 'pending_approval' | 'approved' | 'imported'
+}
+
 export type LeadSource =
   | 'External provider'
   | 'National Website'

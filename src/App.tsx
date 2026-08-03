@@ -26,6 +26,7 @@ import { Catalogue } from '@/routes/Catalogue'
 import { Purchasing } from '@/routes/Purchasing'
 import { Communications } from '@/routes/Communications'
 import { Admin } from '@/routes/Admin'
+import { Prospecting } from '@/routes/Prospecting'
 
 export function App() {
   return (
@@ -47,6 +48,7 @@ export function App() {
           <Route path="/customers" element={<Customers />} />
           <Route path="/finance" element={<Finance />} />
           <Route path="/communications" element={<Communications />} />
+          <Route path="/prospecting" element={<Prospecting />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/admin" element={<Admin />} />

@@ -19,9 +19,8 @@ import type { CommunicationChannel, Gate, Opportunity, StageId } from '@/domain/
 import { ROLE_LABEL } from '@/domain/types'
 import { STAGE_BY_ID, stageLabel } from '@/domain/stages'
 import { templateForStage, CHECKLIST_BY_ID } from '@/data/checklists'
-import { USERS } from '@/data/seed'
 import { useStore } from '@/store/useStore'
-import { useChecks } from '@/store/selectors'
+import { useChecks, useUsers } from '@/store/selectors'
 import { Badge, Button, Checkbox, Input, Modal, Select, StageChip, Textarea } from '@/components/ui'
 import { cn } from '@/lib/cn'
 
@@ -81,6 +80,7 @@ export function StageGate({
   const moveStage = useStore((s) => s.moveStage)
   const checklists = useStore((s) => s.checklists)
   const toggleChecklistItem = useStore((s) => s.toggleChecklistItem)
+  const users = useUsers()
 
   const [satisfied, setSatisfied] = useState<Record<number, boolean>>({})
   const [reminderDate, setReminderDate] = useState('')
@@ -392,7 +392,7 @@ export function StageGate({
                         className="mt-2.5 max-w-sm"
                       >
                         <option value="">Select a person…</option>
-                        {USERS.filter(
+                        {users.filter(
                           (u) => u.locationId === opportunity.locationId && u.role === gate.role,
                         ).map((u) => (
                           <option key={u.id} value={u.id}>

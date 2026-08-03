@@ -4,10 +4,11 @@ import { Filter, LayoutGrid, Plus, Rows3, Search } from 'lucide-react'
 import { SALES_BOARD_STAGES, STAGE_BY_ID, stageLabel } from '@/domain/stages'
 import type { Category, LeadTemperature, Opportunity, StageId } from '@/domain/types'
 import { TEMPERATURE_LABEL } from '@/domain/types'
-import { ACCOUNT_BY_ID, USERS, USER_BY_ID } from '@/data/seed'
+import { ACCOUNT_BY_ID } from '@/data/seed'
 import { money, useStore } from '@/store/useStore'
 import { OpportunityCard } from '@/components/domain/OpportunityCard'
 import { StageGate } from '@/components/domain/StageGate'
+import { useUserDirectory, useUsers } from '@/store/selectors'
 import {
   Avatar,
   Badge,
@@ -39,6 +40,8 @@ export function Sales() {
 
   const opportunities = useStore((s) => s.opportunities)
   const locationFilter = useStore((s) => s.locationFilter)
+  const users = useUsers()
+  const userById = useUserDirectory()
 
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<Category | 'all'>('all')
@@ -65,7 +68,7 @@ export function Sales() {
     return rows
   }, [opportunities, locationFilter, tab, temp, category, rep, query])
 
-  const reps = USERS.filter(
+  const reps = users.filter(
     (u) =>
       (u.role === 'sales' || u.role === 'owner') &&
       (locationFilter === 'all' || u.locationId === locationFilter),
@@ -83,8 +86,8 @@ export function Sales() {
     .reduce((s, o) => s + o.value, 0)
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-subtle bg-surface-raised px-3 py-2">
+    <div className="mx-auto w-full max-w-7xl h-full flex flex-col bg-surface-sunken">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-subtle/50 bg-surface-raised px-6 py-4 rounded-b-xl shadow-sm mb-4">
         <h1 className="font-display text-lg text-primary">Sales</h1>
         <Badge tone="brand">{money(totalOpen, true)} open</Badge>
         <Badge tone="neutral">{visibleOpps.length} opportunities</Badge>
@@ -261,8 +264,8 @@ export function Sales() {
                   </Td>
                   <Td>
                     <span className="flex items-center gap-1.5">
-                      <Avatar name={USER_BY_ID[o.ownerId]?.name ?? '?'} size={18} />
-                      <span className="truncate text-secondary">{USER_BY_ID[o.ownerId]?.name}</span>
+                      <Avatar name={userById[o.ownerId]?.name ?? '?'} size={18} />
+                      <span className="truncate text-secondary">{userById[o.ownerId]?.name}</span>
                     </span>
                   </Td>
                   <Td align="right" mono className="font-medium">

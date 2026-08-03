@@ -15,13 +15,16 @@ import type {
   Issue,
   Job,
   JobStatus,
+  Location,
   MaterialOrder,
   Opportunity,
   PaymentRequest,
   PriceBookItem,
+  ProspectRequest,
   ProposalTemplate,
   Reminder,
   Role,
+  User,
   SiteVisitForm,
   SiteVisitResponse,
   StageDef,
@@ -43,6 +46,7 @@ import {
   INVOICES,
   ISSUES,
   JOBS,
+  LOCATIONS,
   MATERIAL_ORDERS,
   OPPORTUNITIES,
   REMINDERS,
@@ -83,6 +87,8 @@ interface State {
   materialOrders: MaterialOrder[]
   changeOrders: ChangeOrder[]
   issues: Issue[]
+  users: User[]
+  locations: Location[]
   workspaceTemplate: WorkspaceTemplate
   siteVisitForms: SiteVisitForm[]
   checklistTemplates: ChecklistTemplate[]
@@ -92,6 +98,7 @@ interface State {
   messageThreads: CommunicationThread[]
   communicationTemplates: CommunicationTemplate[]
   paymentRequests: PaymentRequest[]
+  prospectRequests: ProspectRequest[]
 
   viewerId: string
   locationFilter: string | 'all'
@@ -102,6 +109,7 @@ interface State {
   setLocationFilter: (id: string | 'all') => void
   setDensity: (d: 'comfortable' | 'field') => void
   setTheme: (t: 'light' | 'dark') => void
+  upsertUser: (user: User) => void
 
   moveStage: (opportunityId: string, to: StageId, meta?: MoveMeta) => void
   setJobStatus: (opportunityId: string, status: JobStatus) => void
@@ -109,6 +117,7 @@ interface State {
   createOpportunity: (o: Omit<Opportunity, 'id'>) => string
   createLead: (input: LeadInput) => string
   ensureEstimate: (opportunityId: string) => string
+  upsertAccount: (account: Account) => void
 
   addArtifact: (a: Omit<Artifact, 'id'>) => void
   toggleChecklistItem: (opportunityId: string, templateId: string, itemId: string) => void
@@ -163,6 +172,8 @@ interface State {
     input: { channel: CommunicationChannel; body: string; subject?: string; at?: string },
   ) => void
   updateWorkspaceTemplate: (next: WorkspaceTemplate) => void
+  upsertLocation: (location: Location) => void
+  upsertProspectRequest: (request: ProspectRequest) => void
   upsertSiteVisitForm: (form: SiteVisitForm) => void
   upsertChecklistTemplate: (template: ChecklistTemplate) => void
   upsertPriceBookItem: (item: PriceBookItem) => void
@@ -243,6 +254,20 @@ const createMessageThreads = (): CommunicationThread[] =>
     }
   })
 
+const createProspectRequests = (): ProspectRequest[] => [
+  {
+    id: 'pr_local_1',
+    locationId: LOCATIONS[0]?.id ?? 'loc_chi',
+    requestedById: USERS.find((user) => user.role === 'sales' && user.locationId === LOCATIONS[0]?.id)?.id ?? 'u_nic',
+    vertical: 'Food & Beverage',
+    originCity: LOCATIONS[0]?.city ?? 'Chicago',
+    radiusMiles: 100,
+    minEmployees: 75,
+    estimatedCount: 84,
+    status: 'approved',
+  },
+]
+
 const initial = () => ({
   accounts: structuredClone(ACCOUNTS),
   opportunities: structuredClone(OPPORTUNITIES),
@@ -258,6 +283,8 @@ const initial = () => ({
   materialOrders: structuredClone(MATERIAL_ORDERS),
   changeOrders: structuredClone(CHANGE_ORDERS),
   issues: structuredClone(ISSUES),
+  users: structuredClone(USERS),
+  locations: structuredClone(LOCATIONS),
   workspaceTemplate: structuredClone(WORKSPACE_TEMPLATE),
   siteVisitForms: structuredClone(SITE_VISIT_FORMS),
   checklistTemplates: structuredClone(CHECKLIST_TEMPLATES),
@@ -267,6 +294,7 @@ const initial = () => ({
   messageThreads: createMessageThreads(),
   communicationTemplates: createCommunicationTemplates(),
   paymentRequests: [],
+  prospectRequests: createProspectRequests(),
 })
 
 /**
@@ -275,7 +303,7 @@ const initial = () => ({
  * seed invalidates it and "Reset demo" always returns to the story's start.
  */
 const STORAGE_KEY = 'fcg-prototype'
-const STORAGE_VERSION = 4
+const STORAGE_VERSION = 6
 
 const createState: StateCreator<State> = (set, get) => ({
   ...initial(),
@@ -286,7 +314,7 @@ const createState: StateCreator<State> = (set, get) => ({
   theme: 'light',
 
   setViewer: (id) => {
-    const user = USERS.find((u) => u.id === id)
+    const user = get().users.find((u) => u.id === id)
     set({
       viewerId: id,
       // Team members are scoped to their location; administrators can view all locations.
@@ -298,6 +326,12 @@ const createState: StateCreator<State> = (set, get) => ({
   setLocationFilter: (id) => set({ locationFilter: id }),
   setDensity: (density) => set({ density }),
   setTheme: (theme) => set({ theme }),
+  upsertUser: (user) =>
+    set((s) => ({
+      users: s.users.some((existing) => existing.id === user.id)
+        ? s.users.map((existing) => (existing.id === user.id ? user : existing))
+        : [...s.users, user],
+    })),
 
   /* ---- Pipeline ------------------------------------------------------- */
 
@@ -550,6 +584,13 @@ const createState: StateCreator<State> = (set, get) => ({
     return id
   },
 
+  upsertAccount: (account) =>
+    set((s) => ({
+      accounts: s.accounts.some((existing) => existing.id === account.id)
+        ? s.accounts.map((existing) => (existing.id === account.id ? account : existing))
+        : [...s.accounts, account],
+    })),
+
   /* ---- Records -------------------------------------------------------- */
 
   addArtifact: (a) => {
@@ -634,7 +675,11 @@ const createState: StateCreator<State> = (set, get) => ({
       approvedAt: new Date().toISOString(),
       rejectionNote: null,
     })
-    get().logActivity(est.opportunityId, 'system', `Estimate approved by ${USERS.find((u) => u.id === approverId)?.name}.`)
+    get().logActivity(
+      est.opportunityId,
+      'system',
+      `Estimate approved by ${get().users.find((u) => u.id === approverId)?.name}.`,
+    )
     const opp = get().opportunities.find((o) => o.id === est.opportunityId)
     if (opp && (opp.stage === 'estimate_in_progress' || opp.stage === 'site_visit_completed')) {
       get().moveStage(est.opportunityId, 'estimate_ready')
@@ -1002,6 +1047,20 @@ const createState: StateCreator<State> = (set, get) => ({
 
   updateWorkspaceTemplate: (next) => set({ workspaceTemplate: next }),
 
+  upsertLocation: (location) =>
+    set((s) => ({
+      locations: s.locations.some((existing) => existing.id === location.id)
+        ? s.locations.map((existing) => (existing.id === location.id ? location : existing))
+        : [...s.locations, location],
+    })),
+
+  upsertProspectRequest: (request) =>
+    set((s) => ({
+      prospectRequests: s.prospectRequests.some((existing) => existing.id === request.id)
+        ? s.prospectRequests.map((existing) => (existing.id === request.id ? request : existing))
+        : [request, ...s.prospectRequests],
+    })),
+
   upsertSiteVisitForm: (form) =>
     set((s) => ({
       siteVisitForms: s.siteVisitForms.some((existing) => existing.id === form.id)
@@ -1070,6 +1129,8 @@ export const useStore = create<State>()(
       materialOrders: s.materialOrders,
       changeOrders: s.changeOrders,
       issues: s.issues,
+      users: s.users,
+      locations: s.locations,
       workspaceTemplate: s.workspaceTemplate,
       siteVisitForms: s.siteVisitForms,
       checklistTemplates: s.checklistTemplates,
@@ -1079,6 +1140,7 @@ export const useStore = create<State>()(
       messageThreads: s.messageThreads,
       communicationTemplates: s.communicationTemplates,
       paymentRequests: s.paymentRequests,
+      prospectRequests: s.prospectRequests,
       viewerId: s.viewerId,
       locationFilter: s.locationFilter,
       density: s.density,

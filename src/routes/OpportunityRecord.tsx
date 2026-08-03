@@ -31,10 +31,10 @@ import type { ArtifactKind, JobStatus, StageId } from '@/domain/types'
 import { STAGE_BY_ID, jobStatusIndex, stageLabel } from '@/domain/stages'
 import { CHECKLIST_BY_ID } from '@/data/checklists'
 import { formForCategory } from '@/data/siteVisitForms'
-import { ACCOUNT_BY_ID, LOCATION_BY_ID, USER_BY_ID } from '@/data/seed'
+import { ACCOUNT_BY_ID, LOCATION_BY_ID } from '@/data/seed'
 import { PRICE_BOOK_BY_ID } from '@/data/priceBook'
 import { estimateTotal, money, optionTotal, useStore } from '@/store/useStore'
-import { useChangeOrdersFor, useChecks, useIssuesFor, useMessageThreads, usePaymentRequests } from '@/store/selectors'
+import { useChangeOrdersFor, useChecks, useIssuesFor, useMessageThreads, usePaymentRequests, useUserDirectory } from '@/store/selectors'
 import { StageGate } from '@/components/domain/StageGate'
 import { StageStepper } from '@/components/domain/StageStepper'
 import { NextActionPanel } from '@/components/domain/NextActionPanel'
@@ -90,6 +90,7 @@ export function OpportunityRecord() {
   const { id = '' } = useParams<{ id: string }>()
   const [params, setParams] = useSearchParams()
   const s = useStore()
+  const userById = useUserDirectory()
 
   const [gateTo, setGateTo] = useState<StageId | null>(null)
   const [showNext, setShowNext] = useState(true)
@@ -139,22 +140,22 @@ export function OpportunityRecord() {
   return (
     <div className="flex h-full flex-col">
       {/* ---- Header ---- */}
-      <header className="shrink-0 border-b border-subtle bg-surface-raised px-4 py-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <Link to="/sales" className="text-muted hover:text-primary">
-            <ArrowLeft size={16} />
+      <header className="shrink-0 border-b border-subtle/50 bg-surface-chrome text-white px-5 pt-4 pb-0">
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <Link to="/sales" className="text-white/60 hover:text-white transition-colors">
+            <ArrowLeft size={18} />
           </Link>
-          <div className="min-w-0">
-            <h1 className="truncate font-display text-lg leading-tight text-primary">{opp.name}</h1>
-            <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
-              <span className="font-mono">{opp.code}</span>
-              <span>·</span>
-              <Link to="/customers" className="hover:text-primary hover:underline">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate font-display text-xl leading-tight text-white">{opp.name}</h1>
+            <p className="flex flex-wrap items-center gap-x-2 text-sm text-white/60 mt-0.5">
+              <span className="font-mono text-white/50">{opp.code}</span>
+              <span className="text-white/30">·</span>
+              <Link to="/customers" className="hover:text-white hover:underline transition-colors">
                 {account?.name}
               </Link>
-              <span>·</span>
+              <span className="text-white/30">·</span>
               <span>{location?.name}</span>
-              <span>·</span>
+              <span className="text-white/30">·</span>
               <Badge
                 tone={
                   opp.temperature === 'hot' ? 'danger' : opp.temperature === 'warm' ? 'attention' : 'neutral'
@@ -165,27 +166,29 @@ export function OpportunityRecord() {
             </p>
           </div>
 
-          <div className="flex-1" />
-
-          <StageChip group={def.group} label={stageLabel(opp.stage, opp.category)} />
-          <span className="font-mono text-lg font-semibold text-primary tabular">
-            {money(est ? estimateTotal(est) : opp.value)}
-          </span>
+          <div className="flex items-center gap-3">
+            <StageChip group={def.group} label={stageLabel(opp.stage, opp.category)} />
+            <span className="font-mono text-xl font-bold text-white tabular">
+              {money(est ? estimateTotal(est) : opp.value)}
+            </span>
+          </div>
         </div>
 
-        <div className="mt-2.5">
+        <div className="mb-3">
           <StageStepper opportunity={opp} onPick={setGateTo} />
         </div>
 
-        <div className="mt-2.5 flex gap-0.5 overflow-x-auto scrollbar-thin">
+        <div className="flex gap-0.5 overflow-x-auto scrollbar-thin border-t border-white/10">
           {visibleTabs.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
               className={cn(
-                'flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium',
-                tab === t.id ? 'bg-action-soft text-brand' : 'text-muted hover:text-primary',
+                'flex shrink-0 items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 transition-colors',
+                tab === t.id
+                  ? 'border-white text-white'
+                  : 'border-transparent text-white/50 hover:text-white/80',
               )}
             >
               <t.icon size={13} />
@@ -195,8 +198,8 @@ export function OpportunityRecord() {
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-        <div className="mx-auto max-w-4xl space-y-6 p-5">
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin bg-surface-sunken">
+        <div className="space-y-5 p-5">
           {showNext && (
             <NextActionPanel
               opportunity={opp}
@@ -234,12 +237,12 @@ export function OpportunityRecord() {
                   <KeyValue label="Estimated quantity">{opp.estimatedQuantity.toLocaleString()} units</KeyValue>
                   <KeyValue label="Secondary quantity">{opp.secondaryQuantity > 0 ? `${opp.secondaryQuantity} units` : '—'}</KeyValue>
                   <KeyValue label="Source">{opp.source}</KeyValue>
-                  <KeyValue label="Sales rep">{USER_BY_ID[opp.ownerId]?.name ?? 'Unassigned'}</KeyValue>
+                  <KeyValue label="Sales rep">{userById[opp.ownerId]?.name ?? 'Unassigned'}</KeyValue>
                   <KeyValue label="Estimator">
-                    {opp.estimatorId ? USER_BY_ID[opp.estimatorId]?.name : '—'}
+                    {opp.estimatorId ? userById[opp.estimatorId]?.name : '—'}
                   </KeyValue>
                   <KeyValue label="Project manager">
-                    {opp.pmId ? USER_BY_ID[opp.pmId]?.name : '—'}
+                    {opp.pmId ? userById[opp.pmId]?.name : '—'}
                   </KeyValue>
                   <KeyValue label="Probability">{def.probability}%</KeyValue>
                 </dl>
@@ -314,7 +317,7 @@ export function OpportunityRecord() {
                     title={`${est.options.length} option${est.options.length === 1 ? '' : 's'}`}
                     subtitle={
                       est.approvedById
-                        ? `Approved by ${USER_BY_ID[est.approvedById]?.name}`
+                        ? `Approved by ${userById[est.approvedById]?.name}`
                         : 'Not yet approved'
                     }
                     actions={
@@ -491,10 +494,10 @@ export function OpportunityRecord() {
                     <KeyValue label="Start">{format(new Date(job.start), 'd MMM')}</KeyValue>
                     <KeyValue label="Finish">{format(new Date(job.end), 'd MMM')}</KeyValue>
                     <KeyValue label="Project manager">
-                      {job.pmId ? USER_BY_ID[job.pmId]?.name : '—'}
+                      {job.pmId ? userById[job.pmId]?.name : '—'}
                     </KeyValue>
                     <KeyValue label="Crew leader">
-                      {job.crewLeaderId ? USER_BY_ID[job.crewLeaderId]?.name : '—'}
+                      {job.crewLeaderId ? userById[job.crewLeaderId]?.name : '—'}
                     </KeyValue>
                   </div>
 
@@ -503,8 +506,8 @@ export function OpportunityRecord() {
                       <span className="text-sm text-muted">Crew</span>
                       {job.crewIds.map((cid) => (
                         <span key={cid} className="flex items-center gap-1.5">
-                          <Avatar name={USER_BY_ID[cid]?.name ?? ''} size={20} />
-                          <span className="text-sm text-secondary">{USER_BY_ID[cid]?.name}</span>
+                          <Avatar name={userById[cid]?.name ?? ''} size={20} />
+                          <span className="text-sm text-secondary">{userById[cid]?.name}</span>
                         </span>
                       ))}
                     </div>
@@ -530,7 +533,7 @@ export function OpportunityRecord() {
                           </span>
                           <span className="min-w-0 text-secondary">
                             {d.note}
-                            <span className="text-muted"> — {USER_BY_ID[d.byId]?.name}</span>
+                            <span className="text-muted"> — {userById[d.byId]?.name}</span>
                           </span>
                         </div>
                       ))}
@@ -787,11 +790,11 @@ export function OpportunityRecord() {
                 <ol className="space-y-3">
                   {log.map((a) => (
                     <li key={a.id} className="flex gap-2.5">
-                      <Avatar name={USER_BY_ID[a.actorId]?.name ?? 'System'} size={22} />
+                      <Avatar name={userById[a.actorId]?.name ?? 'System'} size={22} />
                       <div className="min-w-0 flex-1">
                         <p className="text-base leading-snug text-secondary">{a.text}</p>
                         <p className="mt-0.5 text-sm text-muted">
-                          {USER_BY_ID[a.actorId]?.name ?? 'System'} ·{' '}
+                          {userById[a.actorId]?.name ?? 'System'} ·{' '}
                           {format(new Date(a.at), 'd MMM yyyy, HH:mm')}
                         </p>
                       </div>
@@ -839,6 +842,7 @@ function Section({
 }
 
 function ArtifactRow({ artifact, category }: { artifact: ReturnType<typeof Object> & any; category: string }) {
+  const userById = useUserDirectory()
   const Icon = ARTIFACT_ICON[artifact.kind as ArtifactKind] ?? FileText
   return (
     <div className="flex items-start gap-2.5 border-b border-subtle px-4 py-2.5 last:border-0">
@@ -857,7 +861,7 @@ function ArtifactRow({ artifact, category }: { artifact: ReturnType<typeof Objec
         )}
         <p className="mt-0.5 text-sm text-muted">
           Added at {stageLabel(artifact.stageAdded, category as never)} by{' '}
-          {USER_BY_ID[artifact.addedById]?.name ?? 'the customer'}
+          {userById[artifact.addedById]?.name ?? 'the customer'}
           {artifact.meta && ` · ${artifact.meta}`}
         </p>
       </div>
@@ -872,6 +876,7 @@ function SiteVisitSummary({ opportunityId }: { opportunityId: string }) {
   const visit = useStore((s) => s.siteVisits.find((v) => v.opportunityId === opportunityId))
   const checks = useChecks(opportunityId, 'site_visit_completed')
   const form = formForCategory(opp.category)
+  const userById = useUserDirectory()
 
   if (!visit || !form) {
     return (
@@ -892,7 +897,7 @@ function SiteVisitSummary({ opportunityId }: { opportunityId: string }) {
         title={form.name}
         subtitle={
           visit.completedAt
-            ? `Completed on site by ${USER_BY_ID[visit.completedById ?? '']?.name} on ${format(new Date(visit.completedAt), 'd MMM yyyy')}`
+            ? `Completed on site by ${userById[visit.completedById ?? '']?.name} on ${format(new Date(visit.completedAt), 'd MMM yyyy')}`
             : 'In progress'
         }
         icon={<ClipboardList size={14} />}
@@ -984,6 +989,7 @@ function ChangeOrders({ opportunityId }: { opportunityId: string }) {
   const orders = useChangeOrdersFor(opportunityId)
   const add = useStore((s) => s.addChangeOrder)
   const setStatus = useStore((s) => s.setChangeOrderStatus)
+  const userById = useUserDirectory()
   const viewerId = useStore((s) => s.viewerId)
   const [open, setOpen] = useState(false)
   const [description, setDescription] = useState('')
@@ -1016,7 +1022,7 @@ function ChangeOrders({ opportunityId }: { opportunityId: string }) {
                 <div className="min-w-0 flex-1">
                   <p className="text-base text-primary">{c.description}</p>
                   <p className="mt-0.5 text-sm text-muted">
-                    {c.qty} {c.unit} · raised by {USER_BY_ID[c.raisedById]?.name} on{' '}
+                    {c.qty} {c.unit} · raised by {userById[c.raisedById]?.name} on{' '}
                     {format(new Date(c.raisedAt), 'd MMM')}
                     {c.scheduleImpactDays > 0 && ` · +${c.scheduleImpactDays} day to the schedule`}
                   </p>
@@ -1133,6 +1139,7 @@ function ChangeOrders({ opportunityId }: { opportunityId: string }) {
 function Issues({ opportunityId }: { opportunityId: string }) {
   const issues = useIssuesFor(opportunityId)
   const resolve = useStore((s) => s.resolveIssue)
+  const userById = useUserDirectory()
 
   if (issues.length === 0) return null
 
@@ -1156,7 +1163,7 @@ function Issues({ opportunityId }: { opportunityId: string }) {
             <p className="text-base font-medium text-primary">{i.title}</p>
             <p className="mt-0.5 text-sm leading-relaxed text-secondary">{i.detail}</p>
             <p className="mt-0.5 text-sm text-muted">
-              {USER_BY_ID[i.raisedById]?.name} · {format(new Date(i.raisedAt), 'd MMM yyyy')}
+              {userById[i.raisedById]?.name} · {format(new Date(i.raisedAt), 'd MMM yyyy')}
             </p>
           </div>
           {i.status === 'open' ? (

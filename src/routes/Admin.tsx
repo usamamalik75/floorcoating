@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { type ReactNode, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   BookOpen,
@@ -10,10 +10,10 @@ import {
   Route,
   TrendingUp,
 } from 'lucide-react'
-import { LOCATIONS, USER_BY_ID } from '@/data/seed'
 import { PRICE_BOOK, PROPOSAL_TEMPLATES } from '@/data/priceBook'
 import { CHECKLIST_TEMPLATES } from '@/data/checklists'
 import { STAGE_BY_ID } from '@/domain/stages'
+import type { Role } from '@/domain/types'
 import { money, useStore } from '@/store/useStore'
 import { AdminBuilders } from '@/components/domain/AdminBuilders'
 import {
@@ -24,7 +24,9 @@ import {
   Input,
   KeyValue,
   Meter,
+  Modal,
   SectionTitle,
+  Select,
   Table,
   Td,
   Th,
@@ -41,13 +43,23 @@ export function Admin() {
   const opportunities = useStore((s) => s.opportunities)
   const jobs = useStore((s) => s.jobs)
   const invoices = useStore((s) => s.invoices)
+  const locations = useStore((s) => s.locations)
+  const users = useStore((s) => s.users)
+  const upsertUser = useStore((s) => s.upsertUser)
   const [testZip, setTestZip] = useState('60540')
+  const [teamOpen, setTeamOpen] = useState(false)
+  const [memberDraft, setMemberDraft] = useState({
+    name: '',
+    title: 'Sales Representative',
+    role: 'sales' as Role,
+    locationId: locations[0]?.id ?? '',
+  })
 
-  const routed = LOCATIONS.find((l) => l.zips.some((z) => testZip.startsWith(z)))
+  const routed = locations.find((l) => l.zips.some((z) => testZip.startsWith(z)))
 
   const byLocation = useMemo(
     () =>
-      LOCATIONS.map((loc) => {
+      locations.map((loc) => {
         const opps = opportunities.filter((o) => o.locationId === loc.id)
         const open = opps.filter((o) => {
           if (o.stage === 'lost') return false
@@ -72,7 +84,7 @@ export function Admin() {
           serviceFee: revenue * 0,
         }
       }),
-    [opportunities, jobs, invoices],
+    [opportunities, jobs, invoices, locations],
   )
 
   const totals = byLocation.reduce(
@@ -104,7 +116,7 @@ export function Admin() {
               {money(totals.openValue)}
             </p>
             <p className="mt-1 flex items-center gap-1 text-sm text-muted">
-              <TrendingUp size={11} /> across {LOCATIONS.length} territories
+              <TrendingUp size={11} /> across {locations.length} territories
             </p>
           </Card>
           <Card className="p-4">
@@ -128,6 +140,42 @@ export function Admin() {
             </p>
           </Card>
         </div>
+
+        <section>
+          <SectionTitle>Team setup</SectionTitle>
+          <Card>
+            <CardHeader
+              title="Roles by territory"
+              subtitle="Shared roster for each territory, ready for staffing and handoff journeys."
+              actions={
+                <Button size="sm" onClick={() => setTeamOpen(true)}>
+                  New team member
+                </Button>
+              }
+            />
+            <div className="grid gap-3 p-4 md:grid-cols-3">
+              {locations.map((location) => {
+                const members = users.filter((member) => member.locationId === location.id)
+                return (
+                  <div key={location.id} className="rounded-md border border-subtle bg-surface-raised p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-medium text-primary">{location.name}</p>
+                      <Badge tone="neutral">{members.length}</Badge>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {members.map((member) => (
+                        <div key={member.id} className="rounded-md border border-subtle px-2.5 py-2">
+                          <p className="text-sm font-medium text-primary">{member.name}</p>
+                          <p className="text-sm text-muted">{member.title}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
+        </section>
 
         {/* ---- Lead routing ---- */}
         <section>
@@ -164,7 +212,7 @@ export function Admin() {
               </div>
 
               <div className="space-y-2">
-                {LOCATIONS.map((loc) => (
+                {locations.map((loc) => (
                   <div
                     key={loc.id}
                     className={cn(
@@ -177,7 +225,7 @@ export function Admin() {
                     <div className="min-w-[10rem]">
                       <p className="text-base font-medium text-primary">{loc.name}</p>
                       <p className="text-sm text-muted">
-                        {loc.city}, {loc.state} · {USER_BY_ID[loc.ownerId]?.name}
+                        {loc.city}, {loc.state} · {users.find((user) => user.id === loc.ownerId)?.name ?? 'Unassigned'}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-1">
@@ -308,7 +356,72 @@ export function Admin() {
           </Card>
         </section>
       </div>
+      <Modal
+        open={teamOpen}
+        onClose={() => setTeamOpen(false)}
+        title="New team member"
+        subtitle="Add a shared roster member to the demo workspace."
+      >
+        <div className="grid gap-3">
+          <Field label="Name">
+            <Input value={memberDraft.name} onChange={(e) => setMemberDraft({ ...memberDraft, name: e.target.value })} />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Role">
+              <Select value={memberDraft.role} onChange={(e) => setMemberDraft({ ...memberDraft, role: e.target.value as Role })}>
+                <option value="admin">Admin</option>
+                <option value="owner">Owner</option>
+                <option value="sales">Sales</option>
+                <option value="estimator">Estimator</option>
+                <option value="pm">Project manager</option>
+                <option value="crew_leader">Crew leader</option>
+                <option value="tech">Technician</option>
+                <option value="accounting">Accounting</option>
+              </Select>
+            </Field>
+            <Field label="Location">
+              <Select value={memberDraft.locationId} onChange={(e) => setMemberDraft({ ...memberDraft, locationId: e.target.value })}>
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>{location.name}</option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <Field label="Title">
+            <Input value={memberDraft.title} onChange={(e) => setMemberDraft({ ...memberDraft, title: e.target.value })} />
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setTeamOpen(false)}>Close</Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                if (!memberDraft.name.trim()) return
+                upsertUser({ id: `u_${Date.now().toString(36)}`, ...memberDraft })
+                setTeamOpen(false)
+                setMemberDraft({
+                  name: '',
+                  title: 'Sales Representative',
+                  role: 'sales',
+                  locationId: memberDraft.locationId,
+                })
+              }}
+              disabled={!memberDraft.name.trim()}
+            >
+              Add team member
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-sm font-medium text-primary">{label}</span>
+      {children}
+    </label>
   )
 }
 
@@ -551,7 +664,9 @@ export function Accounts() {
                 </div>
               ) : (
                 <div className="px-4 py-3">
-                  <Button size="sm">Create first opportunity</Button>
+                  <Link to="/intake">
+                    <Button size="sm">Create first opportunity</Button>
+                  </Link>
                 </div>
               )}
             </Card>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   addDays,
@@ -9,13 +9,14 @@ import {
   startOfWeek,
 } from 'date-fns'
 import { AlertTriangle, BellRing, ChevronLeft, ChevronRight, Clock3, HardHat, Package, UserPlus } from 'lucide-react'
-import { LOCATIONS, TODAY, USERS, USER_BY_ID } from '@/data/seed'
+import { TODAY, iso } from '@/data/seed'
 import { money, useStore } from '@/store/useStore'
 import { STAGE_BY_ID } from '@/domain/stages'
 import { JOB_ROLE_LABEL, type JobRole } from '@/domain/types'
 import { jobTeam, membersWithRole, primaryFieldLead } from '@/domain/jobs'
 import { Avatar, Badge, Button, Card, CardHeader, EmptyState, Sheet } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { useLocations, useUserDirectory, useUsers } from '@/store/selectors'
 
 const WEEKS = 3
 const JOB_ROLES = Object.keys(JOB_ROLE_LABEL) as JobRole[]
@@ -63,9 +64,14 @@ export function Schedule() {
   const opportunities = useStore((s) => s.opportunities)
   const locationFilter = useStore((s) => s.locationFilter)
   const updateJob = useStore((s) => s.updateJob)
+  const scheduleJob = useStore((s) => s.scheduleJob)
+  const locations = useLocations()
+  const users = useUsers()
+  const userById = useUserDirectory()
 
   const [anchor, setAnchor] = useState(startOfWeek(TODAY, { weekStartsOn: 1 }))
   const [openJob, setOpenJob] = useState<string | null>(null)
+  const [pendingOpportunityId, setPendingOpportunityId] = useState<string | null>(null)
 
   const days = useMemo(
     () => eachDayOfInterval({ start: anchor, end: addDays(anchor, WEEKS * 7 - 1) }),
@@ -100,6 +106,45 @@ export function Schedule() {
     return !job || job.status === 'scheduling_required'
   })
 
+  useEffect(() => {
+    if (!pendingOpportunityId) return
+    const created = rows.find((row) => row.opp?.id === pendingOpportunityId)?.job
+    if (!created) return
+    setOpenJob(created.id)
+    setPendingOpportunityId(null)
+  }, [pendingOpportunityId, rows])
+
+  const openScheduling = (opportunityId: string) => {
+    const existing = jobs.find((job) => job.opportunityId === opportunityId)
+    if (existing) {
+      setOpenJob(existing.id)
+      return
+    }
+    const opp = opportunities.find((candidate) => candidate.id === opportunityId)
+    if (!opp) return
+    scheduleJob({
+      opportunityId,
+      status: 'scheduling_required',
+      start: iso(1),
+      end: iso(2),
+      crewLeaderId: null,
+      pmId: opp.pmId,
+      crewIds: [],
+      team: [],
+      progress: 0,
+      dispatchState: 'unassigned',
+      syncStatus: 'synced',
+      clockStatus: 'not_started',
+      travelMinutes: 30,
+      checkInAt: null,
+      checkOutAt: null,
+      customerNotifiedAt: null,
+      lastDispatchNote: '',
+      dailyLogs: [],
+    })
+    setPendingOpportunityId(opportunityId)
+  }
+
   return (
     <div className="flex h-full flex-col">
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-subtle bg-surface-raised px-3 py-2">
@@ -109,6 +154,11 @@ export function Schedule() {
           <Badge tone="warning">{unscheduled.length} awarded, not scheduled</Badge>
         )}
         <div className="flex-1" />
+        {unscheduled[0] && (
+          <Button size="sm" variant="primary" onClick={() => openScheduling(unscheduled[0].id)}>
+            Schedule next job
+          </Button>
+        )}
         <span className="text-base font-medium text-secondary">
           {format(days[0], 'MMM d')} – {format(days[days.length - 1], 'MMM d, yyyy')}
         </span>
@@ -133,14 +183,21 @@ export function Schedule() {
             />
             <div className="flex flex-wrap gap-2 p-3">
               {unscheduled.map((o) => (
-                <Link
+                <div
                   key={o.id}
-                  to={`/opportunities/${o.id}`}
-                  className="rounded-md border border-subtle bg-surface-inset px-2.5 py-1.5 hover:border-strong"
+                  className="rounded-md border border-subtle bg-surface-inset px-2.5 py-1.5"
                 >
                   <p className="text-base font-medium text-primary">{o.name}</p>
                   <p className="font-mono text-sm tabular text-muted">{money(o.value)}</p>
-                </Link>
+                  <div className="mt-2 flex gap-2">
+                    <Button size="sm" onClick={() => openScheduling(o.id)}>
+                      Schedule
+                    </Button>
+                    <Link to={`/opportunities/${o.id}`}>
+                      <Button size="sm" variant="ghost">Open record</Button>
+                    </Link>
+                  </div>
+                </div>
               ))}
             </div>
           </Card>
@@ -206,8 +263,8 @@ export function Schedule() {
                     <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
                       {primaryFieldLead(job) ? (
                         <>
-                          <Avatar name={USER_BY_ID[primaryFieldLead(job)!]?.name ?? '?'} size={15} />
-                          {USER_BY_ID[primaryFieldLead(job)!]?.name}
+                          <Avatar name={userById[primaryFieldLead(job)!]?.name ?? '?'} size={15} />
+                          {userById[primaryFieldLead(job)!]?.name}
                         </>
                       ) : (
                         <span className="text-warning-text">No crew leader</span>
@@ -289,7 +346,7 @@ export function Schedule() {
                         <Badge tone={assigned.length ? 'brand' : 'neutral'}>{assigned.length} assigned</Badge>
                       </div>
                       <div className='flex flex-wrap gap-1.5'>
-                        {USERS.filter((u) => !u.locationId || u.locationId === selected.opp!.locationId).map((u) => {
+                        {users.filter((u) => !u.locationId || u.locationId === selected.opp!.locationId).map((u) => {
                           const on = assigned.some((a) => a.userId === u.id)
                           return (
                             <button
@@ -330,7 +387,7 @@ export function Schedule() {
                 className="h-(--control-h) w-full rounded-md border border-strong bg-surface-raised px-2 text-base"
               >
                 <option value="">Unassigned</option>
-                {USERS.filter(
+                {users.filter(
                   (u) => u.role === 'crew_leader' && u.locationId === selected.opp!.locationId,
                 ).map((u) => (
                   <option key={u.id} value={u.id}>
@@ -350,7 +407,7 @@ export function Schedule() {
                 className="h-(--control-h) w-full rounded-md border border-strong bg-surface-raised px-2 text-base"
               >
                 <option value="">Unassigned</option>
-                {USERS.filter(
+                {users.filter(
                   (u) => u.role === 'pm' && u.locationId === selected.opp!.locationId,
                 ).map((u) => (
                   <option key={u.id} value={u.id}>
@@ -365,7 +422,7 @@ export function Schedule() {
                 <UserPlus size={11} /> Installers
               </p>
               <div className="space-y-1.5">
-                {USERS.filter(
+                {users.filter(
                   (u) => u.role === 'tech' && u.locationId === selected.opp!.locationId,
                 ).map((u) => {
                   const on = selected.job.crewIds.includes(u.id)
@@ -475,7 +532,7 @@ export function Schedule() {
             </div>
 
             <p className="text-sm text-muted">
-              Location: {LOCATIONS.find((l) => l.id === selected.opp!.locationId)?.name}
+              Location: {locations.find((l) => l.id === selected.opp!.locationId)?.name}
               {selected.job.customerNotifiedAt && ` · customer notified ${format(new Date(selected.job.customerNotifiedAt), 'd MMM')}`}
               {selected.job.travelMinutes && ` · ${selected.job.travelMinutes} min travel buffer`}
             </p>

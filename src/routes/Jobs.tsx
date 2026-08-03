@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertTriangle, Boxes, Camera, HardHat } from 'lucide-react'
 import { useStore, money } from '@/store/useStore'
-import { useScopedOpportunities } from '@/store/selectors'
-import { ACCOUNT_BY_ID, LOCATION_BY_ID, USER_BY_ID } from '@/data/seed'
+import { useScopedOpportunities, useUserDirectory } from '@/store/selectors'
+import { ACCOUNT_BY_ID, LOCATION_BY_ID } from '@/data/seed'
 import {
   JOB_STATUSES,
   jobStatusLabel,
@@ -19,6 +19,9 @@ import {
   Card,
   EmptyState,
   Meter,
+  Modal,
+  Input,
+  Select,
   SectionTitle,
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -26,8 +29,13 @@ import { cn } from '@/lib/cn'
 export function Jobs() {
   const s = useStore()
   const setJobStatus = useStore((st) => st.setJobStatus)
+  const scheduleJob = useStore((st) => st.scheduleJob)
   const opps = useScopedOpportunities().filter((o) => o.stage === 'awarded')
   const [filter, setFilter] = useState<JobStatus | 'all'>('all')
+  const [creating, setCreating] = useState(false)
+  const [draftOppId, setDraftOppId] = useState('')
+  const [draftStart, setDraftStart] = useState(new Date().toISOString().slice(0, 10))
+  const [draftDays, setDraftDays] = useState(2)
 
   const rows = useMemo(() => {
     return opps
@@ -38,14 +46,53 @@ export function Jobs() {
       .filter((r) => r.job)
       .filter((r) => filter === 'all' || r.job!.status === filter)
   }, [opps, s.jobs, filter])
+  const available = opps.filter((opp) => !s.jobs.some((job) => job.opportunityId === opp.id))
+
+  const createJob = () => {
+    if (!draftOppId) return
+    const opp = opps.find((candidate) => candidate.id === draftOppId)
+    if (!opp) return
+    const start = new Date(`${draftStart}T09:00:00`)
+    const end = new Date(start)
+    end.setDate(end.getDate() + Math.max(0, draftDays - 1))
+    scheduleJob({
+      opportunityId: opp.id,
+      status: 'scheduling_required',
+      start: start.toISOString(),
+      end: end.toISOString(),
+      crewLeaderId: null,
+      pmId: opp.pmId,
+      crewIds: [],
+      team: [],
+      progress: 0,
+      dispatchState: 'unassigned',
+      syncStatus: 'synced',
+      clockStatus: 'not_started',
+      travelMinutes: 30,
+      checkInAt: null,
+      checkOutAt: null,
+      customerNotifiedAt: null,
+      lastDispatchNote: '',
+      dailyLogs: [],
+    })
+    setCreating(false)
+    setDraftOppId('')
+  }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="shrink-0 border-b border-subtle bg-surface-raised px-5 py-3">
-        <h1 className="font-display text-2xl text-primary">Jobs</h1>
-        <p className="mt-0.5 text-base text-muted">
-          Awarded work managed on the job pipeline — not the sales board.
-        </p>
+    <div className="mx-auto w-full max-w-7xl h-full flex flex-col bg-surface-sunken">
+      <div className="shrink-0 border-b border-subtle/50 bg-surface-raised px-6 py-4 rounded-b-xl shadow-sm mb-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <h1 className="font-display text-2xl text-primary">Jobs</h1>
+            <p className="mt-0.5 text-base text-muted">
+              Awarded work managed on the job pipeline — not the sales board.
+            </p>
+          </div>
+          <Button className="ml-auto" size="sm" variant="primary" onClick={() => setCreating(true)}>
+            New job
+          </Button>
+        </div>
         <div className="mt-3 flex flex-wrap gap-1">
           <FilterChip active={filter === 'all'} onClick={() => setFilter('all')} label="All" />
           {JOB_STATUSES.map((st) => (
@@ -112,9 +159,55 @@ export function Jobs() {
               title="No jobs yet"
               description="A job is created automatically when a proposal is accepted."
             />
+            <div className="px-4 pb-4">
+              <Link to="/proposals">
+                <Button size="sm" className="w-full">Open proposals</Button>
+              </Link>
+            </div>
           </Card>
         </div>
       )}
+
+      <Modal
+        open={creating}
+        onClose={() => setCreating(false)}
+        title="Create job"
+        subtitle="Launch a manual delivery record for awarded work."
+      >
+        <div className="grid gap-3">
+          {available.length === 0 ? (
+            <EmptyState title="No awarded work waiting" description="Accepted proposals will appear here when they need a job record." />
+          ) : (
+            <>
+              <label className="grid gap-1">
+                <span className="text-sm font-medium text-primary">Opportunity</span>
+                <Select value={draftOppId} onChange={(e) => setDraftOppId(e.target.value)}>
+                  <option value="">Select awarded work…</option>
+                  {available.map((opp) => (
+                    <option key={opp.id} value={opp.id}>
+                      {opp.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1">
+                  <span className="text-sm font-medium text-primary">Start date</span>
+                  <Input type="date" value={draftStart} onChange={(e) => setDraftStart(e.target.value)} />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-sm font-medium text-primary">Duration (days)</span>
+                  <Input type="number" value={draftDays} onChange={(e) => setDraftDays(Number(e.target.value) || 1)} />
+                </label>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setCreating(false)}>Close</Button>
+                <Button size="sm" onClick={createJob} disabled={!draftOppId}>Create job</Button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
     </div>
   )
 }
@@ -157,6 +250,7 @@ function JobCard({
   onAdvance: () => void
 }) {
   const s = useStore()
+  const userById = useUserDirectory()
   const job = s.jobs.find((j) => j.opportunityId === opp.id)
   const material = s.materialOrders.find((m) => m.opportunityId === opp.id)
   const issues = s.issues.filter((i) => i.opportunityId === opp.id && i.status === 'open')
@@ -174,7 +268,7 @@ function JobCard({
         </div>
         {job && jobTeam(job).length > 0 && (
           <div className="mt-2 flex items-center gap-1.5">
-            <Avatar name={USER_BY_ID[primaryFieldLead(job) ?? jobTeam(job)[0].userId]?.name ?? '?'} size={16} />
+            <Avatar name={userById[primaryFieldLead(job) ?? jobTeam(job)[0].userId]?.name ?? '?'} size={16} />
             <span className="text-2xs text-muted">{jobTeam(job).length} team members</span>
           </div>
         )}

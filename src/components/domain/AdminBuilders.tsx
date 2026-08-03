@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { BookOpen, ClipboardCheck, FileSignature, KanbanSquare, ListChecks, SlidersHorizontal } from 'lucide-react'
-import type { ChecklistTemplate, SiteVisitForm, StageDef } from '@/domain/types'
+import { BookOpen, Building2, ClipboardCheck, FileSignature, KanbanSquare, ListChecks, SlidersHorizontal } from 'lucide-react'
+import type { ChecklistTemplate, Location, SiteVisitForm, StageDef } from '@/domain/types'
 import type { ConfigField } from '@/config/workspace'
 import { useStore } from '@/store/useStore'
 import { Badge, Button, Card, CardHeader, FieldRow, Input, SectionTitle, Select, Textarea } from '@/components/ui'
@@ -9,7 +9,7 @@ import { cn } from '@/lib/cn'
 const uid = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 
 export function AdminBuilders() {
-  const [tab, setTab] = useState<'workspace' | 'forms' | 'catalogue' | 'templates' | 'checklists' | 'stages'>('workspace')
+  const [tab, setTab] = useState<'workspace' | 'locations' | 'forms' | 'catalogue' | 'templates' | 'checklists' | 'stages'>('workspace')
 
   return (
     <section className="pb-8">
@@ -18,6 +18,7 @@ export function AdminBuilders() {
         {(
           [
             ['workspace', 'Workspace', SlidersHorizontal],
+            ['locations', 'Locations', Building2],
             ['forms', 'Forms', ListChecks],
             ['catalogue', 'Catalogue', BookOpen],
             ['templates', 'Proposal templates', FileSignature],
@@ -43,6 +44,7 @@ export function AdminBuilders() {
       </div>
 
       {tab === 'workspace' && <WorkspaceBuilder />}
+      {tab === 'locations' && <LocationsBuilder />}
       {tab === 'forms' && <FormsBuilder />}
       {tab === 'catalogue' && <CatalogueBuilder />}
       {tab === 'templates' && <ProposalTemplateBuilder />}
@@ -401,6 +403,144 @@ function ChecklistBuilder() {
         </Button>
       </div>
     </Card>
+  )
+}
+
+function LocationsBuilder() {
+  const locations = useStore((s) => s.locations)
+  const upsert = useStore((s) => s.upsertLocation)
+  const users = useStore((s) => s.users)
+  const [selectedId, setSelectedId] = useState(locations[0]?.id ?? '')
+  const location = locations.find((candidate) => candidate.id === selectedId) ?? locations[0]
+  const owners = users.filter((user) => user.role === 'owner' || user.role === 'admin')
+
+  const addLocation = () => {
+    const created: Location = {
+      id: uid('loc'),
+      name: 'New territory',
+      city: 'New city',
+      state: 'ST',
+      zips: ['000'],
+      ownerId: owners[0]?.id ?? 'u_nic',
+      openedAt: new Date().toISOString().slice(0, 10),
+      isCorporate: false,
+      priceMultiplier: 1,
+    }
+    upsert(created)
+    setSelectedId(created.id)
+  }
+
+  if (!location) return null
+
+  const updateLocation = (next: Location) => upsert(next)
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
+      <Card>
+        <CardHeader
+          title="Territories"
+          subtitle="UI-only network setup for adding branches, ZIP ownership, and pricing."
+          actions={
+            <Button size="sm" onClick={addLocation}>
+              Add location
+            </Button>
+          }
+        />
+        <div className="space-y-2 p-4">
+          {locations.map((candidate) => (
+            <button
+              key={candidate.id}
+              type="button"
+              onClick={() => setSelectedId(candidate.id)}
+              className={cn(
+                'w-full rounded-md border px-3 py-2 text-left',
+                candidate.id === location.id
+                  ? 'border-action bg-action-soft'
+                  : 'border-subtle bg-surface-raised hover:border-strong',
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium text-primary">{candidate.name}</p>
+                {candidate.isCorporate && <Badge tone="brand">Corporate</Badge>}
+              </div>
+              <p className="text-sm text-muted">
+                {candidate.city}, {candidate.state}
+              </p>
+              <p className="mt-1 text-2xs uppercase tracking-wide text-muted">
+                {candidate.zips.length} ZIP ranges
+              </p>
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Location builder"
+          subtitle="Design the territory, routing coverage, and commercial defaults shown in the admin workspace."
+        />
+        <div className="space-y-4 p-4">
+          <div className="grid gap-3 lg:grid-cols-2">
+            <FieldRow label="Location name">
+              <Input value={location.name} onChange={(e) => updateLocation({ ...location, name: e.target.value })} />
+            </FieldRow>
+            <FieldRow label="Owner">
+              <Select value={location.ownerId} onChange={(e) => updateLocation({ ...location, ownerId: e.target.value })}>
+                {owners.map((owner) => (
+                  <option key={owner.id} value={owner.id}>
+                    {owner.name} — {owner.title}
+                  </option>
+                ))}
+              </Select>
+            </FieldRow>
+            <FieldRow label="City">
+              <Input value={location.city} onChange={(e) => updateLocation({ ...location, city: e.target.value })} />
+            </FieldRow>
+            <FieldRow label="State">
+              <Input value={location.state} onChange={(e) => updateLocation({ ...location, state: e.target.value })} />
+            </FieldRow>
+            <FieldRow label="Opened on">
+              <Input value={location.openedAt} onChange={(e) => updateLocation({ ...location, openedAt: e.target.value })} />
+            </FieldRow>
+            <FieldRow label="Price multiplier">
+              <Input
+                type="number"
+                step="0.01"
+                value={location.priceMultiplier}
+                onChange={(e) => updateLocation({ ...location, priceMultiplier: Number(e.target.value) || 1 })}
+              />
+            </FieldRow>
+          </div>
+
+          <FieldRow label="ZIP prefixes" hint="One per line. These drive the territory routing preview.">
+            <Textarea
+              rows={4}
+              value={location.zips.join('\n')}
+              onChange={(e) =>
+                updateLocation({
+                  ...location,
+                  zips: e.target.value
+                    .split('\n')
+                    .map((line) => line.trim())
+                    .filter(Boolean),
+                })
+              }
+            />
+          </FieldRow>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant={location.isCorporate ? 'primary' : 'secondary'}
+              onClick={() => updateLocation({ ...location, isCorporate: !location.isCorporate })}
+            >
+              {location.isCorporate ? 'Corporate territory' : 'Mark as corporate'}
+            </Button>
+            <Badge tone="neutral">{location.zips.join(', ') || 'No ZIP prefixes yet'}</Badge>
+          </div>
+        </div>
+      </Card>
+    </div>
   )
 }
 

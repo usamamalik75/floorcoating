@@ -1,9 +1,9 @@
 import { Moon, RotateCcw, Sun } from 'lucide-react'
 import { useStore } from '@/store/useStore'
-import { LOCATIONS, USERS } from '@/data/seed'
 import { Avatar, Button, SegmentedControl, Tooltip } from '@/components/ui'
 import { DemoPath } from './DemoPath'
 import { ROLE_LABEL } from '@/domain/types'
+import { useUsers } from '@/store/selectors'
 
 /**
  * Not a production control — this is the demo's most valuable affordance.
@@ -18,8 +18,10 @@ export function DemoBar() {
   const theme = useStore((s) => s.theme)
   const setTheme = useStore((s) => s.setTheme)
   const reset = useStore((s) => s.reset)
+  const locations = useStore((s) => s.locations)
+  const users = useUsers()
 
-  const viewer = USERS.find((u) => u.id === viewerId)!
+  const viewer = users.find((u) => u.id === viewerId)!
   const isAdmin = viewer.role === 'admin'
 
   return (
@@ -36,7 +38,7 @@ export function DemoBar() {
           onChange={(e) => setViewer(e.target.value)}
           className="h-7 max-w-[15rem] rounded-md border border-strong bg-surface-raised px-2 text-base text-primary"
         >
-          {USERS.map((u) => (
+          {users.map((u) => (
             <option key={u.id} value={u.id}>
               {u.name} — {ROLE_LABEL[u.role]}
             </option>
@@ -62,8 +64,8 @@ export function DemoBar() {
           }
           className="h-7 rounded-md border border-strong bg-surface-raised px-2 text-base text-primary disabled:opacity-50"
         >
-          {isAdmin && <option value="all">All locationes</option>}
-          {LOCATIONS.map((l) => (
+          {isAdmin && <option value="all">All locations</option>}
+          {locations.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name}
             </option>

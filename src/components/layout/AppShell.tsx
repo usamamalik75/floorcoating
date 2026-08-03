@@ -14,9 +14,11 @@ import {
   Receipt,
   Ruler,
   Settings2,
+  ShieldCheck,
   ShoppingCart,
   BarChart3,
   MessagesSquare,
+  Search,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/cn'
@@ -38,20 +40,22 @@ const OFFICE: Role[] = ['admin', 'owner', 'sales', 'estimator', 'pm', 'accountin
 /** Modules = types of work. Pipeline stages are not menu items. */
 const OPERATIONS: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/customers', label: 'Customers', icon: Building2, roles: OFFICE },
+  { to: '/prospecting', label: 'Prospecting', icon: Search, roles: ['admin', 'owner', 'sales'] },
   { to: '/sales', label: 'Sales', icon: KanbanSquare, roles: OFFICE },
+  { to: '/communications', label: 'Communications', icon: MessagesSquare, roles: OFFICE },
   { to: '/site-visits', label: 'Assessments', icon: MapPin, roles: [...OFFICE, 'crew_leader'] },
   { to: '/estimates', label: 'Quotes', icon: Ruler, roles: ['admin', 'owner', 'sales', 'estimator', 'pm'] },
   { to: '/proposals', label: 'Proposals', icon: FileText, roles: ['admin', 'owner', 'sales', 'estimator'] },
   { to: '/jobs', label: 'Jobs', icon: ClipboardList, roles: ['admin', 'owner', 'pm', 'estimator', 'crew_leader', 'accounting'] },
   { to: '/schedule', label: 'Schedule', icon: CalendarDays, roles: [...OFFICE, 'crew_leader'] },
-  { to: '/catalog', label: 'Products & Services', icon: BookOpen, roles: OFFICE },
-  { to: '/purchasing', label: 'Purchasing', icon: ShoppingCart, roles: ['admin', 'owner', 'pm', 'accounting'] },
-  { to: '/customers', label: 'Customers', icon: Building2, roles: OFFICE },
+  { to: '/field', label: 'Field Operations', icon: HardHat },
+  { to: '/purchasing', label: 'Procurement', icon: ShoppingCart, roles: ['admin', 'owner', 'pm', 'accounting'] },
+  { to: '/catalog', label: 'Catalogue', icon: BookOpen, roles: OFFICE },
   { to: '/finance', label: 'Finance', icon: Receipt, roles: ['admin', 'owner', 'accounting', 'pm'] },
-  { to: '/communications', label: 'Communications', icon: MessagesSquare, roles: OFFICE },
   { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['admin', 'owner'] },
+  { to: '/admin', label: 'Admin', icon: ShieldCheck, roles: ['admin', 'owner'] },
   { to: '/settings', label: 'Settings', icon: Settings2, roles: ['admin', 'owner'] },
-  { to: '/field', label: 'Field', icon: HardHat },
 ]
 
 export function AppShell() {

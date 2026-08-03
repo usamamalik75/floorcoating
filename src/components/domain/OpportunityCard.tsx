@@ -2,8 +2,9 @@ import { Link } from 'react-router-dom'
 import { BellRing, Building2, GripVertical, Ruler } from 'lucide-react'
 import type { Account, Opportunity } from '@/domain/types'
 import { TEMPERATURE_LABEL } from '@/domain/types'
-import { ACCOUNT_BY_ID, USER_BY_ID } from '@/data/seed'
+import { ACCOUNT_BY_ID } from '@/data/seed'
 import { money } from '@/store/useStore'
+import { useUserDirectory } from '@/store/selectors'
 import { Avatar, Badge } from '@/components/ui'
 import { cn } from '@/lib/cn'
 
@@ -26,8 +27,9 @@ export function OpportunityCard({
   onDragStart: () => void
   dragging?: boolean
 }) {
+  const userById = useUserDirectory()
   const account = ACCOUNT_BY_ID[opp.accountId]
-  const owner = USER_BY_ID[opp.ownerId]
+  const owner = userById[opp.ownerId]
   const age = daysIn(opp.stageEnteredAt)
 
   return (

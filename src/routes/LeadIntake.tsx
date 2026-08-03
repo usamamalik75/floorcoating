@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
@@ -12,8 +12,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
-import { routeZip } from '@/store/selectors'
-import { LOCATIONS, USERS } from '@/data/seed'
+import { useRouteZip, useUsers } from '@/store/selectors'
 import type { Category, LeadSource } from '@/domain/types'
 import {
   Badge,
@@ -52,6 +51,8 @@ export function LeadIntake() {
   const createLead = useStore((s) => s.createLead)
   const patch = useStore((s) => s.patchOpportunity)
   const logActivity = useStore((s) => s.logActivity)
+  const locations = useStore((s) => s.locations)
+  const users = useUsers()
 
   const [company, setCompany] = useState('Cascade Provisions')
   const [contactName, setContactName] = useState('Dale Munro')
@@ -70,8 +71,8 @@ export function LeadIntake() {
   const [created, setCreated] = useState<string | null>(null)
   const [assignee, setAssignee] = useState('')
 
-  const routed = useMemo(() => routeZip(zip), [zip])
-  const reps = USERS.filter((u) => u.role === 'sales' && u.locationId === routed?.id)
+  const routed = useRouteZip(zip)
+  const reps = users.filter((u) => u.role === 'sales' && u.locationId === routed?.id)
 
   const submit = () => {
     if (!routed) return
@@ -98,7 +99,7 @@ export function LeadIntake() {
     logActivity(
       created,
       'system',
-      `Assigned to ${USERS.find((u) => u.id === assignee)?.name}. Follow-up workflow started — first contact due within 24 hours.`,
+      `Assigned to ${users.find((u) => u.id === assignee)?.name}. Follow-up workflow started — first contact due within 24 hours.`,
     )
     navigate(`/opportunities/${created}`)
   }
@@ -263,7 +264,7 @@ export function LeadIntake() {
           <Card>
             <CardHeader title="Location coverage" subtitle="Zip prefixes by location" icon={<Building2 size={14} />} />
             <div className="p-1">
-              {LOCATIONS.map((l) => (
+              {locations.map((l) => (
                 <div
                   key={l.id}
                   className={cn(

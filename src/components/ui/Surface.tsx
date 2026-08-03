@@ -1,11 +1,11 @@
 import type { HTMLAttributes, ReactNode } from 'react'
 import { cn } from '@/lib/cn'
 
-/** Surfaces separate by border, never by drop shadow. */
+/** Surfaces separate by subtle border and light shadow for a floating, minimalistic feel. */
 export function Card({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('rounded-lg border border-subtle bg-surface-raised', className)}
+      className={cn('rounded-xl border border-subtle/50 bg-surface-raised shadow-sm', className)}
       {...props}
     >
       {children}

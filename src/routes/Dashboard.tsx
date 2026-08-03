@@ -11,17 +11,18 @@ import {
   ClipboardCheck,
   FileSignature,
   HardHat,
+  Plus,
   Receipt,
   ScanSearch,
   Users,
 } from 'lucide-react'
 import { useStore, money, estimateTotal } from '@/store/useStore'
 import { assignedTo } from '@/domain/jobs'
-import { useScopedOpportunities, useViewer } from '@/store/selectors'
-import { LOCATION_BY_ID, TODAY, USER_BY_ID } from '@/data/seed'
+import { useScopedOpportunities, useUserDirectory, useViewer } from '@/store/selectors'
+import { LOCATION_BY_ID, TODAY } from '@/data/seed'
 import { STAGE_BY_ID, stageLabel } from '@/domain/stages'
 import type { Opportunity, StageId } from '@/domain/types'
-import { Badge, Button, Card, CardHeader, EmptyState, StageChip } from '@/components/ui'
+import { Badge, Button, Card, CardHeader, EmptyState, StageChip, HorizontalBarChart, TrendMetric } from '@/components/ui'
 import { cn } from '@/lib/cn'
 
 /* ==========================================================================
@@ -55,17 +56,29 @@ export function Dashboard() {
   }
 
   return (
-    <div className="h-full overflow-y-auto scrollbar-thin">
-      <div className="mx-auto max-w-[80rem] px-5 py-5">
-        <header className="mb-5">
-          <p className="text-sm text-muted">{format(TODAY, 'EEEE d MMMM yyyy')}</p>
-          <h1 className="font-display text-2xl text-primary">
-            {viewer.name.split(' ')[0]}’s workspace
-          </h1>
-          <p className="mt-0.5 text-base text-muted">
-            {viewer.title}
-            {viewer.locationId && ` · ${LOCATION_BY_ID[viewer.locationId].name}`}
-          </p>
+    <div className="h-full overflow-y-auto scrollbar-thin bg-surface-sunken">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <header className="mb-6">
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <p className="text-sm text-muted">{format(TODAY, 'EEEE d MMMM yyyy')}</p>
+              <h1 className="font-display text-2xl text-primary">
+                {viewer.name.split(' ')[0]}’s workspace
+              </h1>
+              <p className="mt-0.5 text-base text-muted">
+                {viewer.title}
+                {viewer.locationId && ` · ${LOCATION_BY_ID[viewer.locationId].name}`}
+              </p>
+            </div>
+            {['admin', 'owner', 'sales'].includes(viewer.role) && (
+              <Link to="/intake" className="ml-auto">
+                <Button size="sm" variant="primary">
+                  <Plus size={12} />
+                  New lead
+                </Button>
+              </Link>
+            )}
+          </div>
         </header>
         {common[viewer.role]}
       </div>
@@ -199,6 +212,12 @@ function OwnerHome() {
     .filter((i) => opps.some((o) => o.id === i.opportunityId) && i.status !== 'paid')
     .reduce((a, i) => a + (i.amount - i.payments.reduce((p, x) => p + x.amount, 0)), 0)
 
+  const pipelineData = [
+    { label: 'Sales', value: open.filter(o => STAGE_BY_ID[o.stage]?.group === 'sales').reduce((a, o) => a + o.value, 0), color: 'var(--status-info)' },
+    { label: 'Estimating', value: open.filter(o => STAGE_BY_ID[o.stage]?.group === 'estimating').reduce((a, o) => a + o.value, 0), color: 'var(--status-warning)' },
+    { label: 'Awarded', value: open.filter(o => STAGE_BY_ID[o.stage]?.group === 'won').reduce((a, o) => a + o.value, 0), color: 'var(--status-success)' },
+  ].filter(d => d.value > 0).map(d => ({ ...d, formattedValue: money(d.value, true) }))
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -206,6 +225,22 @@ function OwnerHome() {
         <Stat label="Unassigned leads" value={unassigned.length} tone={unassigned.length ? 'warning' : undefined} sub="Need a rep today" to="/sales" />
         <Stat label="Awaiting scheduling" value={needsScheduling.length} tone={needsScheduling.length ? 'warning' : undefined} sub="Signed with no dates" to="/schedule" />
         <Stat label="Outstanding receivables" value={money(outstanding, true)} sub="Across all open invoices" to="/finance" />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <HorizontalBarChart
+          className="lg:col-span-2"
+          title="Active Pipeline Value"
+          data={pipelineData}
+          totalLabel="Total Open"
+          totalValue={money(open.reduce((a, o) => a + o.value, 0), true)}
+        />
+        <TrendMetric
+          label="Revenue Forecast"
+          value={money(open.filter(o => STAGE_BY_ID[o.stage]?.group === 'won').reduce((a, o) => a + o.value, 0), true)}
+          trend={14.2}
+          trendLabel="vs last month"
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -255,9 +290,19 @@ function SalesHome() {
   const drafts = myThreads.filter((thread) => thread.messages.some((message) => message.status === 'draft'))
   const noResponse = myThreads.filter((thread) => thread.status === 'waiting')
 
+  const winLossData = [
+    { label: 'Won', value: mine.filter(o => o.stage === 'awarded').length, color: 'var(--status-success)' },
+    { label: 'Open', value: mine.filter(o => o.stage !== 'awarded' && o.stage !== 'lost').length, color: 'var(--status-info)' },
+    { label: 'Lost', value: mine.filter(o => o.stage === 'lost').length, color: 'var(--status-danger)' },
+  ].filter(d => d.value > 0)
+  
+  const wonCount = mine.filter(o => o.stage === 'awarded').length
+  const closedCount = mine.filter(o => o.stage === 'awarded' || o.stage === 'lost').length
+  const winRate = closedCount > 0 ? Math.round((wonCount / closedCount) * 100) : 0
+
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Stat label="Appointments today" value={todayVisits.length} icon={<CalendarClock size={12} />} tone={todayVisits.length ? 'success' : undefined} to="/field" />
         <Stat label="My open pipeline" value={money(mine.filter((o) => isOpenOpportunity(o, s.jobs)).reduce((a, o) => a + o.value, 0), true)} sub={`${mine.length} records`} to="/sales" />
         <Stat label="Proposals out" value={openProposals.length} sub={money(openProposals.reduce((a, o) => a + o.value, 0), true)} to="/sales" />
@@ -266,7 +311,23 @@ function SalesHome() {
         <Stat label="No response" value={noResponse.length} tone={noResponse.length ? 'warning' : undefined} sub="Customer has not replied yet" to="/communications" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-3">
+        <HorizontalBarChart
+          className="lg:col-span-2"
+          title="My Opportunities"
+          data={winLossData}
+          totalLabel="Total Assigned"
+          totalValue={mine.length.toString()}
+        />
+        <TrendMetric
+          label="Win Rate"
+          value={`${winRate}%`}
+          trend={2.4}
+          trendLabel="trailing 30 days"
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <List
           title="Today’s appointments"
           subtitle="Your guided form is already on the record"
@@ -312,6 +373,11 @@ function SalesHome() {
           title="New leads in your territory"
           icon={<Users size={14} />}
           empty="No new leads."
+          action={
+            <Link to="/intake">
+              <Button size="sm">Capture lead</Button>
+            </Link>
+          }
           items={newLeads.map((o) => <OppRow key={o.id} o={o} />)}
         />
 
@@ -368,7 +434,7 @@ function EstimatorHome() {
         <Stat label="Scope extractions to review" value={scopeExtractions.length} icon={<ScanSearch size={12} />} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <List
           title="Estimate queue"
           subtitle="Everything the rep captured is already attached"
@@ -450,6 +516,7 @@ function jobStatusOf(
 
 function PmHome() {
   const s = useStore()
+  const userById = useUserDirectory()
   const scoped = useScopedOpportunities()
   const opps = scoped.filter((o) => o.stage === 'awarded')
   const toSchedule = opps.filter((o) => jobStatusOf(o.id, s.jobs) === 'scheduling_required')
@@ -529,7 +596,7 @@ function PmHome() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-base font-medium text-primary">{i.title}</p>
                   <p className="truncate text-sm text-muted">
-                    {o?.name} · raised by {USER_BY_ID[i.raisedById]?.name}
+                    {o?.name} · raised by {userById[i.raisedById]?.name}
                   </p>
                 </div>
               </Link>
@@ -575,8 +642,9 @@ function CrewHome() {
 
   return (
     <div className="space-y-5">
-      <Card>
-        <CardHeader title="Today on site" icon={<HardHat size={14} />} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader title="Today on site" icon={<HardHat size={14} />} />
         {today.length === 0 ? (
           <EmptyState title="Nothing scheduled today" description="Your next job will appear here the moment it is assigned." />
         ) : (
@@ -628,6 +696,7 @@ function CrewHome() {
             )
           })}
       />
+      </div>
     </div>
   )
 }
@@ -657,8 +726,9 @@ function AccountingHome() {
         <Stat label="Change orders to confirm" value={pendingCo.length} tone={pendingCo.length ? 'warning' : undefined} />
       </div>
 
-      <List
-        title="Ready to invoice"
+      <div className="grid gap-4 lg:grid-cols-2">
+        <List
+          title="Ready to invoice"
         subtitle="Closeout complete, quantities confirmed"
         icon={<CheckCircle2 size={14} />}
         empty="Nothing waiting."
@@ -703,6 +773,7 @@ function AccountingHome() {
             )
           })}
       />
+      </div>
     </div>
   )
 }

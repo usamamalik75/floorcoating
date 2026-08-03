@@ -54,6 +54,7 @@ export function Accounting() {
   const s = useStore()
   const viewer = useViewer()
   const opps = useScopedOpportunities()
+  const createInvoice = useStore((st) => st.createInvoice)
   const recordPayment = useStore((st) => st.recordPayment)
   const setJobStatus = useStore((st) => st.setJobStatus)
   const paymentRequests = useStore((st) => st.paymentRequests)
@@ -62,6 +63,10 @@ export function Accounting() {
 
   const [raising, setRaising] = useState<Opportunity | null>(null)
   const [paying, setPaying] = useState<Invoice | null>(null)
+  const [manualOpen, setManualOpen] = useState(false)
+  const [manualOpportunityId, setManualOpportunityId] = useState('')
+  const [manualKind, setManualKind] = useState<InvoiceKind>('progress')
+  const [manualAmount, setManualAmount] = useState(0)
 
   const mine = s.invoices.filter((i) => opps.some((o) => o.id === i.opportunityId))
   const awarded = opps.filter((o) => o.stage === 'awarded')
@@ -79,11 +84,36 @@ export function Accounting() {
     <div className="h-full overflow-y-auto scrollbar-thin">
       <div className="mx-auto max-w-[80rem] px-5 py-5">
         <header className="mb-5">
-          <h1 className="font-display text-2xl text-primary">Accounting</h1>
-          <p className="mt-0.5 text-base text-muted">
-            Invoicing, QuickBooks synchronisation and payment status across{' '}
-            {viewer?.role === 'admin' ? 'the company' : 'this location'}.
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <div>
+              <h1 className="font-display text-2xl text-primary">Accounting</h1>
+              <p className="mt-0.5 text-base text-muted">
+                Invoicing, QuickBooks synchronisation and payment status across{' '}
+                {viewer?.role === 'admin' ? 'the company' : 'this location'}.
+              </p>
+            </div>
+            <Button
+              className="ml-auto"
+              size="sm"
+              variant="primary"
+              disabled={!readyToInvoice[0] && !inReview[0]}
+              onClick={() => {
+                const target = inReview[0] ?? readyToInvoice[0]
+                if (!target) return
+                if (jobStatus(target.id) === 'ready_to_invoice') {
+                  setJobStatus(target.id, 'invoiced')
+                } else {
+                  setRaising(target)
+                }
+              }}
+            >
+              <Plus size={12} />
+              New invoice
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => setManualOpen(true)}>
+              Manual invoice
+            </Button>
+          </div>
         </header>
 
         <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -326,6 +356,36 @@ export function Accounting() {
       </div>
 
       <RaiseInvoice opportunity={raising} onClose={() => setRaising(null)} />
+      <ManualInvoiceComposer
+        open={manualOpen}
+        opportunities={opps}
+        count={s.invoices.length}
+        selectedOpportunityId={manualOpportunityId}
+        setSelectedOpportunityId={setManualOpportunityId}
+        kind={manualKind}
+        setKind={setManualKind}
+        amount={manualAmount}
+        setAmount={setManualAmount}
+        onClose={() => setManualOpen(false)}
+        onCreate={() => {
+          if (!manualOpportunityId || manualAmount <= 0) return
+          createInvoice({
+            opportunityId: manualOpportunityId,
+            number: `INV-${5400 + s.invoices.length}`,
+            kind: manualKind,
+            amount: manualAmount,
+            status: 'draft',
+            issuedAt: new Date().toISOString(),
+            dueAt: iso(14),
+            quickbooksId: null,
+            payments: [],
+          })
+          setManualOpen(false)
+          setManualOpportunityId('')
+          setManualAmount(0)
+          setManualKind('progress')
+        }}
+      />
       <RecordPayment
         invoice={paying}
         onClose={() => setPaying(null)}
@@ -343,6 +403,68 @@ export function Accounting() {
         }}
       />
     </div>
+  )
+}
+
+/* ------------------------------------------------------------------------ */
+
+function ManualInvoiceComposer({
+  open,
+  opportunities,
+  count,
+  selectedOpportunityId,
+  setSelectedOpportunityId,
+  kind,
+  setKind,
+  amount,
+  setAmount,
+  onClose,
+  onCreate,
+}: {
+  open: boolean
+  opportunities: Opportunity[]
+  count: number
+  selectedOpportunityId: string
+  setSelectedOpportunityId: (value: string) => void
+  kind: InvoiceKind
+  setKind: (value: InvoiceKind) => void
+  amount: number
+  setAmount: (value: number) => void
+  onClose: () => void
+  onCreate: () => void
+}) {
+  return (
+    <Modal open={open} onClose={onClose} title="Manual invoice" subtitle={`Create freeform billing outside the closeout queue. Draft number INV-${5400 + count}.`}>
+      <div className="grid gap-3">
+        <FieldRow label="Opportunity">
+          <Select value={selectedOpportunityId} onChange={(e) => setSelectedOpportunityId(e.target.value)}>
+            <option value="">Select project…</option>
+            {opportunities.map((opp) => (
+              <option key={opp.id} value={opp.id}>
+                {opp.name}
+              </option>
+            ))}
+          </Select>
+        </FieldRow>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FieldRow label="Invoice type">
+            <Select value={kind} onChange={(e) => setKind(e.target.value as InvoiceKind)}>
+              <option value="deposit">Deposit</option>
+              <option value="progress">Progress</option>
+              <option value="final">Final</option>
+              <option value="change_order">Change order</option>
+            </Select>
+          </FieldRow>
+          <FieldRow label="Amount">
+            <Input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} />
+          </FieldRow>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="ghost" onClick={onClose}>Close</Button>
+          <Button size="sm" onClick={onCreate} disabled={!selectedOpportunityId || amount <= 0}>Create invoice</Button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 

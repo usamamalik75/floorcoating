@@ -103,12 +103,12 @@
   --space-11: 48px;
   --space-12: 64px;
 
-  /* ---- Radius. Tight. This is a tool, not a consumer app. ------------- */
-  --radius-xs: 2px;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  /* ---- Radius. Friendly and modern. ------------- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-full: 999px;
 
   /* ---- Type ---------------------------------------------------------- */

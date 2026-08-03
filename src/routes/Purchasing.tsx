@@ -1,11 +1,12 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
-import { ArrowRight, Boxes, Truck } from 'lucide-react'
+import { ArrowRight, Boxes, Plus, Truck } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useViewer } from '@/store/selectors'
 import { LOCATION_BY_ID } from '@/data/seed'
 import type { MaterialOrder } from '@/domain/types'
-import { Badge, Button, Card, EmptyState, Table, Td, Th, Tr } from '@/components/ui'
+import { Badge, Button, Card, EmptyState, Modal, Table, Td, Th, Tr } from '@/components/ui'
 import { cn } from '@/lib/cn'
 
 const FLOW: MaterialOrder['status'][] = ['draft', 'submitted', 'approved', 'shipped', 'delivered']
@@ -86,16 +87,62 @@ export function PurchasingOrders() {
 }
 
 export function Purchasing() {
+  const [creating, setCreating] = useState(false)
+  const orders = useStore((state) => state.materialOrders)
+  const opportunities = useStore((state) => state.opportunities)
+  const jobs = useStore((state) => state.jobs)
+  const locationFilter = useStore((state) => state.locationFilter)
+  const candidates = opportunities.filter((opportunity) => {
+    if (opportunity.stage !== 'awarded') return false
+    if (locationFilter !== 'all' && opportunity.locationId !== locationFilter) return false
+    if (orders.some((order) => order.opportunityId === opportunity.id)) return false
+    const job = jobs.find((candidate) => candidate.opportunityId === opportunity.id)
+    return job?.status === 'material_required'
+  })
+
   return (
     <div className='h-full overflow-y-auto scrollbar-thin'>
       <div className='mx-auto max-w-[80rem] px-5 py-5'>
-        <header className='mb-4'>
-          <h1 className='font-display text-2xl text-primary'>Purchasing</h1>
-          <p className='mt-0.5 text-base text-muted'>
-            Job-specific resources and supplies moving from request through fulfilment.
-          </p>
+        <header className='mb-4 flex flex-wrap items-end justify-between gap-3'>
+          <div>
+            <h1 className='font-display text-2xl text-primary'>Purchasing</h1>
+            <p className='mt-0.5 text-base text-muted'>
+              Job-specific resources and supplies moving from request through fulfilment.
+            </p>
+          </div>
+          <Button size='sm' variant='primary' onClick={() => setCreating(true)}>
+            <Plus size={12} />
+            Prepare order
+          </Button>
         </header>
         <PurchasingOrders />
+        <Modal
+          open={creating}
+          onClose={() => setCreating(false)}
+          title="Prepare order"
+          subtitle="Open a job that needs purchasing and create its material order."
+        >
+          <div className="space-y-2">
+            {candidates.length === 0 ? (
+              <EmptyState title="No jobs need ordering" description="Jobs move here when the workflow marks materials as required." />
+            ) : (
+              candidates.map((opportunity) => (
+                <Link
+                  key={opportunity.id}
+                  to={`/opportunities/${opportunity.id}/purchasing`}
+                  onClick={() => setCreating(false)}
+                  className="flex items-start justify-between gap-3 rounded-md border border-subtle bg-surface-raised px-3 py-2.5 hover:border-strong"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-primary">{opportunity.name}</p>
+                    <p className="text-sm text-muted">{LOCATION_BY_ID[opportunity.locationId]?.name}</p>
+                  </div>
+                  <Badge tone="warning">Materials required</Badge>
+                </Link>
+              ))
+            )}
+          </div>
+        </Modal>
       </div>
     </div>
   )

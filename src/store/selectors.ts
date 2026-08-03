@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 import { useStore } from './useStore'
 import { checksForStage, type ReadinessInput } from '@/domain/readiness'
 import type { StageId } from '@/domain/types'
-import { USER_BY_ID, LOCATION_BY_ID } from '@/data/seed'
 
 /** Assembles the readiness input for one opportunity from live store state. */
 export function useReadinessInput(opportunityId: string): ReadinessInput | null {
@@ -62,7 +61,20 @@ export function useChecks(opportunityId: string, stage: StageId) {
 
 export function useViewer() {
   const viewerId = useStore((s) => s.viewerId)
-  return USER_BY_ID[viewerId]
+  const users = useStore((s) => s.users)
+  return useMemo(() => users.find((user) => user.id === viewerId) ?? null, [users, viewerId])
+}
+
+export function useUsers() {
+  return useStore((s) => s.users)
+}
+
+export function useUserDirectory() {
+  const users = useUsers()
+  return useMemo(
+    () => Object.fromEntries(users.map((user) => [user.id, user])),
+    [users],
+  )
 }
 
 /** Everything the current viewer is allowed to see, after the territory filter. */
@@ -88,9 +100,18 @@ export function useScopedAccounts() {
 }
 
 /** Inbound routing: match the lead's zip prefix to a territory. */
-export function routeZip(zip: string) {
+export function routeZip<T extends { zips: string[] }>(zip: string, locations: T[] = []) {
   const prefix = zip.slice(0, 3)
-  return Object.values(LOCATION_BY_ID).find((l) => l.zips.includes(prefix)) ?? null
+  return locations.find((location) => location.zips.includes(prefix)) ?? null
+}
+
+export function useLocations() {
+  return useStore((s) => s.locations)
+}
+
+export function useRouteZip(zip: string) {
+  const locations = useLocations()
+  return useMemo(() => routeZip(zip, locations), [locations, zip])
 }
 
 export function useWorkspaceTemplate() {

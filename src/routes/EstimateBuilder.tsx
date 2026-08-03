@@ -18,9 +18,9 @@ import {
   XCircle,
 } from 'lucide-react'
 import type { Estimate, EstimateOption, LineItem } from '@/domain/types'
-import { ACCOUNT_BY_ID, USER_BY_ID } from '@/data/seed'
+import { ACCOUNT_BY_ID } from '@/data/seed'
 import { estimateTotal, money, optionTotal, useStore } from '@/store/useStore'
-import { useChecks, useViewer } from '@/store/selectors'
+import { useChecks, useUserDirectory, useViewer } from '@/store/selectors'
 import {
   Badge,
   Button,
@@ -54,6 +54,7 @@ const uid = (p: string) => `${p}_${Date.now()}_${++n}`
 export function EstimateBuilder() {
   const { id = '' } = useParams<{ id: string }>()
   const viewer = useViewer()
+  const userById = useUserDirectory()
   const opportunities = useStore((s) => s.opportunities)
   const estimates = useStore((s) => s.estimates)
   const scopeExtractions = useStore((s) => s.scopeExtractions)
@@ -294,7 +295,7 @@ export function EstimateBuilder() {
                 <Card className="border-(--status-success) bg-success-soft px-4 py-3">
                   <p className="flex items-center gap-2 text-base font-medium text-primary">
                     <CheckCircle2 size={14} className="text-success-text" />
-                    Approved by {USER_BY_ID[est.approvedById ?? '']?.name}. Ready to send to the
+                    Approved by {userById[est.approvedById ?? '']?.name}. Ready to send to the
                     customer.
                   </p>
                 </Card>
