@@ -44,43 +44,73 @@ export type StageGroup =
   | 'estimating'
   | 'stalled'
   | 'won'
-  | 'execution'
-  | 'closed'
   | 'lost'
 
 /**
- * The three phases. The system separates sales from operations for
- * permissions and board legibility, but the RECORD renders them as one
- * continuous journey — which is the experience the client asked for.
+ * Pre = customer workspace anchors. Sales = opportunity pipeline.
+ * Job progress lives on Job.status — not on the opportunity stage.
  */
-export type Phase = 'pre' | 'sales' | 'operations'
+export type Phase = 'pre' | 'sales'
 
+/** Lead urgency — a field on the opportunity, never a pipeline stage. */
+export type LeadTemperature = 'hot' | 'warm' | 'cold'
+
+export const TEMPERATURE_LABEL: Record<LeadTemperature, string> = {
+  hot: 'Hot',
+  warm: 'Warm',
+  cold: 'Cold',
+}
+
+/**
+ * Sales (and pre) stages on the Opportunity. After Awarded, operational
+ * progress moves to Job.status so the sales board stays short.
+ */
 export type StageId =
-  // pre-pipeline
   | 'prospect'
   | 'contact'
-  // sales pipeline
-  | 'unqualified_lead'
-  | 'qualified_lead'
+  | 'new_lead'
+  | 'contacted'
+  | 'qualified'
+  | 'site_visit_required'
   | 'site_visit_scheduled'
-  | 'site_visit_complete'
-  | 'estimating'
-  | 'internal_approval'
-  | 'proposal_delivered'
+  | 'site_visit_completed'
+  | 'estimate_in_progress'
+  | 'estimate_ready'
+  | 'proposal_sent'
   | 'follow_up'
   | 'delayed'
   | 'awarded'
   | 'lost'
-  // operations pipeline
+
+/** Job workflow — Awarded through Paid. Managed in the Jobs module. */
+export type JobStatus =
   | 'scheduling_required'
   | 'scheduled'
   | 'material_required'
-  | 'ready_install'
+  | 'material_ordered'
+  | 'ready_to_start'
   | 'in_progress'
+  | 'on_hold'
   | 'completion_review'
-  | 'ready_invoice'
+  | 'completed'
+  | 'ready_to_invoice'
   | 'invoiced'
   | 'paid'
+
+export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
+  scheduling_required: 'Scheduling Required',
+  scheduled: 'Scheduled',
+  material_required: 'Material Required',
+  material_ordered: 'Material Ordered',
+  ready_to_start: 'Ready to Start',
+  in_progress: 'In Progress',
+  on_hold: 'On Hold',
+  completion_review: 'Completion Review',
+  completed: 'Completed',
+  ready_to_invoice: 'Ready to Invoice',
+  invoiced: 'Invoiced',
+  paid: 'Paid',
+}
 
 /** A requirement that must be satisfied to ENTER a stage. */
 export type Gate =
@@ -273,7 +303,8 @@ export interface ChecklistTemplate {
   id: string
   name: string
   category?: Category
-  stage: StageId
+  /** Fired when an opportunity or job reaches this status. */
+  stage: StageId | JobStatus
   /** Franchisor-controlled templates are locked at the location. */
   managedByFranchisor: boolean
   items: ChecklistItem[]
@@ -406,6 +437,7 @@ export interface MaterialOrder {
 export interface Job {
   id: string
   opportunityId: string
+  status: JobStatus
   start: string
   end: string
   crewLeaderId: string | null
@@ -493,6 +525,8 @@ export interface Opportunity {
   locationId: string
   category: Category
   stage: StageId
+  /** Urgency / likelihood — independent of pipeline stage. */
+  temperature: LeadTemperature
   /** Sales rep. */
   ownerId: string
   estimatorId: string | null

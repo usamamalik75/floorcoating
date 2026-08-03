@@ -79,12 +79,13 @@ export function Schedule() {
 
   const selected = rows.find((r) => r.job.id === openJob)
 
-  const unscheduled = opportunities.filter(
-    (o) =>
-      (o.stage === 'awarded' || o.stage === 'scheduling_required') &&
-      !jobs.some((j) => j.opportunityId === o.id) &&
-      (locationFilter === 'all' || o.locationId === locationFilter),
-  )
+  const unscheduled = opportunities.filter((o) => {
+    if (o.stage !== 'awarded') return false
+    if (locationFilter !== 'all' && o.locationId !== locationFilter) return false
+    const job = jobs.find((j) => j.opportunityId === o.id)
+    // Needs scheduling when no job yet, or job still at scheduling_required.
+    return !job || job.status === 'scheduling_required'
+  })
 
   return (
     <div className="flex h-full flex-col">

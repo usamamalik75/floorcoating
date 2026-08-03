@@ -5,44 +5,44 @@ import { Button, Modal } from '@/components/ui'
 
 const STEPS: { to: string; title: string; body: string }[] = [
   {
-    to: '/pipeline',
-    title: 'One board, prospects included',
-    body: 'Prospect and Contact are anchor columns holding Accounts — not a separate contacts database. Everything from Unqualified Lead onward is a named project. Pulling a project out of an Account leaves the Account where it is.',
+    to: '/sales',
+    title: 'Sales pipeline — modules, not stages, in the menu',
+    body: 'The left nav is business modules. Sales holds the lead-to-award board. Site Visits, Estimates and Proposals are separate modules that the pipeline creates and links to.',
   },
   {
-    to: '/pipeline',
-    title: 'Drag any card to "Delayed / Nurture"',
-    body: 'The gate cannot be dismissed until a follow-up date is set. This is the rule that stops six-figure bids quietly disappearing — the pipeline refuses to let you park work without committing to chase it.',
+    to: '/sales',
+    title: 'Drag a card to Project Delayed',
+    body: 'The gate cannot be dismissed until a reason, period and follow-up date are set. Temperature (Hot / Warm / Cold) is a field on the card — not a stage.',
   },
   {
-    to: '/opportunities/op_egg_naperville',
-    title: 'The whole project on one surface',
-    body: 'One scrolling record, deliberately not tabs. Scroll to Photos & Files: artifacts are grouped by the stage they arrived at, so estimating and the crew visibly inherit the site visit instead of asking for it again.',
+    to: '/opportunities/op_midwest_plant3',
+    title: 'Opportunity as the hub',
+    body: 'Tabs for Overview, Site Visits, Estimates, Proposals and Job. Same record from the pipeline, module lists, or dashboard — no hunting across menus.',
   },
   {
-    to: '/estimate/op_egg_naperville',
+    to: '/estimate/op_midwest_plant3',
     title: 'Estimate off the price book',
-    body: 'Add a line — description, unit and pricing populate from FCG\u2019s real service line. An Area adds to the contract total; an Alternative is a client choice, so it does not.',
+    body: 'Detailed work lives in Estimates. Approving moves the opportunity to Estimate Ready and offers Generate Proposal — without auto-redirecting you.',
   },
   {
-    to: '/estimate/op_egg_naperville',
-    title: 'Preview, then simulate acceptance',
-    body: 'The signed proposal advances the record to Awarded and fires the notification back to operations. Nobody re-keys anything.',
+    to: '/proposal/qd7w1z',
+    title: 'Customer accepts the proposal',
+    body: 'Signing awards the opportunity and creates a Job at Scheduling Required. Operational progress then lives on the Job pipeline.',
   },
   {
-    to: '/schedule',
-    title: 'Awarded work that is not scheduled',
-    body: 'The newly awarded job surfaces in the warning strip. Click a bar to assign a crew leader, project manager and installers, and to trigger the material order to the franchisor.',
+    to: '/jobs',
+    title: 'Job pipeline',
+    body: 'Awarded through Paid — separate from Sales so twenty stages never sit on one board.',
   },
   {
     to: '/field',
-    title: 'Same components, field density',
-    body: 'Switch "Viewing as" to a Field Tech. This is not a second application — it is the same component library at 48px rows and 44px touch targets, driven by one token.',
+    title: 'Field density',
+    body: 'Crew leaders land in Field. Same components, larger touch targets.',
   },
   {
     to: '/admin',
-    title: 'The franchisor lens',
-    body: 'Switch to Nic Ugolini. Type 60540 into the routing tester to see inbound leads land in Chicago automatically, and royalty accrue at 5% of gross across every territory.',
+    title: 'Franchisor lens',
+    body: 'Network overview, standards and Franchise Management stay in the second product group.',
   },
 ]
 
@@ -63,7 +63,7 @@ export function DemoPath() {
         size="md"
         icon={<Route size={17} className="text-attention" />}
         title="Guided demo"
-        subtitle="Eight steps that walk one opportunity from prospect to paid."
+        subtitle="Modules for work. Pipelines for progress. One opportunity hub."
         footer={
           <>
             <span className="mr-auto font-mono text-sm tabular text-muted">
@@ -78,7 +78,6 @@ export function DemoPath() {
               </Button>
             </Link>
             <Button
-              variant="attention"
               disabled={step === STEPS.length - 1}
               onClick={() => setStep((n) => n + 1)}
             >
@@ -87,38 +86,8 @@ export function DemoPath() {
           </>
         }
       >
-        <ol className="space-y-1.5">
-          {STEPS.map((item, i) => (
-            <li key={i}>
-              <button
-                onClick={() => setStep(i)}
-                className={
-                  'flex w-full items-start gap-2.5 rounded-md border px-3 py-2.5 text-left transition-colors duration-(--duration-fast) ' +
-                  (i === step
-                    ? 'border-(--action-primary) bg-action-soft'
-                    : 'border-subtle hover:bg-surface-inset')
-                }
-              >
-                <span
-                  className={
-                    'mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-mono text-2xs font-semibold ' +
-                    (i === step ? 'bg-action text-white' : 'bg-surface-sunken text-muted')
-                  }
-                >
-                  {i + 1}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-base font-medium text-primary">{item.title}</span>
-                  {i === step && (
-                    <span className="mt-1 block text-sm leading-snug text-secondary">
-                      {item.body}
-                    </span>
-                  )}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ol>
+        <p className="font-display text-lg text-primary">{s.title}</p>
+        <p className="mt-2 text-base leading-relaxed text-secondary">{s.body}</p>
       </Modal>
     </>
   )

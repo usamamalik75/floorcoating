@@ -10,6 +10,7 @@ import type {
   Invoice,
   Issue,
   Job,
+  JobStatus,
   MaterialOrder,
   Opportunity,
   ProspectRequest,
@@ -20,6 +21,7 @@ import type {
   Takeoff,
 } from '@/domain/types'
 import { ROLE_LABEL } from '@/domain/types'
+import { formForCategory } from '@/data/siteVisitForms'
 import {
   ACCOUNTS,
   ACTIVITY,
@@ -81,9 +83,11 @@ interface State {
   setTheme: (t: 'light' | 'dark') => void
 
   moveStage: (opportunityId: string, to: StageId, meta?: MoveMeta) => void
+  setJobStatus: (opportunityId: string, status: JobStatus) => void
   patchOpportunity: (id: string, next: Partial<Opportunity>) => void
   createOpportunity: (o: Omit<Opportunity, 'id'>) => string
   createLead: (input: LeadInput) => string
+  ensureEstimate: (opportunityId: string) => string
 
   addArtifact: (a: Omit<Artifact, 'id'>) => void
   toggleChecklistItem: (opportunityId: string, templateId: string, itemId: string) => void
@@ -160,7 +164,7 @@ const initial = () => ({
  * seed invalidates it and "Reset demo" always returns to the story's start.
  */
 const STORAGE_KEY = 'fcg-prototype'
-const STORAGE_VERSION = 1
+const STORAGE_VERSION = 2
 
 const createState: StateCreator<State> = (set, get) => ({
   ...initial(),
@@ -240,8 +244,61 @@ const createState: StateCreator<State> = (set, get) => ({
       get().logActivity(opportunityId, 'system', `Notified ${ROLE_LABEL[n.role]}: ${n.message}`),
     )
 
-    if (to === 'invoiced') {
-      const contract = contractTotal(get(), opportunityId) || o.value
+    // Stage changes create related module records — they do not redirect the user.
+    if (to === 'site_visit_scheduled' || to === 'site_visit_required') {
+      const form = formForCategory(o.category)
+      if (form && !get().siteVisits.some((v) => v.opportunityId === opportunityId)) {
+        set((s) => ({
+          siteVisits: [
+            ...s.siteVisits,
+            {
+              opportunityId,
+              formId: form.id,
+              values: {},
+              completedAt: null,
+              completedById: null,
+            },
+          ],
+        }))
+        get().logActivity(opportunityId, 'system', 'Site Visit record created — open it from Site Visits or this opportunity.')
+      }
+    }
+
+    if (to === 'estimate_in_progress') {
+      get().ensureEstimate(opportunityId)
+    }
+
+    if (to === 'awarded') {
+      const existing = get().jobs.find((j) => j.opportunityId === opportunityId)
+      if (!existing) {
+        get().scheduleJob({
+          opportunityId,
+          status: 'scheduling_required',
+          start: iso(14),
+          end: iso(17),
+          crewLeaderId: null,
+          pmId: o.pmId,
+          crewIds: [],
+          progress: 0,
+          dailyLogs: [],
+        })
+        get().logActivity(opportunityId, 'system', 'Job created at Scheduling Required — open it from Jobs.')
+      }
+    }
+  },
+
+  setJobStatus: (opportunityId, status) => {
+    const job = get().jobs.find((j) => j.opportunityId === opportunityId)
+    if (!job) return
+    const from = job.status
+    set((s) => ({
+      jobs: s.jobs.map((j) => (j.opportunityId === opportunityId ? { ...j, status } : j)),
+    }))
+    get().logActivity(opportunityId, 'stage', `Job moved from ${from.replace(/_/g, ' ')} to ${status.replace(/_/g, ' ')}.`)
+
+    if (status === 'invoiced') {
+      const o = get().opportunities.find((x) => x.id === opportunityId)
+      const contract = contractTotal(get(), opportunityId) || o?.value || 0
       const approvedCo = get()
         .changeOrders.filter((c) => c.opportunityId === opportunityId && c.status === 'customer_approved')
         .reduce((s, c) => s + c.amount, 0)
@@ -268,7 +325,7 @@ const createState: StateCreator<State> = (set, get) => ({
       )
     }
 
-    if (to === 'paid') {
+    if (status === 'paid') {
       set((s) => ({
         invoices: s.invoices.map((i) =>
           i.opportunityId === opportunityId && i.status !== 'paid'
@@ -340,7 +397,8 @@ const createState: StateCreator<State> = (set, get) => ({
           accountId: account!.id,
           locationId: input.locationId,
           category: input.category,
-          stage: 'unqualified_lead',
+          stage: 'new_lead',
+          temperature: 'warm',
           ownerId: '',
           estimatorId: null,
           pmId: null,
@@ -412,7 +470,18 @@ const createState: StateCreator<State> = (set, get) => ({
       ...(Number.isFinite(cove) && cove > 0 ? { coveLf: cove } : {}),
     })
 
-    if (complete) get().logActivity(opportunityId, 'checklist', 'Guided site visit form submitted from the field.')
+    if (complete) {
+      get().logActivity(opportunityId, 'checklist', 'Guided site visit form submitted from the field.')
+      const opp = get().opportunities.find((o) => o.id === opportunityId)
+      if (
+        opp &&
+        (opp.stage === 'site_visit_scheduled' ||
+          opp.stage === 'site_visit_required' ||
+          opp.stage === 'qualified')
+      ) {
+        get().moveStage(opportunityId, 'site_visit_completed')
+      }
+    }
   },
 
   /* ---- Estimating ----------------------------------------------------- */
@@ -437,6 +506,10 @@ const createState: StateCreator<State> = (set, get) => ({
       rejectionNote: null,
     })
     get().logActivity(est.opportunityId, 'system', `Estimate approved by ${USERS.find((u) => u.id === approverId)?.name}.`)
+    const opp = get().opportunities.find((o) => o.id === est.opportunityId)
+    if (opp && (opp.stage === 'estimate_in_progress' || opp.stage === 'site_visit_completed')) {
+      get().moveStage(est.opportunityId, 'estimate_ready')
+    }
   },
 
   rejectEstimate: (id, note) => {
@@ -467,10 +540,34 @@ const createState: StateCreator<State> = (set, get) => ({
       ),
     }))
     get().logActivity(est.opportunityId, 'money', `Proposal accepted and signed electronically by ${signedBy}.`)
-    // A customer signature is the award, and an awarded job immediately needs
-    // dates and a crew. Nobody should have to drag a card to say either.
+    // Signature awards the opportunity; moveStage('awarded') creates the Job.
     get().moveStage(est.opportunityId, 'awarded')
-    get().moveStage(est.opportunityId, 'scheduling_required')
+  },
+
+  ensureEstimate: (opportunityId) => {
+    const existing = get().estimates.find((e) => e.opportunityId === opportunityId)
+    if (existing) return existing.id
+    const id = nextId('est')
+    const token = id.replace('est_', '').slice(0, 6)
+    const estimate: Estimate = {
+      id,
+      opportunityId,
+      options: [],
+      templateId: 'pt_industrial',
+      internalNotes: '',
+      status: 'draft',
+      approvedById: null,
+      approvedAt: null,
+      rejectionNote: null,
+      sentAt: null,
+      signedAt: null,
+      signedBy: null,
+      token,
+      depositPct: 40,
+    }
+    get().upsertEstimate(estimate)
+    get().logActivity(opportunityId, 'system', 'Draft estimate created — open it from Estimates or this opportunity.')
+    return id
   },
 
   acceptTakeoff: (takeoffId) => {
@@ -493,7 +590,10 @@ const createState: StateCreator<State> = (set, get) => ({
 
   scheduleJob: (job) => {
     set((s) => ({
-      jobs: [...s.jobs.filter((j) => j.opportunityId !== job.opportunityId), { ...job, id: nextId('job') }],
+      jobs: [
+        ...s.jobs.filter((j) => j.opportunityId !== job.opportunityId),
+        { ...job, status: job.status ?? ('scheduling_required' as JobStatus), id: nextId('job') },
+      ],
     }))
     get().logActivity(job.opportunityId, 'system', 'Job placed on the schedule.')
   },

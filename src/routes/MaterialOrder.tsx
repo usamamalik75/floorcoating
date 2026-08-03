@@ -65,7 +65,8 @@ export function MaterialOrder() {
   const upsert = useStore((s) => s.upsertMaterialOrder)
   const submit = useStore((s) => s.submitMaterialOrder)
   const advance = useStore((s) => s.advanceMaterialOrder)
-  const moveStage = useStore((s) => s.moveStage)
+  const setJobStatus = useStore((s) => s.setJobStatus)
+  const jobs = useStore((s) => s.jobs)
   const [neededBy, setNeededBy] = useState(iso(7).slice(0, 10))
 
   /**
@@ -207,7 +208,8 @@ export function MaterialOrder() {
                     variant="primary"
                     onClick={() => {
                       submit(order.id)
-                      if (opportunity.stage === 'material_required') moveStage(opportunity.id, 'ready_install')
+                      const job = jobs.find((j) => j.opportunityId === opportunity.id)
+                      if (job?.status === 'material_required') setJobStatus(opportunity.id, 'ready_to_start')
                     }}
                   >
                     <Send size={13} />

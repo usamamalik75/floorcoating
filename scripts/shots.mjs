@@ -20,16 +20,18 @@ async function shot(name, path, w = 1600, h = 950) {
 
 /* -- Desktop: the operations platform ----------------------------------- */
 await shot('01-dashboard', '/')
-await shot('02-pipeline-sales', '/pipeline?scope=sales')
-await shot('03-pipeline-operations', '/pipeline?scope=operations')
+await shot('02-sales', '/sales')
+await shot('03-jobs', '/jobs')
 await shot('04-prospecting', '/prospecting')
 await shot('05-intake', '/intake')
 await shot('06-record', `/opportunities/${HERO}`)
 await shot('07-estimate', `/estimate/${HERO}`)
 await shot('08-material', `/opportunities/${HERO}/material`)
-await shot('09-projects', '/projects')
+await shot('09-site-visits', '/site-visits')
+await shot('09b-estimates', '/estimates')
+await shot('09c-proposals', '/proposals')
 await shot('10-schedule', '/schedule')
-await shot('11-accounting', '/accounting')
+await shot('11-finance', '/finance')
 await shot('12-admin', '/admin', 1600, 1150)
 
 /* -- Desktop: the franchise management system --------------------------- */
@@ -59,16 +61,16 @@ console.log('captured 22-gate-delayed')
 
 // Readiness gate: the estimate cannot go to approval with missing inputs.
 await page.goto(`${BASE}/opportunities/op_den_qualified`, { waitUntil: 'networkidle' })
-await page.getByRole('button', { name: 'Internal Approval', exact: true }).click()
+await page.getByRole('button', { name: 'Estimate Ready', exact: true }).click()
 await page.waitForTimeout(600)
 await page.screenshot({ path: `${OUT}/23-gate-readiness.png` })
 console.log('captured 23-gate-readiness')
 
 /* -- Dark mode ----------------------------------------------------------- */
-await page.goto(`${BASE}/pipeline?scope=sales`, { waitUntil: 'networkidle' })
+await page.goto(`${BASE}/sales`, { waitUntil: 'networkidle' })
 await page.evaluate(() => document.documentElement.classList.add('dark'))
 await page.waitForTimeout(400)
-await page.screenshot({ path: `${OUT}/24-pipeline-dark.png` })
-console.log('captured 24-pipeline-dark')
+await page.screenshot({ path: `${OUT}/24-sales-dark.png` })
+console.log('captured 24-sales-dark')
 
 await browser.close()

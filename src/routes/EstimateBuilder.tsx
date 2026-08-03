@@ -73,7 +73,7 @@ export function EstimateBuilder() {
   const est = estimates.find((e) => e.opportunityId === id)
   const takeoff = takeoffs.find((t) => t.opportunityId === id)
   const account = opp ? ACCOUNT_BY_ID[opp.accountId] : undefined
-  const checks = useChecks(id, 'internal_approval')
+  const checks = useChecks(id, 'estimate_ready')
 
   const grand = useMemo(() => (est ? estimateTotal(est) : 0), [est])
 
@@ -197,7 +197,7 @@ export function EstimateBuilder() {
                 disabled={grand === 0}
                 onClick={() => {
                   patch({ status: 'pending_approval' })
-                  if (opp.stage === 'estimating') moveStage(opp.id, 'internal_approval')
+                  if (opp.stage === 'estimate_in_progress') moveStage(opp.id, 'estimate_ready')
                 }}
               >
                 <ShieldCheck size={13} />
@@ -227,7 +227,7 @@ export function EstimateBuilder() {
                 variant="primary"
                 onClick={() => {
                   patch({ status: 'sent', sentAt: new Date().toISOString() })
-                  moveStage(opp.id, 'proposal_delivered')
+                  moveStage(opp.id, 'proposal_sent')
                 }}
               >
                 <Send size={13} />

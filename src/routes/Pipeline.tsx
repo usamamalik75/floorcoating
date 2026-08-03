@@ -22,14 +22,11 @@ import {
 import { cn } from '@/lib/cn'
 
 /**
- * The board separates sales from operations because 22 columns side by side
- * is unusable, but the record page renders the whole journey continuously.
- * That is the compromise the brief asks for: "one continuous journey, even if
- * the system technically separates sales and operations."
+ * Legacy sales board. `/pipeline` redirects to `/sales`; kept for reference.
+ * Operations work lives on Jobs (`Job.status`), not opportunity stages.
  */
 const SCOPES: { value: Phase | 'all'; label: string }[] = [
   { value: 'sales', label: 'Sales' },
-  { value: 'operations', label: 'Operations' },
   { value: 'all', label: 'Everything' },
 ]
 
@@ -90,7 +87,7 @@ export function Pipeline() {
   }
 
   const totalOpen = visibleOpps
-    .filter((o) => !['paid', 'lost', 'invoiced'].includes(o.stage))
+    .filter((o) => o.stage !== 'lost')
     .reduce((s, o) => s + o.value, 0)
 
   return (
@@ -210,8 +207,7 @@ function BoardView({
   const columns = BOARD_STAGES.filter((id) => {
     const phase = STAGE_BY_ID[id].phase
     if (scope === 'all') return true
-    if (scope === 'sales') return phase === 'pre' || phase === 'sales'
-    return phase === 'operations'
+    return phase === 'pre' || phase === 'sales'
   })
 
   return (

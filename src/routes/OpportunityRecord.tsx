@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import {
   AlertTriangle,
   ArrowLeft,
-  Banknote,
   BellRing,
   Boxes,
   Camera,
@@ -27,8 +26,8 @@ import {
   User as UserIcon,
   XCircle,
 } from 'lucide-react'
-import type { ArtifactKind, StageId } from '@/domain/types'
-import { STAGE_BY_ID, stageIndex, stageLabel } from '@/domain/stages'
+import type { ArtifactKind, JobStatus, StageId } from '@/domain/types'
+import { STAGE_BY_ID, jobStatusIndex, stageLabel } from '@/domain/stages'
 import { CHECKLIST_BY_ID } from '@/data/checklists'
 import { formForCategory } from '@/data/siteVisitForms'
 import { ACCOUNT_BY_ID, LOCATION_BY_ID, USER_BY_ID } from '@/data/seed'
@@ -37,6 +36,8 @@ import { estimateTotal, money, optionTotal, useStore } from '@/store/useStore'
 import { useChangeOrdersFor, useChecks, useIssuesFor } from '@/store/selectors'
 import { StageGate } from '@/components/domain/StageGate'
 import { StageStepper } from '@/components/domain/StageStepper'
+import { NextActionPanel } from '@/components/domain/NextActionPanel'
+import { TEMPERATURE_LABEL } from '@/domain/types'
 import {
   Avatar,
   Badge,
@@ -57,20 +58,17 @@ import {
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
 
-const SECTIONS = [
-  { id: 'summary', label: 'Summary', icon: ClipboardList },
-  { id: 'sitevisit', label: 'Site Visit', icon: MapPin },
-  { id: 'estimate', label: 'Estimate', icon: FileText },
-  { id: 'proposal', label: 'Proposal', icon: FileSignature },
-  { id: 'material', label: 'Material', icon: Boxes },
-  { id: 'prep', label: 'Preparation', icon: ClipboardCheck },
-  { id: 'job', label: 'Job & Crew', icon: HardHat },
-  { id: 'photos', label: 'Photos & Files', icon: Camera },
-  { id: 'changes', label: 'Changes & Issues', icon: AlertTriangle },
-  { id: 'closeout', label: 'Closeout', icon: CheckCircle2 },
-  { id: 'invoice', label: 'Invoice', icon: Banknote },
-  { id: 'activity', label: 'Activity', icon: StickyNote },
-]
+const TABS = [
+  { id: 'overview', label: 'Overview', icon: ClipboardList },
+  { id: 'visits', label: 'Site Visits', icon: MapPin },
+  { id: 'estimates', label: 'Estimates', icon: FileText },
+  { id: 'proposals', label: 'Proposals', icon: FileSignature },
+  { id: 'documents', label: 'Documents', icon: ClipboardCheck },
+  { id: 'photos', label: 'Photos', icon: Camera },
+  { id: 'notes', label: 'Notes', icon: StickyNote },
+  { id: 'history', label: 'History', icon: StickyNote },
+  { id: 'job', label: 'Job', icon: HardHat, awardedOnly: true },
+] as const
 
 const ARTIFACT_ICON: Record<ArtifactKind, typeof FileText> = {
   photo: ImageIcon,
@@ -83,37 +81,19 @@ const ARTIFACT_ICON: Record<ArtifactKind, typeof FileText> = {
 }
 
 /**
- * Deliberately ONE scrolling document with a sticky rail, not tabs.
- *
- * The complaint this answers is specific: "if I go and look for something in
- * estimates, I don't see anything that happened after that, and I've got to
- * look in the right spot." Tabs would reproduce exactly that. Everything a
- * person needs about this project is on one surface, in pipeline order, and
- * every downstream section shows what it INHERITED from the one before it.
+ * Opportunity is the hub: tabs surface Site Visits, Estimates, Proposals and
+ * Job without forcing menu redirects. Module list pages deep-link here too.
  */
 export function OpportunityRecord() {
   const { id = '' } = useParams<{ id: string }>()
+  const [params, setParams] = useSearchParams()
   const s = useStore()
 
   const [gateTo, setGateTo] = useState<StageId | null>(null)
-  const [active, setActive] = useState('summary')
+  const [showNext, setShowNext] = useState(true)
+  const tab = params.get('tab') ?? 'overview'
 
   const opp = s.opportunities.find((o) => o.id === id)
-
-  useEffect(() => {
-    const els = SECTIONS.map((sec) => document.getElementById(sec.id)).filter(Boolean) as HTMLElement[]
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
-        if (visible[0]) setActive(visible[0].target.id)
-      },
-      { rootMargin: '-72px 0px -60% 0px' },
-    )
-    els.forEach((el) => obs.observe(el))
-    return () => obs.disconnect()
-  }, [opp?.id])
 
   const est = useMemo(() => s.estimates.find((e) => e.opportunityId === id), [s.estimates, id])
   const job = s.jobs.find((j) => j.opportunityId === id)
@@ -131,25 +111,29 @@ export function OpportunityRecord() {
         title="Opportunity not found"
         description="It may have been reset with the demo data."
         action={
-          <Link to="/pipeline">
-            <Button variant="primary">Back to pipeline</Button>
+          <Link to="/sales">
+            <Button variant="primary">Back to Sales</Button>
           </Link>
         }
       />
     )
   }
 
+  const setTab = (id: string) => setParams({ tab: id })
+  const visibleTabs = TABS.filter((t) => !('awardedOnly' in t && t.awardedOnly) || opp.stage === 'awarded')
+
   const account = ACCOUNT_BY_ID[opp.accountId]
   const location = LOCATION_BY_ID[opp.locationId]
   const def = STAGE_BY_ID[opp.stage]
-  const reached = (stage: StageId) => stageIndex(opp.stage) >= stageIndex(stage)
+  const jobReached = (status: JobStatus) =>
+    Boolean(job && jobStatusIndex(job.status) >= jobStatusIndex(status))
 
   return (
     <div className="flex h-full flex-col">
       {/* ---- Header ---- */}
       <header className="shrink-0 border-b border-subtle bg-surface-raised px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          <Link to="/pipeline" className="text-muted hover:text-primary">
+          <Link to="/sales" className="text-muted hover:text-primary">
             <ArrowLeft size={16} />
           </Link>
           <div className="min-w-0">
@@ -157,11 +141,19 @@ export function OpportunityRecord() {
             <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
               <span className="font-mono">{opp.code}</span>
               <span>·</span>
-              <Link to="/accounts" className="hover:text-primary hover:underline">
+              <Link to="/customers" className="hover:text-primary hover:underline">
                 {account?.name}
               </Link>
               <span>·</span>
               <span>{location?.name}</span>
+              <span>·</span>
+              <Badge
+                tone={
+                  opp.temperature === 'hot' ? 'danger' : opp.temperature === 'warm' ? 'attention' : 'neutral'
+                }
+              >
+                {TEMPERATURE_LABEL[opp.temperature]}
+              </Badge>
             </p>
           </div>
 
@@ -176,34 +168,38 @@ export function OpportunityRecord() {
         <div className="mt-2.5">
           <StageStepper opportunity={opp} onPick={setGateTo} />
         </div>
-      </header>
 
-      <div className="flex min-h-0 flex-1">
-        {/* ---- Sticky rail ---- */}
-        <nav className="hidden w-44 shrink-0 overflow-y-auto border-r border-subtle bg-surface-raised py-3 lg:block scrollbar-thin">
-          {SECTIONS.map((sec) => (
-            <a
-              key={sec.id}
-              href={`#${sec.id}`}
+        <div className="mt-2.5 flex gap-0.5 overflow-x-auto scrollbar-thin">
+          {visibleTabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
               className={cn(
-                'flex items-center gap-2 px-4 py-1.5 text-sm',
-                'transition-colors duration-(--duration-fast)',
-                active === sec.id
-                  ? 'border-l-2 border-action bg-surface-inset font-medium text-primary'
-                  : 'border-l-2 border-transparent text-muted hover:text-primary',
+                'flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium',
+                tab === t.id ? 'bg-action-soft text-brand' : 'text-muted hover:text-primary',
               )}
             >
-              <sec.icon size={13} className="shrink-0" />
-              {sec.label}
-            </a>
+              <t.icon size={13} />
+              {t.label}
+            </button>
           ))}
-        </nav>
+        </div>
+      </header>
 
-        {/* ---- Document ---- */}
-        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-          <div className="mx-auto max-w-4xl space-y-6 p-5">
-            {/* == Summary == */}
-            <Section id="summary" title="Summary">
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+        <div className="mx-auto max-w-4xl space-y-6 p-5">
+          {showNext && (
+            <NextActionPanel
+              opportunity={opp}
+              onDismiss={() => setShowNext(false)}
+              onMove={setGateTo}
+            />
+          )}
+
+            {/* == Overview == */}
+            <div className={tab === 'overview' ? 'space-y-6' : 'hidden'}>
+            <Section id="summary" title="Overview">
               {reminder && (
                 <Card className="mb-3 border-(--status-warning) bg-warning-soft px-4 py-3">
                   <div className="flex items-start gap-2.5">
@@ -263,8 +259,10 @@ export function OpportunityRecord() {
                 </div>
               </Card>
             </Section>
+            </div>
 
-            {/* == Site visit == */}
+            {/* == Site Visits tab == */}
+            <div className={tab === 'visits' ? 'space-y-6' : 'hidden'}>
             <Section
               id="sitevisit"
               title="Site visit"
@@ -279,8 +277,10 @@ export function OpportunityRecord() {
             >
               <SiteVisitSummary opportunityId={opp.id} />
             </Section>
+            </div>
 
-            {/* == Estimate == */}
+            {/* == Estimates tab == */}
+            <div className={tab === 'estimates' ? 'space-y-6' : 'hidden'}>
             <Section
               id="estimate"
               title="Estimate"
@@ -365,7 +365,10 @@ export function OpportunityRecord() {
               )}
             </Section>
 
-            {/* == Proposal == */}
+            </div>
+
+            {/* == Proposals tab == */}
+            <div className={tab === 'proposals' ? 'space-y-6' : 'hidden'}>
             <Section id="proposal" title="Proposal">
               {!est || est.status === 'draft' ? (
                 <Card>
@@ -400,8 +403,10 @@ export function OpportunityRecord() {
                 </Card>
               )}
             </Section>
+            </div>
 
-            {/* == Material == */}
+            {/* == Documents tab == */}
+            <div className={tab === 'documents' ? 'space-y-6' : 'hidden'}>
             <Section
               id="material"
               title="Material"
@@ -463,7 +468,10 @@ export function OpportunityRecord() {
               />
             </Section>
 
-            {/* == Job & crew == */}
+            </div>
+
+            {/* == Job tab == */}
+            <div className={tab === 'job' ? 'space-y-6' : 'hidden'}>
             <Section id="job" title="Job and crew">
               {!job ? (
                 <Card>
@@ -524,7 +532,80 @@ export function OpportunityRecord() {
               )}
             </Section>
 
-            {/* == Photos & files == */}
+            <Section id="changes" title="Change orders and issues">
+              <ChangeOrders opportunityId={opp.id} />
+              <div className="mt-3">
+                <Issues opportunityId={opp.id} />
+              </div>
+            </Section>
+            <Section id="closeout" title="Completion and closeout">
+              <ChecklistCard
+                opportunityId={opp.id}
+                templateId="cl_closeout"
+                subtitle="The system asks these questions so nobody has to remember them."
+              />
+              {jobReached('completion_review') && (
+                <Card className="mt-3 p-4">
+                  <p className="text-base text-secondary">
+                    Customer sign-off is captured on a link sent to {account?.contactName}.
+                  </p>
+                  <Link to={`/signoff/${opp.id}`} target="_blank">
+                    <Button size="sm" className="mt-2">
+                      <PenLine size={12} />
+                      Open the sign-off link
+                    </Button>
+                  </Link>
+                </Card>
+              )}
+            </Section>
+            <Section id="invoice" title="Invoice and payment">
+              {invoices.length === 0 ? (
+                <Card>
+                  <EmptyState title="Not invoiced" description="Raised after closeout is confirmed." />
+                </Card>
+              ) : (
+                <Card>
+                  {invoices.map((inv) => {
+                    const paidAmt = inv.payments.reduce((a, p) => a + p.amount, 0)
+                    return (
+                      <div key={inv.id} className="border-b border-subtle p-4 last:border-0">
+                        <div className="flex items-center gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-mono text-base text-primary">{inv.number}</p>
+                            <p className="text-sm text-muted capitalize">
+                              {inv.kind} · QuickBooks {inv.quickbooksId ?? 'not synced'}
+                            </p>
+                          </div>
+                          <Badge
+                            tone={
+                              inv.status === 'paid'
+                                ? 'success'
+                                : inv.status === 'partial'
+                                  ? 'warning'
+                                  : 'neutral'
+                            }
+                          >
+                            {inv.status}
+                          </Badge>
+                          <span className="font-mono text-base text-primary tabular">
+                            {money(inv.amount)}
+                          </span>
+                        </div>
+                        {paidAmt > 0 && paidAmt < inv.amount && (
+                          <p className="mt-1.5 text-sm text-muted">
+                            {money(paidAmt)} received · {money(inv.amount - paidAmt)} outstanding
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </Card>
+              )}
+            </Section>
+            </div>
+
+            {/* == Photos tab == */}
+            <div className={tab === 'photos' ? 'space-y-6' : 'hidden'}>
             <Section id="photos" title="Photos and files">
               {mine.length === 0 ? (
                 <Card>
@@ -554,77 +635,10 @@ export function OpportunityRecord() {
                 </Card>
               )}
             </Section>
+            </div>
 
-            {/* == Changes & issues == */}
-            <Section id="changes" title="Change orders and issues">
-              <ChangeOrders opportunityId={opp.id} />
-              <Issues opportunityId={opp.id} />
-            </Section>
-
-            {/* == Closeout == */}
-            <Section id="closeout" title="Completion and closeout">
-              <ChecklistCard
-                opportunityId={opp.id}
-                templateId="cl_closeout"
-                subtitle="The system asks these questions so nobody has to remember them."
-              />
-              {reached('completion_review') && (
-                <Card className="mt-3 p-4">
-                  <p className="text-base text-secondary">
-                    Customer sign-off is captured on a link sent to {account?.contactName}. It is the
-                    last thing accounting needs before the final invoice.
-                  </p>
-                  <Link to={`/signoff/${opp.id}`} target="_blank">
-                    <Button size="sm" className="mt-2">
-                      <PenLine size={12} />
-                      Open the sign-off link
-                    </Button>
-                  </Link>
-                </Card>
-              )}
-            </Section>
-
-            {/* == Invoice == */}
-            <Section id="invoice" title="Invoice and payment">
-              {invoices.length === 0 ? (
-                <Card>
-                  <EmptyState title="Not invoiced" description="Raised after closeout is confirmed." />
-                </Card>
-              ) : (
-                <Card>
-                  {invoices.map((inv) => {
-                    const paid = inv.payments.reduce((a, p) => a + p.amount, 0)
-                    return (
-                      <div key={inv.id} className="border-b border-subtle p-4 last:border-0">
-                        <div className="flex items-center gap-3">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-mono text-base text-primary">{inv.number}</p>
-                            <p className="text-sm text-muted capitalize">
-                              {inv.kind} · QuickBooks {inv.quickbooksId ?? 'not synced'}
-                            </p>
-                          </div>
-                          <Badge
-                            tone={inv.status === 'paid' ? 'success' : inv.status === 'partial' ? 'warning' : 'neutral'}
-                          >
-                            {inv.status}
-                          </Badge>
-                          <span className="font-mono text-base text-primary tabular">
-                            {money(inv.amount)}
-                          </span>
-                        </div>
-                        {paid > 0 && paid < inv.amount && (
-                          <p className="mt-1.5 text-sm text-muted">
-                            {money(paid)} received · {money(inv.amount - paid)} outstanding
-                          </p>
-                        )}
-                      </div>
-                    )
-                  })}
-                </Card>
-              )}
-            </Section>
-
-            {/* == Activity == */}
+            {/* == Notes / History == */}
+            <div className={tab === 'notes' || tab === 'history' ? 'space-y-6' : 'hidden'}>
             <Section id="activity" title="Activity">
               <Card className="p-4">
                 <ol className="space-y-3">
@@ -643,15 +657,18 @@ export function OpportunityRecord() {
                 </ol>
               </Card>
             </Section>
+            </div>
           </div>
-        </div>
       </div>
 
       <StageGate
         opportunity={opp}
         targetStage={gateTo}
         open={Boolean(gateTo)}
-        onClose={() => setGateTo(null)}
+        onClose={() => {
+          setGateTo(null)
+          setShowNext(true)
+        }}
       />
     </div>
   )
@@ -710,7 +727,7 @@ function ArtifactRow({ artifact, category }: { artifact: ReturnType<typeof Objec
 function SiteVisitSummary({ opportunityId }: { opportunityId: string }) {
   const opp = useStore((s) => s.opportunities.find((o) => o.id === opportunityId))!
   const visit = useStore((s) => s.siteVisits.find((v) => v.opportunityId === opportunityId))
-  const checks = useChecks(opportunityId, 'site_visit_complete')
+  const checks = useChecks(opportunityId, 'site_visit_completed')
   const form = formForCategory(opp.category)
 
   if (!visit || !form) {

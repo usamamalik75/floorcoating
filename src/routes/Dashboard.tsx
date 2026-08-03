@@ -164,11 +164,22 @@ function List({
 
 /* ---------- 1. Franchisor ------------------------------------------------ */
 
+function isOpenOpportunity(
+  o: Opportunity,
+  jobs: { opportunityId: string; status: string }[],
+) {
+  if (o.stage === 'lost') return false
+  if (STAGE_BY_ID[o.stage]?.phase === 'pre') return false
+  if (o.stage === 'awarded') {
+    const job = jobs.find((j) => j.opportunityId === o.id)
+    return job?.status !== 'paid'
+  }
+  return true
+}
+
 function FranchisorHome() {
   const s = useStore()
-  const open = s.opportunities.filter(
-    (o) => !['paid', 'lost'].includes(o.stage) && STAGE_BY_ID[o.stage].phase !== 'pre',
-  )
+  const open = s.opportunities.filter((o) => isOpenOpportunity(o, s.jobs))
   const invoiced = s.invoices.reduce((sum, i) => sum + i.amount, 0)
   const pendingRequests = s.prospectRequests.filter((r) => r.status === 'pending_approval')
   const pendingOrders = s.materialOrders.filter((m) => m.status === 'submitted')
@@ -223,11 +234,11 @@ function FranchisorHome() {
           empty=""
           items={LOCATIONS.map((l) => {
             const mine = s.opportunities.filter((o) => o.locationId === l.id)
-            const won = mine.filter((o) => STAGE_BY_ID[o.stage].phase === 'operations' || o.stage === 'awarded')
+            const won = mine.filter((o) => o.stage === 'awarded')
             const lost = mine.filter((o) => o.stage === 'lost')
             const rate = won.length + lost.length > 0 ? Math.round((won.length / (won.length + lost.length)) * 100) : 0
             const openValue = mine
-              .filter((o) => !['paid', 'lost'].includes(o.stage))
+              .filter((o) => isOpenOpportunity(o, s.jobs))
               .reduce((a, o) => a + o.value, 0)
             return (
               <div key={l.id} className="flex items-center gap-3 border-b border-subtle px-4 py-2.5 last:border-0">
@@ -255,12 +266,16 @@ function FranchisorHome() {
 function OwnerHome() {
   const s = useStore()
   const opps = useScopedOpportunities()
-  const unassigned = opps.filter((o) => o.stage === 'unqualified_lead' && !o.ownerId)
-  const needsScheduling = opps.filter((o) => o.stage === 'scheduling_required')
+  const unassigned = opps.filter((o) => o.stage === 'new_lead' && !o.ownerId)
+  const needsScheduling = opps.filter(
+    (o) =>
+      o.stage === 'awarded' &&
+      s.jobs.find((j) => j.opportunityId === o.id)?.status === 'scheduling_required',
+  )
   const awaitingApproval = s.estimates.filter(
     (e) => e.status === 'pending_approval' && opps.some((o) => o.id === e.opportunityId),
   )
-  const open = opps.filter((o) => !['paid', 'lost'].includes(o.stage) && STAGE_BY_ID[o.stage].phase !== 'pre')
+  const open = opps.filter((o) => isOpenOpportunity(o, s.jobs))
   const outstanding = s.invoices
     .filter((i) => opps.some((o) => o.id === i.opportunityId) && i.status !== 'paid')
     .reduce((a, i) => a + (i.amount - i.payments.reduce((p, x) => p + x.amount, 0)), 0)
@@ -268,10 +283,10 @@ function OwnerHome() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Open pipeline" value={money(open.reduce((a, o) => a + o.value, 0), true)} sub={`${open.length} opportunities`} to="/pipeline" />
-        <Stat label="Unassigned leads" value={unassigned.length} tone={unassigned.length ? 'warning' : undefined} sub="Need a rep today" to="/pipeline" />
+        <Stat label="Open pipeline" value={money(open.reduce((a, o) => a + o.value, 0), true)} sub={`${open.length} opportunities`} to="/sales" />
+        <Stat label="Unassigned leads" value={unassigned.length} tone={unassigned.length ? 'warning' : undefined} sub="Need a rep today" to="/sales" />
         <Stat label="Awaiting scheduling" value={needsScheduling.length} tone={needsScheduling.length ? 'warning' : undefined} sub="Signed with no dates" to="/schedule" />
-        <Stat label="Outstanding receivables" value={money(outstanding, true)} sub="Across all open invoices" to="/accounting" />
+        <Stat label="Outstanding receivables" value={money(outstanding, true)} sub="Across all open invoices" to="/finance" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -315,15 +330,15 @@ function SalesHome() {
   const dueReminders = s.reminders.filter(
     (r) => !r.done && r.ownerId === viewer.id && isBefore(new Date(r.dueAt), new Date(TODAY.getTime() + 7 * 86_400_000)),
   )
-  const openProposals = mine.filter((o) => ['proposal_delivered', 'follow_up'].includes(o.stage))
-  const newLeads = s.opportunities.filter((o) => o.stage === 'unqualified_lead' && o.locationId === viewer.locationId)
+  const openProposals = mine.filter((o) => ['proposal_sent', 'follow_up'].includes(o.stage))
+  const newLeads = s.opportunities.filter((o) => o.stage === 'new_lead' && o.locationId === viewer.locationId)
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Appointments today" value={todayVisits.length} icon={<CalendarClock size={12} />} tone={todayVisits.length ? 'success' : undefined} to="/field" />
-        <Stat label="My open pipeline" value={money(mine.filter((o) => !['paid', 'lost'].includes(o.stage)).reduce((a, o) => a + o.value, 0), true)} sub={`${mine.length} records`} to="/pipeline" />
-        <Stat label="Proposals out" value={openProposals.length} sub={money(openProposals.reduce((a, o) => a + o.value, 0), true)} to="/pipeline" />
+        <Stat label="My open pipeline" value={money(mine.filter((o) => isOpenOpportunity(o, s.jobs)).reduce((a, o) => a + o.value, 0), true)} sub={`${mine.length} records`} to="/sales" />
+        <Stat label="Proposals out" value={openProposals.length} sub={money(openProposals.reduce((a, o) => a + o.value, 0), true)} to="/sales" />
         <Stat label="Follow-ups due" value={dueReminders.length} tone={dueReminders.length ? 'warning' : undefined} sub="Next 7 days" icon={<BellRing size={12} />} />
       </div>
 
@@ -392,9 +407,9 @@ function SalesHome() {
 function EstimatorHome() {
   const s = useStore()
   const opps = useScopedOpportunities()
-  const queue = opps.filter((o) => o.stage === 'site_visit_complete')
-  const inProgress = opps.filter((o) => o.stage === 'estimating')
-  const forApproval = opps.filter((o) => o.stage === 'internal_approval')
+  const queue = opps.filter((o) => o.stage === 'site_visit_completed')
+  const inProgress = opps.filter((o) => o.stage === 'estimate_in_progress')
+  const forApproval = opps.filter((o) => o.stage === 'estimate_ready')
   const takeoffs = s.takeoffs.filter((t) => t.status === 'ready')
 
   return (
@@ -479,23 +494,31 @@ function EstimatorHome() {
 
 /* ---------- 5. Project manager ------------------------------------------- */
 
+function jobStatusOf(
+  opportunityId: string,
+  jobs: { opportunityId: string; status: string }[],
+) {
+  return jobs.find((j) => j.opportunityId === opportunityId)?.status
+}
+
 function PmHome() {
   const s = useStore()
-  const opps = useScopedOpportunities()
-  const toSchedule = opps.filter((o) => o.stage === 'scheduling_required')
-  const materialNeeded = opps.filter((o) => o.stage === 'material_required')
-  const active = opps.filter((o) => o.stage === 'in_progress')
-  const openIssues = s.issues.filter((i) => i.status === 'open' && opps.some((o) => o.id === i.opportunityId))
+  const scoped = useScopedOpportunities()
+  const opps = scoped.filter((o) => o.stage === 'awarded')
+  const toSchedule = opps.filter((o) => jobStatusOf(o.id, s.jobs) === 'scheduling_required')
+  const materialNeeded = opps.filter((o) => jobStatusOf(o.id, s.jobs) === 'material_required')
+  const active = opps.filter((o) => jobStatusOf(o.id, s.jobs) === 'in_progress')
+  const openIssues = s.issues.filter((i) => i.status === 'open' && scoped.some((o) => o.id === i.opportunityId))
   const pendingCo = s.changeOrders.filter(
-    (c) => c.status === 'pending' && opps.some((o) => o.id === c.opportunityId),
+    (c) => c.status === 'pending' && scoped.some((o) => o.id === c.opportunityId),
   )
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Needs dates and a crew" value={toSchedule.length} tone={toSchedule.length ? 'warning' : undefined} icon={<CalendarClock size={12} />} to="/schedule" />
-        <Stat label="Material to order" value={materialNeeded.length} icon={<Boxes size={12} />} to="/projects" />
-        <Stat label="Active installations" value={active.length} icon={<HardHat size={12} />} to="/projects" />
+        <Stat label="Material to order" value={materialNeeded.length} icon={<Boxes size={12} />} to="/jobs" />
+        <Stat label="Active installations" value={active.length} icon={<HardHat size={12} />} to="/jobs" />
         <Stat label="Open issues" value={openIssues.length} tone={openIssues.length ? 'warning' : undefined} icon={<AlertTriangle size={12} />} />
       </div>
 
@@ -666,23 +689,24 @@ function CrewHome() {
 
 function AccountingHome() {
   const s = useStore()
-  const opps = useScopedOpportunities()
-  const mineInv = s.invoices.filter((i) => opps.some((o) => o.id === i.opportunityId))
-  const readyToInvoice = opps.filter((o) => o.stage === 'ready_invoice')
-  const inCompletion = opps.filter((o) => o.stage === 'completion_review')
+  const scoped = useScopedOpportunities()
+  const opps = scoped.filter((o) => o.stage === 'awarded')
+  const mineInv = s.invoices.filter((i) => scoped.some((o) => o.id === i.opportunityId))
+  const readyToInvoice = opps.filter((o) => jobStatusOf(o.id, s.jobs) === 'ready_to_invoice')
+  const inCompletion = opps.filter((o) => jobStatusOf(o.id, s.jobs) === 'completion_review')
   const outstanding = mineInv
     .filter((i) => i.status !== 'paid')
     .reduce((a, i) => a + (i.amount - i.payments.reduce((p, x) => p + x.amount, 0)), 0)
   const pendingCo = s.changeOrders.filter(
-    (c) => c.status === 'pending' && opps.some((o) => o.id === c.opportunityId),
+    (c) => c.status === 'pending' && scoped.some((o) => o.id === c.opportunityId),
   )
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Ready to invoice" value={readyToInvoice.length} tone={readyToInvoice.length ? 'warning' : undefined} icon={<Receipt size={12} />} to="/accounting" />
+        <Stat label="Ready to invoice" value={readyToInvoice.length} tone={readyToInvoice.length ? 'warning' : undefined} icon={<Receipt size={12} />} to="/finance" />
         <Stat label="In completion review" value={inCompletion.length} sub="Sign-off and change orders pending" />
-        <Stat label="Outstanding balance" value={money(outstanding, true)} sub={`${mineInv.filter((i) => i.status !== 'paid').length} open invoices`} to="/accounting" />
+        <Stat label="Outstanding balance" value={money(outstanding, true)} sub={`${mineInv.filter((i) => i.status !== 'paid').length} open invoices`} to="/finance" />
         <Stat label="Change orders to confirm" value={pendingCo.length} tone={pendingCo.length ? 'warning' : undefined} />
       </div>
 
@@ -692,7 +716,7 @@ function AccountingHome() {
         icon={<CheckCircle2 size={14} />}
         empty="Nothing waiting."
         action={
-          <Link to="/accounting">
+          <Link to="/finance">
             <Button size="sm">Open accounting</Button>
           </Link>
         }
@@ -714,7 +738,7 @@ function AccountingHome() {
             return (
               <Link
                 key={i.id}
-                to="/accounting"
+                to="/finance"
                 className="flex items-center gap-3 border-b border-subtle px-4 py-2.5 last:border-0 hover:bg-surface-inset"
               >
                 <span className="w-28 shrink-0 font-mono text-sm text-muted">{i.number}</span>

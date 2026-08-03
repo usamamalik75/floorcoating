@@ -38,6 +38,7 @@ import { cn } from '@/lib/cn'
  */
 export function Admin() {
   const opportunities = useStore((s) => s.opportunities)
+  const jobs = useStore((s) => s.jobs)
   const invoices = useStore((s) => s.invoices)
   const [testZip, setTestZip] = useState('60540')
 
@@ -47,10 +48,15 @@ export function Admin() {
     () =>
       LOCATIONS.map((loc) => {
         const opps = opportunities.filter((o) => o.locationId === loc.id)
-        const open = opps.filter((o) => !['paid', 'lost', 'invoiced'].includes(o.stage))
-        const won = opps.filter(
-          (o) => o.stage === 'awarded' || STAGE_BY_ID[o.stage].phase === 'operations',
-        )
+        const open = opps.filter((o) => {
+          if (o.stage === 'lost') return false
+          if (o.stage === 'awarded') {
+            const job = jobs.find((j) => j.opportunityId === o.id)
+            return job?.status !== 'paid'
+          }
+          return STAGE_BY_ID[o.stage]?.phase !== 'pre'
+        })
+        const won = opps.filter((o) => o.stage === 'awarded')
         const lost = opps.filter((o) => o.stage === 'lost')
         const revenue = invoices
           .filter((i) => opps.some((o) => o.id === i.opportunityId))
@@ -65,7 +71,7 @@ export function Admin() {
           royalty: revenue * ROYALTY_RATE,
         }
       }),
-    [opportunities, invoices],
+    [opportunities, jobs, invoices],
   )
 
   const totals = byLocation.reduce(
@@ -447,7 +453,7 @@ function NetworkStandards() {
             <Card key={c.id}>
               <CardHeader
                 title={c.name}
-                subtitle={`Fires at ${STAGE_BY_ID[c.stage]?.label ?? c.stage}`}
+                subtitle={`Fires at ${STAGE_BY_ID[c.stage as keyof typeof STAGE_BY_ID]?.label ?? String(c.stage).replace(/_/g, ' ')}`}
                 icon={<ClipboardCheck size={14} />}
                 actions={
                   <Badge tone={c.managedByFranchisor ? 'info' : 'neutral'}>

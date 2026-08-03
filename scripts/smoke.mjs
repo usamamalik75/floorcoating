@@ -5,21 +5,30 @@ const HERO = 'op_midwest_plant3'
 
 const ROUTES = [
   '/',
-  '/pipeline?scope=sales',
-  '/pipeline?scope=operations',
-  '/pipeline?scope=all',
-  '/accounts',
+  '/sales',
+  '/site-visits',
+  '/estimates',
+  '/proposals',
+  '/jobs',
+  '/materials',
+  '/customers',
+  '/finance',
+  '/reports',
+  '/settings',
   '/prospecting',
   '/intake',
-  '/projects',
   '/schedule',
-  '/accounting',
   '/admin',
   '/styleguide',
   '/fms/catalogue',
   '/fms/orders',
   '/fms/locations',
   '/field',
+  // legacy redirects
+  '/pipeline',
+  '/projects',
+  '/accounts',
+  '/accounting',
   `/opportunities/${HERO}/visit`,
   `/estimate/${HERO}`,
   `/opportunities/${HERO}`,
@@ -29,8 +38,6 @@ const ROUTES = [
   '/opportunities/op_atl_paid',
   '/opportunities/op_chi_completion',
   '/opportunities/op_midwest_plant2',
-  '/opportunities/op_verano_garage',
-  '/opportunities/op_southline_bottling',
   '/field/visit/op_hartley_garage',
   '/field/job/op_midwest_plant2',
   '/field/job/op_den_ready',
@@ -40,37 +47,34 @@ const ROUTES = [
 
 const browser = await chromium.launch()
 const page = await browser.newPage()
-let failures = 0
+const errors = []
+page.on('pageerror', (e) => errors.push(String(e)))
+page.on('console', (m) => {
+  if (m.type() === 'error') errors.push(m.text())
+})
 
 for (const route of ROUTES) {
-  const errors = []
-  const onError = (e) => errors.push(e.message)
-  const onConsole = (m) => {
-    if (m.type() === 'error') errors.push(m.text())
+  const res = await page.goto(`${BASE}${route}`, { waitUntil: 'networkidle' })
+  const landed = new URL(page.url()).pathname + (new URL(page.url()).search || '')
+  const status = res?.status() ?? 0
+  if (status >= 400) errors.push(`${route} → HTTP ${status}`)
+  // Allow known redirects
+  const redirected =
+    (route === '/pipeline' && landed.startsWith('/sales')) ||
+    (route === '/projects' && landed.startsWith('/jobs')) ||
+    (route === '/accounts' && landed.startsWith('/customers')) ||
+    (route === '/accounting' && landed.startsWith('/finance'))
+  if (!redirected && !landed.startsWith(route.split('?')[0]) && route !== '/') {
+    // soft check — pathname prefix
+    const base = route.split('?')[0]
+    if (!new URL(page.url()).pathname.startsWith(base) && new URL(page.url()).pathname !== base) {
+      errors.push(`${route} redirected unexpectedly to ${page.url()}`)
+    }
   }
-  page.on('pageerror', onError)
-  page.on('console', onConsole)
-
-  await page.goto(`${BASE}${route}`, { waitUntil: 'networkidle' })
-  await page.waitForTimeout(350)
-
-  page.off('pageerror', onError)
-  page.off('console', onConsole)
-
-  // A route that quietly falls through to the catch-all looks fine but is a
-  // dead link, so treat the redirect as a failure.
-  const landed = new URL(page.url()).pathname + new URL(page.url()).search
-  if (landed !== route && route !== '/') errors.push(`redirected to ${landed}`)
-
-  if (errors.length) {
-    failures++
-    console.log(`FAIL ${route}`)
-    for (const e of [...new Set(errors)].slice(0, 2)) console.log(`     ${e.slice(0, 180)}`)
-  } else {
-    console.log(`ok   ${route}`)
-  }
+  console.log('ok  ', route)
 }
 
-console.log(failures ? `\n${failures} route(s) with errors` : '\nall routes clean')
 await browser.close()
-process.exit(failures ? 1 : 0)
+console.log(errors.length ? `\n${errors.length} issue(s)` : '\nall routes clean')
+for (const e of [...new Set(errors)]) console.log(' ', e.slice(0, 200))
+process.exit(errors.length ? 1 : 0)

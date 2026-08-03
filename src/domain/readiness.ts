@@ -1,4 +1,4 @@
-import type { StageId } from './types'
+import type { JobStatus, StageId } from './types'
 import { formForCategory, requiredFields } from '@/data/siteVisitForms'
 import { CHECKLIST_BY_ID } from '@/data/checklists'
 import { estimateTotal } from '@/store/useStore'
@@ -6,14 +6,7 @@ import { estimateTotal } from '@/store/useStore'
 /* ==========================================================================
    Readiness
    ==========================================================================
-   The brief is explicit that the system should VERIFY required information
-   exists rather than trust a checkbox:
-
-     "The proposal should not be sent while required information is missing."
-
-   So `readiness` gates are computed against the actual record. A user cannot
-   satisfy one by ticking it — they have to go and do the work. Each check
-   returns a deep link so the gate can send them straight there.
+   Sales gates check Opportunity.stage. Job gates check Job.status.
    ========================================================================== */
 
 export interface Check {
@@ -24,7 +17,6 @@ export interface Check {
   href?: string
 }
 
-/** The slice of store state the checks read. Keeps this file free of hooks. */
 export interface ReadinessInput {
   opportunity: {
     id: string
@@ -39,6 +31,7 @@ export interface ReadinessInput {
   artifacts: { kind: string; photoPhase?: string }[]
   estimate?: {
     id: string
+    token: string
     options: { lineItems: unknown[] }[]
     status: string
     approvedById: string | null
@@ -47,7 +40,7 @@ export interface ReadinessInput {
   }
   checklists: { templateId: string; done: string[] }[]
   materialOrder?: { status: string }
-  job?: { crewLeaderId: string | null; start: string }
+  job?: { status?: JobStatus; crewLeaderId: string | null; start: string }
   invoices: { kind: string; amount: number; payments: { amount: number }[] }[]
   changeOrders: { status: string }[]
 }
@@ -80,14 +73,21 @@ function siteVisitChecks(input: ReadinessInput): Check[] {
       id: 'photos',
       label: 'Site photos or architectural plans attached',
       ok: has(input, 'photo') || has(input, 'plan'),
-      detail: has(input, 'plan') ? 'Architectural plans on file' : has(input, 'photo') ? 'Site photos on file' : 'Nothing attached',
-      href: `/opportunities/${input.opportunity.id}#photos`,
+      detail: has(input, 'plan')
+        ? 'Architectural plans on file'
+        : has(input, 'photo')
+          ? 'Site photos on file'
+          : 'Nothing attached',
+      href: `/opportunities/${input.opportunity.id}?tab=photos`,
     },
     {
       id: 'measure',
       label: 'Measurements recorded',
       ok: input.opportunity.sqft > 0,
-      detail: input.opportunity.sqft > 0 ? `${input.opportunity.sqft.toLocaleString()} sq ft` : 'No area recorded',
+      detail:
+        input.opportunity.sqft > 0
+          ? `${input.opportunity.sqft.toLocaleString()} sq ft`
+          : 'No area recorded',
       href: `/opportunities/${input.opportunity.id}/visit`,
     },
   ]
@@ -102,7 +102,10 @@ function approvalChecks(input: ReadinessInput): Check[] {
       id: 'estimate',
       label: 'Estimate completed',
       ok: lines > 0,
-      detail: lines > 0 ? `${lines} line items across ${est!.options.length} options` : 'No estimate built',
+      detail:
+        lines > 0
+          ? `${lines} line items across ${est!.options.length} options`
+          : 'No estimate built',
       href: `/estimate/${input.opportunity.id}`,
     },
     {
@@ -128,16 +131,12 @@ function approvalChecks(input: ReadinessInput): Check[] {
   ]
 }
 
-/**
- * The readiness checks for a given stage. Returned in display order; the
- * gate is satisfied only when every check passes.
- */
 export function checksForStage(stage: StageId, input: ReadinessInput): Check[] {
   switch (stage) {
-    case 'site_visit_complete':
+    case 'site_visit_completed':
       return siteVisitChecks(input)
 
-    case 'internal_approval':
+    case 'estimate_ready':
       return approvalChecks(input)
 
     case 'awarded':
@@ -146,12 +145,22 @@ export function checksForStage(stage: StageId, input: ReadinessInput): Check[] {
           id: 'signed',
           label: 'Signed proposal on file',
           ok: Boolean(input.estimate?.signedAt),
-          detail: input.estimate?.signedAt ? 'Electronic signature captured' : 'Customer has not signed yet',
-          href: input.estimate ? `/proposal/${input.estimate.id}` : undefined,
+          detail: input.estimate?.signedAt
+            ? 'Electronic signature captured'
+            : 'Customer has not signed yet',
+          href: input.estimate ? `/proposal/${input.estimate.token ?? input.estimate.id}` : undefined,
         },
       ]
 
+    default:
+      return []
+  }
+}
+
+export function checksForJobStatus(status: JobStatus, input: ReadinessInput): Check[] {
+  switch (status) {
     case 'material_required':
+    case 'material_ordered':
       return [
         {
           id: 'mo',
@@ -164,7 +173,7 @@ export function checksForStage(stage: StageId, input: ReadinessInput): Check[] {
         },
       ]
 
-    case 'ready_install': {
+    case 'ready_to_start': {
       const prep = checklistProgress(input, 'cl_prep')
       return [
         {
@@ -172,7 +181,7 @@ export function checksForStage(stage: StageId, input: ReadinessInput): Check[] {
           label: 'Project preparation checklist complete',
           ok: prep.total > 0 && prep.done === prep.total,
           detail: `${prep.done} of ${prep.total} items`,
-          href: `/opportunities/${input.opportunity.id}#prep`,
+          href: `/opportunities/${input.opportunity.id}?tab=job`,
         },
         {
           id: 'material',
@@ -203,11 +212,14 @@ export function checksForStage(stage: StageId, input: ReadinessInput): Check[] {
           id: 'before',
           label: 'Before photos captured',
           ok: has(input, 'photo', 'before'),
-          detail: has(input, 'photo', 'before') ? 'On file' : 'The floor as found has not been photographed',
+          detail: has(input, 'photo', 'before')
+            ? 'On file'
+            : 'The floor as found has not been photographed',
         },
       ]
 
-    case 'completion_review': {
+    case 'completion_review':
+    case 'completed':
       return [
         {
           id: 'after',
@@ -220,10 +232,9 @@ export function checksForStage(stage: StageId, input: ReadinessInput): Check[] {
           label: 'Customer sign-off captured',
           ok: has(input, 'signature'),
           detail: has(input, 'signature') ? 'Signed off' : 'Customer has not signed off',
-          href: `/opportunities/${input.opportunity.id}#closeout`,
+          href: `/opportunities/${input.opportunity.id}?tab=job`,
         },
       ]
-    }
 
     case 'invoiced':
       return [
@@ -234,7 +245,7 @@ export function checksForStage(stage: StageId, input: ReadinessInput): Check[] {
           detail: input.changeOrders.some((c) => c.status === 'pending')
             ? 'A change order is still pending customer approval'
             : 'No pending change orders',
-          href: `/opportunities/${input.opportunity.id}#changes`,
+          href: `/opportunities/${input.opportunity.id}?tab=job`,
         },
       ]
 
@@ -250,7 +261,7 @@ export function checksForStage(stage: StageId, input: ReadinessInput): Check[] {
           label: 'Balance settled in full',
           ok: billed > 0 && paid >= billed,
           detail: `${paid.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} received of ${billed.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} billed`,
-          href: '/accounting',
+          href: '/finance',
         },
       ]
     }

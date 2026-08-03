@@ -7,13 +7,17 @@ import {
   ClipboardList,
   Factory,
   FileSpreadsheet,
+  FileText,
   HardHat,
   KanbanSquare,
   LayoutDashboard,
+  MapPin,
   Palette,
   Receipt,
+  Ruler,
   Search,
   Settings2,
+  BarChart3,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/cn'
@@ -27,27 +31,27 @@ interface NavItem {
   to: string
   label: string
   icon: LucideIcon
-  /** Omitted means every role sees it. */
   roles?: Role[]
 }
 
-/**
- * Two products, one ecosystem. The brief is explicit that this should read
- * as one platform without becoming one enormous interface, so the shell
- * shares authentication, branding and navigation patterns across both and
- * lets a project hand off to the Franchise Management System mid-flow.
- */
 const OFFICE: Role[] = ['franchisor', 'owner', 'sales', 'estimator', 'pm', 'accounting']
 
+/** Modules = types of work. Pipeline stages are not menu items. */
 const OPERATIONS: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/pipeline', label: 'Pipeline', icon: KanbanSquare, roles: OFFICE },
-  { to: '/accounts', label: 'Accounts & Prospects', icon: Building2, roles: OFFICE },
-  { to: '/prospecting', label: 'Prospecting', icon: Search, roles: ['franchisor', 'owner', 'sales'] },
+  { to: '/sales', label: 'Sales', icon: KanbanSquare, roles: OFFICE },
+  { to: '/site-visits', label: 'Site Visits', icon: MapPin, roles: [...OFFICE, 'crew_leader'] },
+  { to: '/estimates', label: 'Estimates', icon: Ruler, roles: ['franchisor', 'owner', 'sales', 'estimator', 'pm'] },
+  { to: '/proposals', label: 'Proposals', icon: FileText, roles: ['franchisor', 'owner', 'sales', 'estimator'] },
+  { to: '/jobs', label: 'Jobs', icon: ClipboardList, roles: ['franchisor', 'owner', 'pm', 'estimator', 'crew_leader', 'accounting'] },
   { to: '/schedule', label: 'Schedule', icon: CalendarDays, roles: [...OFFICE, 'crew_leader'] },
-  { to: '/projects', label: 'Projects', icon: ClipboardList, roles: ['franchisor', 'owner', 'pm', 'estimator', 'crew_leader'] },
-  { to: '/accounting', label: 'Accounting', icon: Receipt, roles: ['franchisor', 'owner', 'accounting', 'pm'] },
+  { to: '/materials', label: 'Materials', icon: Boxes, roles: [...OFFICE, 'crew_leader'] },
+  { to: '/customers', label: 'Customers', icon: Building2, roles: OFFICE },
+  { to: '/finance', label: 'Finance', icon: Receipt, roles: ['franchisor', 'owner', 'accounting', 'pm'] },
+  { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['franchisor', 'owner'] },
+  { to: '/settings', label: 'Settings', icon: Settings2, roles: ['franchisor', 'owner'] },
   { to: '/field', label: 'Field', icon: HardHat },
+  { to: '/prospecting', label: 'Prospecting', icon: Search, roles: ['franchisor', 'owner', 'sales'] },
 ]
 
 const FRANCHISE: NavItem[] = [
@@ -120,7 +124,7 @@ function NavGroup({
       )}
       <nav className="flex flex-col gap-0.5 px-2">
         {items.map(({ to, label, icon: Icon }) => {
-          const active = to === '/' ? pathname === '/' : pathname.startsWith(to)
+          const active = to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(to + '/')
           return (
             <NavLink
               key={to}

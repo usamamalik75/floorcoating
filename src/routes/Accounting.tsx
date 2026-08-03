@@ -52,14 +52,16 @@ export function Accounting() {
   const viewer = useViewer()
   const opps = useScopedOpportunities()
   const recordPayment = useStore((st) => st.recordPayment)
-  const moveStage = useStore((st) => st.moveStage)
+  const setJobStatus = useStore((st) => st.setJobStatus)
 
   const [raising, setRaising] = useState<Opportunity | null>(null)
   const [paying, setPaying] = useState<Invoice | null>(null)
 
   const mine = s.invoices.filter((i) => opps.some((o) => o.id === i.opportunityId))
-  const readyToInvoice = opps.filter((o) => o.stage === 'ready_invoice')
-  const inReview = opps.filter((o) => o.stage === 'completion_review')
+  const awarded = opps.filter((o) => o.stage === 'awarded')
+  const jobStatus = (id: string) => s.jobs.find((j) => j.opportunityId === id)?.status
+  const readyToInvoice = awarded.filter((o) => jobStatus(o.id) === 'ready_to_invoice')
+  const inReview = awarded.filter((o) => jobStatus(o.id) === 'completion_review')
 
   const billed = mine.reduce((a, i) => a + i.amount, 0)
   const received = mine.reduce((a, i) => a + i.payments.reduce((p, x) => p + x.amount, 0), 0)
@@ -133,7 +135,7 @@ export function Accounting() {
                         </span>
                       </Td>
                       <Td>
-                        {o.stage === 'ready_invoice' ? (
+                        {jobStatus(o.id) === 'ready_to_invoice' ? (
                           <Badge tone="success">Ready to invoice</Badge>
                         ) : (
                           <Badge tone="warning">In completion review</Badge>
@@ -160,8 +162,8 @@ export function Accounting() {
                         {money(deposits)}
                       </Td>
                       <Td align="right">
-                        {o.stage === 'ready_invoice' ? (
-                          <Button size="sm" variant="primary" onClick={() => moveStage(o.id, 'invoiced')}>
+                        {jobStatus(o.id) === 'ready_to_invoice' ? (
+                          <Button size="sm" variant="primary" onClick={() => setJobStatus(o.id, 'invoiced')}>
                             <FileCheck2 size={12} />
                             Raise final invoice
                           </Button>
@@ -261,11 +263,11 @@ export function Accounting() {
           if (!paying) return
           recordPayment(paying.id, amount, method)
           const inv = s.invoices.find((x) => x.id === paying.id)
-          const opp = s.opportunities.find((o) => o.id === paying.opportunityId)
+          const job = s.jobs.find((j) => j.opportunityId === paying.opportunityId)
           // Settling the last balance closes the project without anyone
           // marking it by hand.
-          if (inv && opp?.stage === 'invoiced' && paid(inv) + amount >= inv.amount) {
-            moveStage(opp.id, 'paid')
+          if (inv && job?.status === 'invoiced' && paid(inv) + amount >= inv.amount) {
+            setJobStatus(paying.opportunityId, 'paid')
           }
           setPaying(null)
         }}

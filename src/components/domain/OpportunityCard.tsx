@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { BellRing, Building2, GripVertical, Ruler } from 'lucide-react'
 import type { Account, Opportunity } from '@/domain/types'
+import { TEMPERATURE_LABEL } from '@/domain/types'
 import { ACCOUNT_BY_ID, USER_BY_ID } from '@/data/seed'
 import { money } from '@/store/useStore'
 import { Avatar, Badge } from '@/components/ui'
@@ -69,11 +70,27 @@ export function OpportunityCard({
           <span className="font-mono text-sm font-medium tabular text-primary">
             {money(opp.value, true)}
           </span>
-          <span className="flex items-center gap-1 font-mono text-2xs tabular text-muted">
-            <Ruler size={10} />
-            {opp.sqft.toLocaleString()}
+          <span className="flex items-center gap-1.5">
+            <Badge
+              tone={
+                opp.temperature === 'hot' ? 'danger' : opp.temperature === 'warm' ? 'attention' : 'neutral'
+              }
+            >
+              {TEMPERATURE_LABEL[opp.temperature]}
+            </Badge>
+            <span className="flex items-center gap-1 font-mono text-2xs tabular text-muted">
+              <Ruler size={10} />
+              {opp.sqft.toLocaleString()}
+            </span>
           </span>
         </div>
+
+        <p className="mt-1.5 truncate text-2xs capitalize text-muted">
+          {opp.category}
+          {opp.visitAt
+            ? ` · Visit ${new Date(opp.visitAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+            : ''}
+        </p>
 
         <div className="mt-2 flex items-center justify-between gap-2 border-t border-subtle pt-1.5">
           <span className="flex items-center gap-1.5">

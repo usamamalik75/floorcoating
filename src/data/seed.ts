@@ -8,6 +8,7 @@ import type {
   Invoice,
   Issue,
   Job,
+  JobStatus,
   Location,
   MaterialLine,
   MaterialOrder,
@@ -20,7 +21,7 @@ import type {
   User,
 } from '@/domain/types'
 import { deriveMaterial, PRICE_BOOK_BY_ID } from './priceBook'
-import { STAGES, STAGE_BY_ID } from '@/domain/stages'
+import { jobStatusIndex } from '@/domain/stages'
 
 /** Demo "today". Fixed so the seeded schedule always looks sensible. */
 export const TODAY = new Date('2026-08-01T09:00:00')
@@ -416,7 +417,7 @@ export const ACCOUNTS: Account[] = [
 export const ACCOUNT_BY_ID = Object.fromEntries(ACCOUNTS.map((a) => [a.id, a]))
 
 /* ========================================================================== */
-/* Opportunities — spread across all 22 stages                                */
+/* Opportunities — sales stages + awarded jobs                                */
 /* ========================================================================== */
 
 type OppSeed = Partial<Opportunity> & Pick<Opportunity, 'id' | 'code' | 'name' | 'accountId' | 'locationId' | 'category' | 'stage' | 'ownerId' | 'value' | 'sqft' | 'address' | 'zip'>
@@ -431,6 +432,7 @@ const opp = (o: OppSeed): Opportunity => ({
   reminderAt: null,
   source: 'National Website',
   visitAt: null,
+  temperature: 'warm',
   ...o,
 })
 
@@ -446,7 +448,8 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_midwest',
     locationId: 'loc_chi',
     category: 'industrial',
-    stage: 'estimating',
+    stage: 'estimate_in_progress',
+    temperature: 'hot',
     ownerId: 'u_bj',
     estimatorId: 'u_marcus',
     value: 214_830,
@@ -469,7 +472,8 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_dogwood',
     locationId: 'loc_atl',
     category: 'commercial',
-    stage: 'unqualified_lead',
+    stage: 'new_lead',
+    temperature: 'cold',
     ownerId: 'u_devin',
     value: 18_000,
     sqft: 4_200,
@@ -486,7 +490,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_eggharbor',
     locationId: 'loc_chi',
     category: 'commercial',
-    stage: 'unqualified_lead',
+    stage: 'new_lead',
     ownerId: 'u_bj',
     value: 41_000,
     sqft: 2_400,
@@ -503,7 +507,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_midwest',
     locationId: 'loc_chi',
     category: 'industrial',
-    stage: 'qualified_lead',
+    stage: 'qualified',
     ownerId: 'u_bj',
     value: 64_000,
     sqft: 6_800,
@@ -520,7 +524,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_verano',
     locationId: 'loc_den',
     category: 'commercial',
-    stage: 'qualified_lead',
+    stage: 'qualified',
     ownerId: 'u_nina',
     value: 45_600,
     sqft: 3_700,
@@ -575,7 +579,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_lakeside',
     locationId: 'loc_chi',
     category: 'commercial',
-    stage: 'site_visit_complete',
+    stage: 'site_visit_completed',
     ownerId: 'u_carla',
     value: 38_500,
     sqft: 3_200,
@@ -594,7 +598,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_summit',
     locationId: 'loc_den',
     category: 'industrial',
-    stage: 'estimating',
+    stage: 'estimate_in_progress',
     ownerId: 'u_nina',
     estimatorId: 'u_grant',
     value: 94_800,
@@ -614,7 +618,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_southline',
     locationId: 'loc_atl',
     category: 'industrial',
-    stage: 'internal_approval',
+    stage: 'estimate_ready',
     ownerId: 'u_devin',
     estimatorId: 'u_priya',
     value: 128_000,
@@ -634,7 +638,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_qdoba',
     locationId: 'loc_chi',
     category: 'commercial',
-    stage: 'proposal_delivered',
+    stage: 'proposal_sent',
     ownerId: 'u_carla',
     estimatorId: 'u_marcus',
     value: 27_800,
@@ -654,7 +658,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_verano',
     locationId: 'loc_den',
     category: 'residential',
-    stage: 'proposal_delivered',
+    stage: 'proposal_sent',
     ownerId: 'u_nina',
     value: 7_900,
     sqft: 980,
@@ -673,6 +677,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     locationId: 'loc_chi',
     category: 'commercial',
     stage: 'follow_up',
+    temperature: 'hot',
     ownerId: 'u_bj',
     value: 52_700,
     sqft: 3_100,
@@ -787,7 +792,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_peachtree',
     locationId: 'loc_atl',
     category: 'commercial',
-    stage: 'scheduling_required',
+    stage: 'awarded',
     ownerId: 'u_devin',
     estimatorId: 'u_priya',
     value: 78_400,
@@ -807,7 +812,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_peachtree',
     locationId: 'loc_atl',
     category: 'commercial',
-    stage: 'scheduled',
+    stage: 'awarded',
     ownerId: 'u_devin',
     estimatorId: 'u_priya',
     pmId: 'u_omar',
@@ -827,7 +832,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_continental',
     locationId: 'loc_chi',
     category: 'industrial',
-    stage: 'material_required',
+    stage: 'awarded',
     ownerId: 'u_carla',
     estimatorId: 'u_marcus',
     pmId: 'u_dana',
@@ -848,7 +853,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_summit',
     locationId: 'loc_den',
     category: 'industrial',
-    stage: 'ready_install',
+    stage: 'awarded',
     ownerId: 'u_nina',
     estimatorId: 'u_grant',
     pmId: 'u_pat',
@@ -868,7 +873,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_midwest',
     locationId: 'loc_chi',
     category: 'industrial',
-    stage: 'in_progress',
+    stage: 'awarded',
     ownerId: 'u_bj',
     estimatorId: 'u_marcus',
     pmId: 'u_dana',
@@ -889,7 +894,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_hartley',
     locationId: 'loc_chi',
     category: 'commercial',
-    stage: 'completion_review',
+    stage: 'awarded',
     ownerId: 'u_carla',
     estimatorId: 'u_marcus',
     pmId: 'u_dana',
@@ -909,7 +914,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_lakeside',
     locationId: 'loc_chi',
     category: 'industrial',
-    stage: 'ready_invoice',
+    stage: 'awarded',
     ownerId: 'u_bj',
     estimatorId: 'u_marcus',
     pmId: 'u_dana',
@@ -930,7 +935,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_eggharbor',
     locationId: 'loc_chi',
     category: 'commercial',
-    stage: 'invoiced',
+    stage: 'awarded',
     ownerId: 'u_bj',
     estimatorId: 'u_marcus',
     pmId: 'u_dana',
@@ -950,7 +955,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     accountId: 'ac_southline',
     locationId: 'loc_atl',
     category: 'industrial',
-    stage: 'paid',
+    stage: 'awarded',
     ownerId: 'u_devin',
     estimatorId: 'u_priya',
     pmId: 'u_omar',
@@ -1086,34 +1091,34 @@ export const TAKEOFFS: Takeoff[] = [
 /* ========================================================================== */
 
 export const ARTIFACTS: Artifact[] = [
-  { id: 'ar_1', opportunityId: 'op_midwest_plant3', kind: 'photo', name: 'Process floor — existing quarry tile, east bay', stageAdded: 'site_visit_complete', addedById: 'u_bj', addedAt: iso(-6), meta: 'CompanyCam · auto-matched by GPS', photoPhase: 'before' },
-  { id: 'ar_2', opportunityId: 'op_midwest_plant3', kind: 'photo', name: 'Grout failure and tile lift at trench drain', stageAdded: 'site_visit_complete', addedById: 'u_bj', addedAt: iso(-6), meta: 'CompanyCam · auto-matched by GPS', photoPhase: 'before' },
-  { id: 'ar_3', opportunityId: 'op_midwest_plant3', kind: 'photo', name: 'Cove detail at spiral freezer plinth', stageAdded: 'site_visit_complete', addedById: 'u_bj', addedAt: iso(-6), meta: 'CompanyCam · auto-matched by GPS', photoPhase: 'before' },
-  { id: 'ar_4', opportunityId: 'op_midwest_plant3', kind: 'photo', name: 'Packaging hall — slab condition', stageAdded: 'site_visit_complete', addedById: 'u_bj', addedAt: iso(-6), meta: 'CompanyCam · auto-matched by GPS', photoPhase: 'before' },
-  { id: 'ar_5', opportunityId: 'op_midwest_plant3', kind: 'plan', name: 'MidwestFoods_Plant3_IFC_Set.pdf', stageAdded: 'site_visit_complete', addedById: 'u_bj', addedAt: iso(-6), meta: '214 pages · 4 identified as relevant by AI takeoff' },
-  { id: 'ar_6', opportunityId: 'op_midwest_plant3', kind: 'form', name: 'Industrial Site Visit Form — completed', stageAdded: 'site_visit_complete', addedById: 'u_bj', addedAt: iso(-6), meta: 'All required fields answered on site' },
+  { id: 'ar_1', opportunityId: 'op_midwest_plant3', kind: 'photo', name: 'Process floor — existing quarry tile, east bay', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: 'CompanyCam · auto-matched by GPS', photoPhase: 'before' },
+  { id: 'ar_2', opportunityId: 'op_midwest_plant3', kind: 'photo', name: 'Grout failure and tile lift at trench drain', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: 'CompanyCam · auto-matched by GPS', photoPhase: 'before' },
+  { id: 'ar_3', opportunityId: 'op_midwest_plant3', kind: 'photo', name: 'Cove detail at spiral freezer plinth', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: 'CompanyCam · auto-matched by GPS', photoPhase: 'before' },
+  { id: 'ar_4', opportunityId: 'op_midwest_plant3', kind: 'photo', name: 'Packaging hall — slab condition', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: 'CompanyCam · auto-matched by GPS', photoPhase: 'before' },
+  { id: 'ar_5', opportunityId: 'op_midwest_plant3', kind: 'plan', name: 'MidwestFoods_Plant3_IFC_Set.pdf', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: '214 pages · 4 identified as relevant by AI takeoff' },
+  { id: 'ar_6', opportunityId: 'op_midwest_plant3', kind: 'form', name: 'Industrial Site Visit Form — completed', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-6), meta: 'All required fields answered on site' },
   {
     id: 'ar_7',
     opportunityId: 'op_midwest_plant3',
     kind: 'note',
     name: 'Internal note — not shown to the customer',
-    stageAdded: 'site_visit_complete',
+    stageAdded: 'site_visit_completed',
     addedById: 'u_bj',
     addedAt: iso(-6),
     internal: true,
     body: 'Slab RH tested at 88%, so mitigation is mandatory — do not let this get value-engineered out. Floor does not drain properly near the filler; re-pitching is genuinely needed but it is out of our scope, so flag it in writing before we price. Gary has budget authority to $250k and wants it done before the October ramp. Two weekend windows only.',
   },
-  { id: 'ar_8', opportunityId: 'op_midwest_plant3', kind: 'doc', name: 'Urethane Cement 3/16" — TDS rev 6.0', stageAdded: 'estimating', addedById: 'u_marcus', addedAt: iso(-2), meta: 'Auto-attached when the system was selected' },
-  { id: 'ar_9', opportunityId: 'op_midwest_plant3', kind: 'doc', name: 'Trailer load list — urethane cement, 9,400 sq ft', stageAdded: 'estimating', addedById: 'u_marcus', addedAt: iso(-2), meta: 'Auto-generated from the estimate line items' },
-  { id: 'ar_10', opportunityId: 'op_midwest_plant3', kind: 'map', name: 'Installation map — Plant 3 pour sequence', stageAdded: 'estimating', addedById: 'u_marcus', addedAt: iso(-2), meta: 'Derived from the AI takeoff area breakdown' },
+  { id: 'ar_8', opportunityId: 'op_midwest_plant3', kind: 'doc', name: 'Urethane Cement 3/16" — TDS rev 6.0', stageAdded: 'estimate_in_progress', addedById: 'u_marcus', addedAt: iso(-2), meta: 'Auto-attached when the system was selected' },
+  { id: 'ar_9', opportunityId: 'op_midwest_plant3', kind: 'doc', name: 'Trailer load list — urethane cement, 9,400 sq ft', stageAdded: 'estimate_in_progress', addedById: 'u_marcus', addedAt: iso(-2), meta: 'Auto-generated from the estimate line items' },
+  { id: 'ar_10', opportunityId: 'op_midwest_plant3', kind: 'map', name: 'Installation map — Plant 3 pour sequence', stageAdded: 'estimate_in_progress', addedById: 'u_marcus', addedAt: iso(-2), meta: 'Derived from the AI takeoff area breakdown' },
 
-  { id: 'ar_20', opportunityId: 'op_midwest_plant2', kind: 'photo', name: 'Plant 2 — floor as found', stageAdded: 'site_visit_complete', addedById: 'u_bj', addedAt: iso(-60), photoPhase: 'before', meta: 'CompanyCam' },
-  { id: 'ar_21', opportunityId: 'op_midwest_plant2', kind: 'photo', name: 'Plant 2 — day 2 prep complete, CSP 3', stageAdded: 'in_progress', addedById: 'u_keith', addedAt: iso(-1), photoPhase: 'progress', meta: 'CompanyCam' },
-  { id: 'ar_22', opportunityId: 'op_midwest_plant2', kind: 'plan', name: 'Plant 2 — architectural set', stageAdded: 'site_visit_complete', addedById: 'u_bj', addedAt: iso(-60), meta: 'Sheets A-201 and A-204 relevant' },
-  { id: 'ar_23', opportunityId: 'op_midwest_plant2', kind: 'map', name: 'Installation map — Plant 2', stageAdded: 'ready_install', addedById: 'u_dana', addedAt: iso(-4), meta: 'Pour sequence and exclusion zones' },
+  { id: 'ar_20', opportunityId: 'op_midwest_plant2', kind: 'photo', name: 'Plant 2 — floor as found', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-60), photoPhase: 'before', meta: 'CompanyCam' },
+  { id: 'ar_21', opportunityId: 'op_midwest_plant2', kind: 'photo', name: 'Plant 2 — day 2 prep complete, CSP 3', stageAdded: 'awarded', addedById: 'u_keith', addedAt: iso(-1), photoPhase: 'progress', meta: 'CompanyCam' },
+  { id: 'ar_22', opportunityId: 'op_midwest_plant2', kind: 'plan', name: 'Plant 2 — architectural set', stageAdded: 'site_visit_completed', addedById: 'u_bj', addedAt: iso(-60), meta: 'Sheets A-201 and A-204 relevant' },
+  { id: 'ar_23', opportunityId: 'op_midwest_plant2', kind: 'map', name: 'Installation map — Plant 2', stageAdded: 'awarded', addedById: 'u_dana', addedAt: iso(-4), meta: 'Pour sequence and exclusion zones' },
 
-  { id: 'ar_30', opportunityId: 'op_chi_completion', kind: 'photo', name: 'Weight room — before', stageAdded: 'site_visit_complete', addedById: 'u_carla', addedAt: iso(-40), photoPhase: 'before' },
-  { id: 'ar_31', opportunityId: 'op_chi_completion', kind: 'photo', name: 'Weight room — completed floor', stageAdded: 'completion_review', addedById: 'u_keith', addedAt: iso(-1), photoPhase: 'after' },
+  { id: 'ar_30', opportunityId: 'op_chi_completion', kind: 'photo', name: 'Weight room — before', stageAdded: 'site_visit_completed', addedById: 'u_carla', addedAt: iso(-40), photoPhase: 'before' },
+  { id: 'ar_31', opportunityId: 'op_chi_completion', kind: 'photo', name: 'Weight room — completed floor', stageAdded: 'awarded', addedById: 'u_keith', addedAt: iso(-1), photoPhase: 'after' },
   { id: 'ar_32', opportunityId: 'op_continental_freezer', kind: 'form', name: 'Client Expectation Checklist — completed', stageAdded: 'awarded', addedById: 'u_dana', addedAt: iso(-6), meta: '6 of 6 items' },
 ]
 
@@ -1143,35 +1148,47 @@ const photo = (
   meta: 'CompanyCam · auto-matched by GPS',
 })
 
-const order = (stage: StageId) => STAGES.findIndex((s) => s.id === stage)
+/** Mirrors seeded Job.status — JOBS is declared later in this file. */
+const SEEDED_JOB_STATUS: Record<string, JobStatus> = {
+  op_peachtree_kitchen: 'scheduling_required',
+  op_atl_scheduled: 'scheduled',
+  op_continental_freezer: 'material_required',
+  op_den_ready: 'ready_to_start',
+  op_midwest_plant2: 'in_progress',
+  op_chi_completion: 'completion_review',
+  op_chi_ready_invoice: 'ready_to_invoice',
+  op_egg_schaumburg: 'invoiced',
+  op_atl_paid: 'paid',
+}
 
 ARTIFACTS.push(
   ...OPPORTUNITIES.filter(
     (o) =>
-      STAGE_BY_ID[o.stage].phase === 'operations' &&
+      o.stage === 'awarded' &&
       !ARTIFACTS.some((a) => a.opportunityId === o.id && a.kind === 'photo'),
   ).flatMap((o) => {
     const rep = o.ownerId
     const crew = o.pmId ?? rep
+    const jobStatus = SEEDED_JOB_STATUS[o.id] ?? 'scheduling_required'
     const out: Artifact[] = [
-      photo(o, 'Existing floor as found', 'before', 'site_visit_complete', -45, rep),
-      photo(o, 'Substrate and drainage detail', 'before', 'site_visit_complete', -45, rep),
+      photo(o, 'Existing floor as found', 'before', 'site_visit_completed', -45, rep),
+      photo(o, 'Substrate and drainage detail', 'before', 'site_visit_completed', -45, rep),
       {
         id: `ar_${++arSeq}`,
         opportunityId: o.id,
         kind: 'plan',
         name: `${o.name.split('—').pop()?.trim()} — architectural set`,
-        stageAdded: 'site_visit_complete',
+        stageAdded: 'site_visit_completed',
         addedById: rep,
         addedAt: iso(-45),
         meta: 'Relevant sheets identified during takeoff',
       },
     ]
-    if (order(o.stage) >= order('in_progress')) {
-      out.push(photo(o, 'Prep complete to the specified CSP profile', 'progress', 'in_progress', -3, crew))
+    if (jobStatusIndex(jobStatus) >= jobStatusIndex('in_progress')) {
+      out.push(photo(o, 'Prep complete to the specified CSP profile', 'progress', 'awarded', -3, crew))
     }
-    if (order(o.stage) >= order('completion_review')) {
-      out.push(photo(o, 'Completed floor from the before-shot angles', 'after', 'completion_review', -1, crew))
+    if (jobStatusIndex(jobStatus) >= jobStatusIndex('completion_review')) {
+      out.push(photo(o, 'Completed floor from the before-shot angles', 'after', 'awarded', -1, crew))
     }
     return out
   }),
@@ -1378,7 +1395,7 @@ function soldEstimate(o: Opportunity, signedDaysAgo: number): Estimate {
 }
 
 const SOLD: Estimate[] = OPPORTUNITIES.filter(
-  (o) => STAGE_BY_ID[o.stage].phase === 'operations' && !ESTIMATES.some((e) => e.opportunityId === o.id),
+  (o) => o.stage === 'awarded' && !ESTIMATES.some((e) => e.opportunityId === o.id),
 ).map((o, i) => {
   const estimate = soldEstimate(o, -30 - i * 4)
   // The signed estimate is the contract, so the record's value follows it
@@ -1451,8 +1468,57 @@ export const MATERIAL_ORDERS: MaterialOrder[] = [
 
 export const JOBS: Job[] = [
   {
+    id: 'job_gen_1',
+    opportunityId: 'op_peachtree_kitchen',
+    status: 'scheduling_required',
+    start: iso(-1),
+    end: iso(5),
+    crewLeaderId: null,
+    pmId: 'u_omar',
+    crewIds: [],
+    progress: 0,
+    dailyLogs: [],
+  },
+  {
+    id: 'job_gen_2',
+    opportunityId: 'op_chi_ready_invoice',
+    status: 'ready_to_invoice',
+    start: iso(-12),
+    end: iso(-7),
+    crewLeaderId: 'u_keith',
+    pmId: 'u_dana',
+    crewIds: [],
+    progress: 100,
+    dailyLogs: [],
+  },
+  {
+    id: 'job_gen_3',
+    opportunityId: 'op_egg_schaumburg',
+    status: 'invoiced',
+    start: iso(-40),
+    end: iso(-30),
+    crewLeaderId: 'u_keith',
+    pmId: 'u_dana',
+    crewIds: [],
+    progress: 100,
+    dailyLogs: [],
+  },
+  {
+    id: 'job_gen_4',
+    opportunityId: 'op_atl_paid',
+    status: 'paid',
+    start: iso(-50),
+    end: iso(-40),
+    crewLeaderId: 'u_terrell',
+    pmId: 'u_omar',
+    crewIds: [],
+    progress: 100,
+    dailyLogs: [],
+  },
+  {
     id: 'job_1',
     opportunityId: 'op_midwest_plant2',
+    status: 'in_progress',
     start: iso(-2),
     end: iso(5),
     crewLeaderId: 'u_keith',
@@ -1467,6 +1533,7 @@ export const JOBS: Job[] = [
   {
     id: 'job_2',
     opportunityId: 'op_atl_scheduled',
+    status: 'scheduled',
     start: iso(3),
     end: iso(6),
     crewLeaderId: 'u_terrell',
@@ -1478,6 +1545,7 @@ export const JOBS: Job[] = [
   {
     id: 'job_3',
     opportunityId: 'op_den_ready',
+    status: 'ready_to_start',
     start: iso(1),
     end: iso(4),
     crewLeaderId: 'u_hector',
@@ -1489,6 +1557,7 @@ export const JOBS: Job[] = [
   {
     id: 'job_4',
     opportunityId: 'op_chi_completion',
+    status: 'completion_review',
     start: iso(-6),
     end: iso(-1),
     crewLeaderId: 'u_keith',
@@ -1500,6 +1569,7 @@ export const JOBS: Job[] = [
   {
     id: 'job_5',
     opportunityId: 'op_continental_freezer',
+    status: 'material_required',
     start: iso(9),
     end: iso(15),
     crewLeaderId: 'u_keith',

@@ -96,7 +96,7 @@ export function FieldToday() {
   // A rep's day is appointments; a crew's day is jobs. Both land here.
   const visits = opportunities.filter(
     (o) =>
-      ['site_visit_scheduled', 'site_visit_complete'].includes(o.stage) &&
+      ['site_visit_scheduled', 'site_visit_completed'].includes(o.stage) &&
       (viewer?.role === 'sales' ? o.ownerId === viewerId : true),
   )
 
@@ -472,7 +472,7 @@ export function FieldJob() {
                 opportunityId: opp.id,
                 kind: 'photo',
                 name: `Progress photo ${photos.length + 1}`,
-                stageAdded: 'in_progress',
+                stageAdded: 'awarded',
                 addedById: viewerId,
                 addedAt: new Date().toISOString(),
                 meta: 'Captured in the field · auto-matched by GPS',
@@ -491,7 +491,7 @@ export function FieldJob() {
                 opportunityId: opp.id,
                 kind: 'photo',
                 name: `Completed floor ${photos.filter((p) => p.photoPhase === 'after').length + 1}`,
-                stageAdded: 'completion_review',
+                stageAdded: 'awarded',
                 addedById: viewerId,
                 addedAt: new Date().toISOString(),
                 meta: 'Same angle as the before shot',

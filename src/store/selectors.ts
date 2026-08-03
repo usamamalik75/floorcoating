@@ -73,7 +73,7 @@ export function useScopedOpportunities() {
   return useMemo(() => {
     let list = opportunities
     if (locationFilter !== 'all') list = list.filter((o) => o.locationId === locationFilter)
-    if (viewer?.role === 'sales') list = list.filter((o) => o.ownerId === viewer.id || o.stage === 'unqualified_lead')
+    if (viewer?.role === 'sales') list = list.filter((o) => o.ownerId === viewer.id || o.stage === 'new_lead')
     return list
   }, [opportunities, locationFilter, viewer])
 }

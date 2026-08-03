@@ -26,7 +26,7 @@ export const CHECKLIST_TEMPLATES: ChecklistTemplate[] = [
   {
     id: 'cl_prep',
     name: 'Project Preparation Checklist',
-    stage: 'ready_install',
+    stage: 'ready_to_start',
     managedByFranchisor: true,
     items: [
       { id: 'p1', label: 'Material ordered from the franchisor' },

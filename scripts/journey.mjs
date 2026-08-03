@@ -120,7 +120,7 @@ await page.getByRole('button', { name: /Sign off/i }).click()
 await page.waitForTimeout(400)
 await mark('customer-signoff')
 
-await go('/accounting')
+await go('/finance')
 await viewAs('u_gina')
 await page.waitForTimeout(300)
 await mark('accounting')
