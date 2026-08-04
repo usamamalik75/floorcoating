@@ -79,6 +79,32 @@ export function proposalTokenFor(opportunityId: string) {
   return `p_${opportunityId.replace(/^op_/, '')}`
 }
 
+/** Resolve a public proposal URL token to an estimate (supports stable p_* tokens). */
+export function findEstimateByProposalToken(estimates: Estimate[], token: string) {
+  if (!token) return undefined
+  const direct = estimates.find(
+    (estimate) =>
+      estimate.token === token ||
+      estimate.id === token ||
+      estimate.opportunityId === token,
+  )
+  if (direct) return direct
+
+  if (token.startsWith('p_')) {
+    const opportunityId = `op_${token.slice(2)}`
+    return estimates.find((estimate) => estimate.opportunityId === opportunityId)
+  }
+
+  if (token.startsWith('op_')) {
+    return estimates.find((estimate) => estimate.opportunityId === token)
+  }
+
+  return estimates.find(
+    (estimate) =>
+      estimate.opportunityId === `op_${token}` || estimate.token === `p_${token}`,
+  )
+}
+
 export interface MoveMeta {
   reminderAt?: string
   reminderNote?: string
@@ -350,7 +376,7 @@ const initial = () => ({
  * seed invalidates it and "Reset demo" always returns to the story's start.
  */
 const STORAGE_KEY = 'fcg-prototype'
-const STORAGE_VERSION = 15
+const STORAGE_VERSION = 16
 
 const createState: StateCreator<State> = (set, get) => ({
   ...initial(),
@@ -1448,15 +1474,21 @@ export const useStore = create<State>()(
   persist(createState, {
     name: STORAGE_KEY,
     version: STORAGE_VERSION,
-    storage: createJSONStorage(() => sessionStorage),
+    // localStorage so a customer proposal opened in a new tab sees the same demo data.
+    storage: createJSONStorage(() => localStorage),
     migrate: (persistedState) => {
       const prev = (persistedState ?? {}) as Partial<ReturnType<typeof initial>>
       const defaults = initial()
       const procurementOrders =
         prev.procurementOrders ?? prev.materialOrders ?? defaults.procurementOrders
+      const estimates = (prev.estimates ?? defaults.estimates).map((estimate) => ({
+        ...estimate,
+        token: estimate.token || proposalTokenFor(estimate.opportunityId),
+      }))
       return {
         ...defaults,
         ...prev,
+        estimates,
         procurementOrders,
         materialOrders: procurementOrders,
         estimatePacks: prev.estimatePacks ?? defaults.estimatePacks,

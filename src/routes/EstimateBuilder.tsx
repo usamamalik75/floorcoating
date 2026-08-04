@@ -119,7 +119,12 @@ export function EstimateBuilder() {
   )
   const estimatorMissing = !opp.estimatorId
   const canApprove = viewer?.role === 'estimator' || viewer?.role === 'owner' || viewer?.role === 'admin'
-  const readyForApproval = checks.every((c) => c.ok)
+  /** Approve only needs estimate completeness — visit gaps stay visible as advisory. */
+  const requiredApprovalIds = new Set(['estimate', 'margin', 'terms', 'estimator', 'estimation_request'])
+  const requiredChecks = checks.filter((c) => requiredApprovalIds.has(c.id))
+  const advisoryChecks = checks.filter((c) => !requiredApprovalIds.has(c.id))
+  const readyForApproval = requiredChecks.every((c) => c.ok)
+  const approvalBlockers = requiredChecks.filter((c) => !c.ok)
   const canSendEstimationRequest = grand > 0 && !estimatorMissing
 
   const assignEstimator = (estimatorId: string) => {
@@ -379,6 +384,11 @@ export function EstimateBuilder() {
                 <Button
                   variant="primary"
                   disabled={!readyForApproval}
+                  title={
+                    readyForApproval
+                      ? undefined
+                      : `Complete before approving: ${approvalBlockers.map((c) => c.label).join(', ')}`
+                  }
                   onClick={() => approveEstimate(est.id, viewer!.id)}
                 >
                   <ShieldCheck size={13} />
@@ -405,7 +415,7 @@ export function EstimateBuilder() {
             )}
 
             {(est.status === 'sent' || est.status === 'signed') && (
-              <Link to={`/proposal/${est.token}`} target="_blank">
+              <Link to={`/proposal/${proposalTokenFor(opp.id)}`} target="_blank">
                 <Button>
                   <FileText size={13} />
                   Open customer link
@@ -680,30 +690,59 @@ export function EstimateBuilder() {
                 <Card>
                   <CardHeader
                     title="Approval readiness"
-                    subtitle="Verified against the record. A proposal cannot be sent while anything here is missing."
+                    subtitle="Required items must be complete to approve. Visit gaps are advisory and do not block approval."
                     icon={<ShieldCheck size={14} />}
                     actions={
                       <Badge tone={readyForApproval ? 'success' : 'warning'}>
-                        {checks.filter((c) => c.ok).length} of {checks.length} complete
+                        {requiredChecks.filter((c) => c.ok).length} of {requiredChecks.length} required
                       </Badge>
                     }
                   />
-                  <div className="grid gap-1 p-3 sm:grid-cols-2">
-                    {checks.map((c) => (
-                      <div key={c.id} className="flex items-start gap-2 rounded-sm px-2 py-1.5">
-                        {c.ok ? (
-                          <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-success-text" />
-                        ) : (
-                          <XCircle size={13} className="mt-0.5 shrink-0 text-danger-text" />
-                        )}
-                        <div className="min-w-0">
-                          <p className={cn('text-sm', c.ok ? 'text-secondary' : 'font-medium text-primary')}>
-                            {c.label}
-                          </p>
-                          <p className="text-2xs text-muted">{c.detail}</p>
+                  <div className="space-y-3 p-3">
+                    <div>
+                      <p className="mb-1 px-2 text-2xs font-semibold tracking-wider text-muted uppercase">
+                        Required to approve
+                      </p>
+                      <div className="grid gap-1 sm:grid-cols-2">
+                        {requiredChecks.map((c) => (
+                          <div key={c.id} className="flex items-start gap-2 rounded-sm px-2 py-1.5">
+                            {c.ok ? (
+                              <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-success-text" />
+                            ) : (
+                              <XCircle size={13} className="mt-0.5 shrink-0 text-danger-text" />
+                            )}
+                            <div className="min-w-0">
+                              <p className={cn('text-sm', c.ok ? 'text-secondary' : 'font-medium text-primary')}>
+                                {c.label}
+                              </p>
+                              <p className="text-2xs text-muted">{c.detail}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {advisoryChecks.length > 0 && (
+                      <div>
+                        <p className="mb-1 px-2 text-2xs font-semibold tracking-wider text-muted uppercase">
+                          Advisory from the visit
+                        </p>
+                        <div className="grid gap-1 sm:grid-cols-2">
+                          {advisoryChecks.map((c) => (
+                            <div key={c.id} className="flex items-start gap-2 rounded-sm px-2 py-1.5">
+                              {c.ok ? (
+                                <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-success-text" />
+                              ) : (
+                                <XCircle size={13} className="mt-0.5 shrink-0 text-muted" />
+                              )}
+                              <div className="min-w-0">
+                                <p className="text-sm text-secondary">{c.label}</p>
+                                <p className="text-2xs text-muted">{c.detail}</p>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </Card>
               )}
@@ -1072,7 +1111,11 @@ export function EstimateBuilder() {
                   contactPhone: account?.phone,
                   status: 'sent',
                 })
-                patch({ status: 'sent', sentAt: new Date().toISOString() })
+                patch({
+                  status: 'sent',
+                  sentAt: new Date().toISOString(),
+                  token: proposalTokenFor(opp.id),
+                })
                 moveStage(opp.id, 'proposal_sent')
                 setSending(false)
               }}

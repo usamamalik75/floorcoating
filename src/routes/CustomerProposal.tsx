@@ -2,10 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { ArrowLeft, CheckCircle2, CreditCard, Lock, PenLine, ShieldCheck } from 'lucide-react'
-import { useStore, money, estimateTotal } from '@/store/useStore'
+import { useStore, money, estimateTotal, findEstimateByProposalToken } from '@/store/useStore'
 import { useArtifactsFor, useChangeOrdersFor } from '@/store/selectors'
 import { ACCOUNT_BY_ID } from '@/data/seed'
-import type { Estimate } from '@/domain/types'
 import { ProposalDocument } from '@/components/domain/ProposalDocument'
 import { Logo } from '@/components/layout/Logo'
 import { Button, EmptyState, Input } from '@/components/ui'
@@ -28,22 +27,10 @@ function useStoreHydrated() {
   return hydrated
 }
 
-function findEstimateByToken(estimates: Estimate[], token: string) {
-  if (!token) return undefined
-  return estimates.find(
-    (estimate) =>
-      estimate.token === token ||
-      estimate.id === token ||
-      estimate.opportunityId === token ||
-      estimate.token === `p_${token.replace(/^op_/, '')}` ||
-      estimate.opportunityId === (token.startsWith('op_') ? token : `op_${token}`),
-  )
-}
-
 export function CustomerProposal() {
   const { token = '' } = useParams()
   const hydrated = useStoreHydrated()
-  const estimate = useStore((s) => findEstimateByToken(s.estimates, token))
+  const estimate = useStore((s) => findEstimateByProposalToken(s.estimates, token))
   const opportunity = useStore((s) =>
     s.opportunities.find((o) => o.id === estimate?.opportunityId),
   )
