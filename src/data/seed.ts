@@ -922,6 +922,7 @@ export const SITE_VISIT_RESPONSES: SiteVisitResponse[] = [
   {
     opportunityId: 'op_midwest_plant3',
     formId: 'svf_industrial',
+    serviceTemplateId: 'svc_tpl_industrial',
     completedAt: iso(-6, 16),
     completedById: 'u_bj',
     requests: [
@@ -967,6 +968,7 @@ export const SITE_VISIT_RESPONSES: SiteVisitResponse[] = [
   {
     opportunityId: 'op_lakeside_brewhouse',
     formId: 'svf_commercial',
+    serviceTemplateId: 'svc_tpl_commercial',
     completedAt: iso(-2, 15),
     completedById: 'u_carla',
     requests: [
@@ -1004,6 +1006,7 @@ export const SITE_VISIT_RESPONSES: SiteVisitResponse[] = [
   {
     opportunityId: 'op_hartley_hvac',
     formId: 'svf_residential',
+    serviceTemplateId: 'svc_tpl_residential',
     completedAt: null,
     completedById: null,
     requests: [

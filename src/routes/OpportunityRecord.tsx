@@ -27,11 +27,12 @@ import {
   User as UserIcon,
   XCircle,
 } from 'lucide-react'
-import type { ArtifactKind, JobStatus, StageId } from '@/domain/types'
+import type { ArtifactKind, JobStatus, ScopeRequest, StageId } from '@/domain/types'
 import {
   ACCOUNT_RELATIONSHIP_LABEL,
   CATEGORY_LABEL,
   SALES_PIPELINE_LABEL,
+  SCOPE_UNITS,
   salesPipelineOf,
   visitVocab,
 } from '@/domain/types'
@@ -41,6 +42,8 @@ import {
   resolveChecklistItems,
   visitChecklistTemplates,
 } from '@/data/checklists'
+import { emptyScopeRequest } from '@/data/siteVisitForms'
+import { visitServiceTemplates } from '@/data/serviceTemplates'
 import { formForCategory } from '@/data/siteVisitForms'
 import { ACCOUNT_BY_ID, LOCATION_BY_ID } from '@/data/seed'
 import { PRICE_BOOK_BY_ID } from '@/data/priceBook'
@@ -958,6 +961,121 @@ function ArtifactRow({ artifact, category }: { artifact: ReturnType<typeof Objec
   )
 }
 
+/* ---- Scope request line editor (hub tab) -------------------------------- */
+
+function ScopeRequestEditor({
+  index,
+  request,
+  serviceOptions,
+  canRemove,
+  onChange,
+  onRemove,
+}: {
+  index: number
+  request: ScopeRequest
+  serviceOptions: string[]
+  canRemove: boolean
+  onChange: (patch: Partial<ScopeRequest>) => void
+  onRemove: () => void
+}) {
+  const isCustom =
+    Boolean(request.serviceType) && !serviceOptions.includes(request.serviceType)
+  const selectValue = isCustom
+    ? '__custom__'
+    : request.serviceType && serviceOptions.includes(request.serviceType)
+      ? request.serviceType
+      : request.serviceType
+        ? '__custom__'
+        : ''
+
+  return (
+    <div className="space-y-3 px-4 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-primary">
+          {index + 1}. {request.serviceType || 'Untitled request'}
+        </p>
+        {canRemove && (
+          <Button size="sm" variant="ghost" onClick={onRemove}>
+            <XCircle size={12} />
+            Remove
+          </Button>
+        )}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <FieldRow label="Service required" required>
+          {serviceOptions.length > 0 ? (
+            <>
+              <Select
+                value={selectValue}
+                onChange={(e) => {
+                  if (e.target.value === '__custom__') {
+                    onChange({ serviceType: isCustom ? request.serviceType : '' })
+                    return
+                  }
+                  onChange({ serviceType: e.target.value })
+                }}
+              >
+                <option value="" disabled>
+                  Select service…
+                </option>
+                {serviceOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+                <option value="__custom__">Other / custom…</option>
+              </Select>
+              {(selectValue === '__custom__' || isCustom) && (
+                <Input
+                  className="mt-2"
+                  value={request.serviceType}
+                  onChange={(e) => onChange({ serviceType: e.target.value })}
+                  placeholder="Custom service name"
+                />
+              )}
+            </>
+          ) : (
+            <Input
+              value={request.serviceType}
+              onChange={(e) => onChange({ serviceType: e.target.value })}
+              placeholder="e.g. Garage floor coating"
+            />
+          )}
+        </FieldRow>
+        <FieldRow label="Area / equipment" required>
+          <Input
+            value={request.areaOrEquipment}
+            onChange={(e) => onChange({ areaOrEquipment: e.target.value })}
+          />
+        </FieldRow>
+        <FieldRow label="Quantity" required>
+          <Input
+            type="number"
+            value={request.quantity || ''}
+            onChange={(e) => onChange({ quantity: Number(e.target.value) || 0 })}
+          />
+        </FieldRow>
+        <FieldRow label="Unit" required>
+          <Select value={request.unit} onChange={(e) => onChange({ unit: e.target.value })}>
+            {SCOPE_UNITS.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </Select>
+        </FieldRow>
+        <FieldRow label="Concern or outcome" className="sm:col-span-2">
+          <Textarea
+            rows={2}
+            value={request.concernOrOutcome}
+            onChange={(e) => onChange({ concernOrOutcome: e.target.value })}
+          />
+        </FieldRow>
+      </div>
+    </div>
+  )
+}
+
 /* ---- What we gathered at the visit / call ------------------------------- */
 
 function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
@@ -967,9 +1085,12 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
   const checklists = useStore((s) => s.checklists)
   const checklistTemplates = useStore((s) => s.checklistTemplates)
   const assignVisitChecklist = useStore((s) => s.assignVisitChecklist)
+  const assignVisitServiceTemplate = useStore((s) => s.assignVisitServiceTemplate)
+  const patchVisitRequests = useStore((s) => s.patchVisitRequests)
   const toggleChecklistItem = useStore((s) => s.toggleChecklistItem)
   const addChecklistInstanceItem = useStore((s) => s.addChecklistInstanceItem)
   const removeChecklistInstanceItem = useStore((s) => s.removeChecklistInstanceItem)
+  const serviceTemplates = useStore((s) => s.serviceTemplates)
   const checks = useChecks(opportunityId, 'site_visit_completed')
   const form = formForCategory(opp.category)
   const userById = useUserDirectory()
@@ -980,6 +1101,10 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
   const visitTemplates = useMemo(
     () => visitChecklistTemplates(checklistTemplates),
     [checklistTemplates],
+  )
+  const serviceVisitTemplates = useMemo(
+    () => visitServiceTemplates(serviceTemplates),
+    [serviceTemplates],
   )
   const checklistInstance = useMemo(
     () =>
@@ -1101,25 +1226,69 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
       <Card>
         <CardHeader
           title="Scope requests"
-          subtitle={`${requests.length} surface${requests.length === 1 ? '' : 's'}`}
+          subtitle="Select a service template, then edit surfaces for this visit."
           icon={<Ruler size={14} />}
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                value={visit.serviceTemplateId ?? ''}
+                onChange={(e) => assignVisitServiceTemplate(opportunityId, e.target.value)}
+                className="min-w-52"
+              >
+                <option value="" disabled>
+                  Select service template…
+                </option>
+                {serviceVisitTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </Select>
+              <Button
+                size="sm"
+                onClick={() =>
+                  patchVisitRequests(opportunityId, [
+                    ...requests,
+                    emptyScopeRequest(`req_${Date.now().toString(36)}`),
+                  ])
+                }
+              >
+                <Plus size={12} />
+                Add
+              </Button>
+            </div>
+          }
         />
         {requests.length === 0 ? (
-          <p className="p-4 text-sm text-muted">No scope requests yet — open the guided form to add them.</p>
+          <p className="p-4 text-sm text-muted">
+            Select a service template to seed scope lines, or add a request.
+          </p>
         ) : (
           <div className="divide-y divide-subtle">
             {requests.map((req, i) => (
-              <div key={req.id} className="px-4 py-3">
-                <p className="text-sm font-semibold text-primary">
-                  {i + 1}. {req.serviceType || 'Untitled request'}
-                </p>
-                <p className="mt-0.5 text-sm text-secondary">
-                  {req.areaOrEquipment || 'No area'} · {req.quantity || 0} {req.unit}
-                </p>
-                {req.concernOrOutcome && (
-                  <p className="mt-1 text-sm text-muted">{req.concernOrOutcome}</p>
-                )}
-              </div>
+              <ScopeRequestEditor
+                key={req.id}
+                index={i}
+                request={req}
+                serviceOptions={
+                  serviceVisitTemplates.find((t) => t.id === visit.serviceTemplateId)?.lines.map(
+                    (l) => l.serviceType,
+                  ) ?? []
+                }
+                canRemove={requests.length > 1}
+                onChange={(patch) =>
+                  patchVisitRequests(
+                    opportunityId,
+                    requests.map((r) => (r.id === req.id ? { ...r, ...patch } : r)),
+                  )
+                }
+                onRemove={() =>
+                  patchVisitRequests(
+                    opportunityId,
+                    requests.filter((r) => r.id !== req.id),
+                  )
+                }
+              />
             ))}
           </div>
         )}

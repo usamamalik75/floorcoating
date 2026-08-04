@@ -25,6 +25,7 @@ import type {
   Reminder,
   Role,
   ScopeRequest,
+  ScopeServiceTemplate,
   User,
   SiteVisitForm,
   SiteVisitResponse,
@@ -36,6 +37,11 @@ import { ROLE_LABEL, visitVocab, withVisitVocab } from '@/domain/types'
 import { WORKSPACE_TEMPLATE, type WorkspaceTemplate } from '@/config/workspace'
 import { CHECKLIST_TEMPLATES, templateForStage } from '@/data/checklists'
 import { PRICE_BOOK, PROPOSAL_TEMPLATES } from '@/data/priceBook'
+import {
+  preferredServiceTemplate,
+  requestsFromServiceTemplate,
+  SERVICE_TEMPLATES,
+} from '@/data/serviceTemplates'
 import { formForCategory, SITE_VISIT_FORMS } from '@/data/siteVisitForms'
 import { estimatePackFor, suggestFloorSystem } from '@/data/estimating'
 import {
@@ -95,6 +101,7 @@ interface State {
   workspaceTemplate: WorkspaceTemplate
   siteVisitForms: SiteVisitForm[]
   checklistTemplates: ChecklistTemplate[]
+  serviceTemplates: ScopeServiceTemplate[]
   priceBookItems: PriceBookItem[]
   proposalTemplates: ProposalTemplate[]
   stageDefinitions: StageDef[]
@@ -128,6 +135,10 @@ interface State {
   assignVisitChecklist: (opportunityId: string, templateId: string) => void
   addChecklistInstanceItem: (opportunityId: string, templateId: string, label: string) => void
   removeChecklistInstanceItem: (opportunityId: string, templateId: string, itemId: string) => void
+  /** Select / replace scope request lines from a company service template. */
+  assignVisitServiceTemplate: (opportunityId: string, templateId: string) => void
+  /** Patch scope requests on an in-progress visit (hub tab editing). */
+  patchVisitRequests: (opportunityId: string, requests: ScopeRequest[]) => void
   saveSiteVisit: (
     opportunityId: string,
     formId: string,
@@ -312,6 +323,7 @@ const initial = () => ({
   workspaceTemplate: structuredClone(WORKSPACE_TEMPLATE),
   siteVisitForms: structuredClone(SITE_VISIT_FORMS),
   checklistTemplates: structuredClone(CHECKLIST_TEMPLATES),
+  serviceTemplates: structuredClone(SERVICE_TEMPLATES),
   priceBookItems: structuredClone(PRICE_BOOK),
   proposalTemplates: structuredClone(PROPOSAL_TEMPLATES),
   stageDefinitions: structuredClone(STAGES),
@@ -327,7 +339,7 @@ const initial = () => ({
  * seed invalidates it and "Reset demo" always returns to the story's start.
  */
 const STORAGE_KEY = 'fcg-prototype'
-const STORAGE_VERSION = 12
+const STORAGE_VERSION = 13
 
 const createState: StateCreator<State> = (set, get) => ({
   ...initial(),
@@ -434,6 +446,10 @@ const createState: StateCreator<State> = (set, get) => ({
     if (to === 'site_visit_scheduled' || to === 'site_visit_required') {
       const form = get().siteVisitForms.find((candidate) => candidate.category === o.category) ?? formForCategory(o.category)
       if (form && !get().siteVisits.some((v) => v.opportunityId === opportunityId)) {
+        const serviceTpl = preferredServiceTemplate(get().serviceTemplates, o.category)
+        const seededRequests = serviceTpl
+          ? requestsFromServiceTemplate(serviceTpl, () => nextId('req'))
+          : []
         set((s) => ({
           siteVisits: [
             ...s.siteVisits,
@@ -441,7 +457,8 @@ const createState: StateCreator<State> = (set, get) => ({
               opportunityId,
               formId: form.id,
               values: {},
-              requests: [],
+              requests: seededRequests,
+              serviceTemplateId: serviceTpl?.id ?? null,
               completedAt: null,
               completedById: null,
             },
@@ -804,6 +821,67 @@ const createState: StateCreator<State> = (set, get) => ({
     })
   },
 
+  assignVisitServiceTemplate: (opportunityId, templateId) => {
+    const tpl = get().serviceTemplates.find((t) => t.id === templateId)
+    if (!tpl) return
+    const requests = requestsFromServiceTemplate(tpl, () => nextId('req'))
+    const existing = get().siteVisits.find((v) => v.opportunityId === opportunityId)
+    const opp = get().opportunities.find((o) => o.id === opportunityId)
+    const form =
+      get().siteVisitForms.find((candidate) => candidate.category === opp?.category) ??
+      (opp ? formForCategory(opp.category) : undefined)
+
+    if (!existing) {
+      if (!form) return
+      set((s) => ({
+        siteVisits: [
+          ...s.siteVisits,
+          {
+            opportunityId,
+            formId: form.id,
+            values: {},
+            requests,
+            serviceTemplateId: templateId,
+            completedAt: null,
+            completedById: null,
+          },
+        ],
+      }))
+    } else {
+      set((s) => ({
+        siteVisits: s.siteVisits.map((v) =>
+          v.opportunityId === opportunityId
+            ? { ...v, requests, serviceTemplateId: templateId }
+            : v,
+        ),
+      }))
+    }
+
+    const estimatedQuantity = requests.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0)
+    if (estimatedQuantity > 0) {
+      get().patchOpportunity(opportunityId, { estimatedQuantity })
+    }
+    get().logActivity(
+      opportunityId,
+      'system',
+      `Service template applied — ${tpl.name} (${requests.length} scope line${requests.length === 1 ? '' : 's'}).`,
+    )
+  },
+
+  patchVisitRequests: (opportunityId, requests) => {
+    const existing = get().siteVisits.find((v) => v.opportunityId === opportunityId)
+    if (!existing) return
+    set((s) => ({
+      siteVisits: s.siteVisits.map((v) =>
+        v.opportunityId === opportunityId ? { ...v, requests } : v,
+      ),
+    }))
+    const estimatedQuantity = requests.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0)
+    if (estimatedQuantity > 0) {
+      get().patchOpportunity(opportunityId, { estimatedQuantity })
+    }
+  },
+
   saveSiteVisit: (opportunityId, formId, values, requests, complete) => {
     const { siteVisits, viewerId } = get()
     const existing = siteVisits.find((v) => v.opportunityId === opportunityId)
@@ -812,6 +890,7 @@ const createState: StateCreator<State> = (set, get) => ({
       formId,
       values,
       requests,
+      serviceTemplateId: existing?.serviceTemplateId ?? null,
       completedAt: complete ? new Date().toISOString() : (existing?.completedAt ?? null),
       completedById: complete ? viewerId : (existing?.completedById ?? null),
     }
@@ -1363,6 +1442,7 @@ export const useStore = create<State>()(
       workspaceTemplate: s.workspaceTemplate,
       siteVisitForms: s.siteVisitForms,
       checklistTemplates: s.checklistTemplates,
+      serviceTemplates: s.serviceTemplates,
       priceBookItems: s.priceBookItems,
       proposalTemplates: s.proposalTemplates,
       stageDefinitions: s.stageDefinitions,

@@ -350,6 +350,29 @@ export interface ScopeRequest {
   notes?: string
 }
 
+/** Starter line inside a company service template. */
+export interface ScopeServiceLineTemplate {
+  serviceType: string
+  concernOrOutcome: string
+  unit: string
+  areaOrEquipment: string
+  notes?: string
+  /** Optional starter quantity; 0 means the rep fills it on site. */
+  quantity?: number
+}
+
+/**
+ * Company template for scope / service lines on a visit — parallel to
+ * ChecklistTemplate for the do-this list.
+ */
+export interface ScopeServiceTemplate {
+  id: string
+  name: string
+  category?: Category
+  managedByCompany: boolean
+  lines: ScopeServiceLineTemplate[]
+}
+
 export const SCOPE_UNITS = ['sq ft', 'lin ft', 'each', 'rooms', 'hours', 'gallons'] as const
 
 export interface SiteVisitResponse {
@@ -358,6 +381,8 @@ export interface SiteVisitResponse {
   values: Record<string, string | number | boolean>
   /** Multiple scope lines — separate from the do-this checklist. */
   requests: ScopeRequest[]
+  /** Selected company service template that seeded the request lines. */
+  serviceTemplateId?: string | null
   completedAt: string | null
   completedById: string | null
 }

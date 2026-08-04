@@ -18,6 +18,11 @@ import { useStore } from '@/store/useStore'
 import { useArtifactsFor, useFormForCategory } from '@/store/selectors'
 import { emptyScopeRequest, requestIsComplete, requiredFields } from '@/data/siteVisitForms'
 import { resolveChecklistItems, visitChecklistTemplates } from '@/data/checklists'
+import {
+  preferredServiceTemplate,
+  requestsFromServiceTemplate,
+  visitServiceTemplates,
+} from '@/data/serviceTemplates'
 import { ACCOUNT_BY_ID } from '@/data/seed'
 import type { ScopeRequest, SiteVisitField } from '@/domain/types'
 import { SCOPE_UNITS, visitVocab } from '@/domain/types'
@@ -49,6 +54,7 @@ export function SiteVisit() {
   const save = useStore((s) => s.saveSiteVisit)
   const toggleChecklistItem = useStore((s) => s.toggleChecklistItem)
   const assignVisitChecklist = useStore((s) => s.assignVisitChecklist)
+  const assignVisitServiceTemplate = useStore((s) => s.assignVisitServiceTemplate)
   const addChecklistInstanceItem = useStore((s) => s.addChecklistInstanceItem)
   const removeChecklistInstanceItem = useStore((s) => s.removeChecklistInstanceItem)
   const addArtifact = useStore((s) => s.addArtifact)
@@ -56,12 +62,17 @@ export function SiteVisit() {
   const artifacts = useArtifactsFor(id)
   const checklists = useStore((s) => s.checklists)
   const checklistTemplates = useStore((s) => s.checklistTemplates)
+  const serviceTemplates = useStore((s) => s.serviceTemplates)
 
   const form = useFormForCategory(opportunity?.category)
   const allowsPhotos = opportunity?.category !== 'residential'
   const visitTemplates = useMemo(
     () => visitChecklistTemplates(checklistTemplates),
     [checklistTemplates],
+  )
+  const serviceVisitTemplates = useMemo(
+    () => visitServiceTemplates(serviceTemplates),
+    [serviceTemplates],
   )
 
   const checklistInstance = useMemo(() => {
@@ -93,6 +104,33 @@ export function SiteVisit() {
     // Only auto-assign once when this visit has no checklist yet.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot bootstrap
   }, [opportunity?.id])
+
+  useEffect(() => {
+    if (!opportunity || stored?.serviceTemplateId || serviceVisitTemplates.length === 0) return
+    if (stored?.requests?.some((r) => r.serviceType.trim())) return
+    const preferred = preferredServiceTemplate(serviceVisitTemplates, opportunity.category)
+    if (!preferred) return
+    assignVisitServiceTemplate(opportunity.id, preferred.id)
+    const next = useStore.getState().siteVisits.find((v) => v.opportunityId === opportunity.id)
+    if (next?.requests.length) setRequests(next.requests)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot bootstrap
+  }, [opportunity?.id])
+
+  const applyServiceTemplate = (templateId: string) => {
+    if (!opportunity) return
+    assignVisitServiceTemplate(opportunity.id, templateId)
+    const next = useStore.getState().siteVisits.find((v) => v.opportunityId === opportunity.id)
+    if (next) setRequests(next.requests)
+    else {
+      const tpl = serviceVisitTemplates.find((t) => t.id === templateId)
+      if (tpl) setRequests(requestsFromServiceTemplate(tpl))
+    }
+  }
+
+  const serviceOptions = useMemo(() => {
+    const tpl = serviceVisitTemplates.find((t) => t.id === stored?.serviceTemplateId)
+    return tpl?.lines.map((l) => l.serviceType) ?? []
+  }, [serviceVisitTemplates, stored?.serviceTemplateId])
 
   const panels = useMemo(() => {
     if (!form) return [] as { id: Panel; label: string }[]
@@ -306,21 +344,40 @@ export function SiteVisit() {
 
           {panel === 'requests' && (
             <section className="mb-5">
-              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-                <h2 className="font-display text-lg text-primary">Scope requests</h2>
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    setRequests((prev) => [...prev, emptyScopeRequest(`req_${Date.now()}`)])
-                  }
-                >
-                  <Plus size={12} />
-                  Add request
-                </Button>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <h2 className="font-display text-lg text-primary">Scope requests</h2>
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <FieldRow label="Template" className="min-w-64">
+                    <Select
+                      value={stored?.serviceTemplateId ?? ''}
+                      onChange={(e) => applyServiceTemplate(e.target.value)}
+                    >
+                      <option value="" disabled>
+                        Select service template…
+                      </option>
+                      {serviceVisitTemplates.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                          {t.category ? ` (${t.category})` : ''}
+                        </option>
+                      ))}
+                    </Select>
+                  </FieldRow>
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      setRequests((prev) => [...prev, emptyScopeRequest(`req_${Date.now()}`)])
+                    }
+                  >
+                    <Plus size={12} />
+                    Add request
+                  </Button>
+                </div>
               </div>
               <p className="mb-4 text-sm text-muted">
-                Each request is a different service surface — its own area/equipment, quantity, and
-                unit.
+                Pick a company service template, then edit each surface — area, quantity, and unit.
               </p>
               <div className="space-y-4">
                 {requests.map((req, index) => (
@@ -350,11 +407,66 @@ export function SiteVisit() {
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <FieldRow label="Service required" required>
-                        <Input
-                          value={req.serviceType}
-                          onChange={(e) => updateRequest(req.id, { serviceType: e.target.value })}
-                          placeholder="e.g. Garage floor coating"
-                        />
+                        {serviceOptions.length > 0 ? (
+                          <>
+                            <Select
+                              value={
+                                serviceOptions.includes(req.serviceType)
+                                  ? req.serviceType
+                                  : req.serviceType
+                                    ? '__custom__'
+                                    : ''
+                              }
+                              onChange={(e) => {
+                                if (e.target.value === '__custom__') {
+                                  updateRequest(req.id, { serviceType: '' })
+                                  return
+                                }
+                                const line = serviceVisitTemplates
+                                  .find((t) => t.id === stored?.serviceTemplateId)
+                                  ?.lines.find((l) => l.serviceType === e.target.value)
+                                updateRequest(req.id, {
+                                  serviceType: e.target.value,
+                                  ...(line
+                                    ? {
+                                        concernOrOutcome:
+                                          line.concernOrOutcome || req.concernOrOutcome,
+                                        unit: line.unit || req.unit,
+                                        areaOrEquipment:
+                                          line.areaOrEquipment || req.areaOrEquipment,
+                                      }
+                                    : {}),
+                                })
+                              }}
+                            >
+                              <option value="" disabled>
+                                Select service…
+                              </option>
+                              {serviceOptions.map((name) => (
+                                <option key={name} value={name}>
+                                  {name}
+                                </option>
+                              ))}
+                              <option value="__custom__">Other / custom…</option>
+                            </Select>
+                            {!serviceOptions.includes(req.serviceType) && (
+                              <Input
+                                className="mt-2"
+                                value={req.serviceType}
+                                onChange={(e) =>
+                                  updateRequest(req.id, { serviceType: e.target.value })
+                                }
+                                placeholder="Custom service name"
+                              />
+                            )}
+                          </>
+                        ) : (
+                          <Input
+                            value={req.serviceType}
+                            onChange={(e) => updateRequest(req.id, { serviceType: e.target.value })}
+                            placeholder="e.g. Garage floor coating"
+                          />
+                        )}
                       </FieldRow>
                       <FieldRow label="Area / equipment / surface" required>
                         <Input
