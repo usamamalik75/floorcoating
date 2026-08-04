@@ -330,11 +330,27 @@ export interface SiteVisitField {
   feedsEstimate?: boolean
 }
 
+export interface SiteVisitFormSection {
+  id: string
+  title: string
+  fields: SiteVisitField[]
+  /** When true, reps can add free-form question / answer pairs in this section. */
+  allowCustomQuestions?: boolean
+}
+
 export interface SiteVisitForm {
   id: string
   name: string
   category: Category
-  sections: { id: string; title: string; fields: SiteVisitField[] }[]
+  sections: SiteVisitFormSection[]
+}
+
+/** Extra Q&A captured on a visit section (Customer expectations, Commercial requirements). */
+export interface SiteVisitCustomQA {
+  id: string
+  sectionId: string
+  question: string
+  answer: string
 }
 
 /** One scoped work request captured on a site visit / sales call. */
@@ -383,6 +399,8 @@ export interface SiteVisitResponse {
   requests: ScopeRequest[]
   /** Selected company service template that seeded the request lines. */
   serviceTemplateId?: string | null
+  /** Free-form Q&A added under Customer expectations / Commercial requirements. */
+  customQuestions?: SiteVisitCustomQA[]
   completedAt: string | null
   completedById: string | null
 }

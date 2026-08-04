@@ -23,6 +23,7 @@ export const SITE_VISIT_FORMS: SiteVisitForm[] = [
       {
         id: 'r_customer',
         title: 'Customer expectations',
+        allowCustomQuestions: true,
         fields: [
           { id: 'timeline', label: 'Preferred timeline', type: 'text', required: true, feedsEstimate: true },
           { id: 'decision_maker', label: 'Decision maker', type: 'text', required: true },
@@ -60,6 +61,7 @@ export const SITE_VISIT_FORMS: SiteVisitForm[] = [
       {
         id: 'i_customer',
         title: 'Commercial requirements',
+        allowCustomQuestions: true,
         fields: [
           { id: 'plans_available', label: 'Plans or asset documents available', type: 'boolean', required: true },
           { id: 'decision_maker', label: 'Decision maker and budget authority', type: 'text', required: true },

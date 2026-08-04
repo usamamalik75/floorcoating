@@ -24,7 +24,7 @@ import {
   visitServiceTemplates,
 } from '@/data/serviceTemplates'
 import { ACCOUNT_BY_ID } from '@/data/seed'
-import type { ScopeRequest, SiteVisitField } from '@/domain/types'
+import type { ScopeRequest, SiteVisitCustomQA, SiteVisitField } from '@/domain/types'
 import { SCOPE_UNITS, visitVocab } from '@/domain/types'
 import {
   Badge,
@@ -88,12 +88,14 @@ export function SiteVisit() {
 
   const [values, setValues] = useState<Record<string, string | number | boolean>>({})
   const [requests, setRequests] = useState<ScopeRequest[]>([])
+  const [customQuestions, setCustomQuestions] = useState<SiteVisitCustomQA[]>([])
   const [panel, setPanel] = useState<Panel>('checklist')
   const [newItemLabel, setNewItemLabel] = useState('')
 
   useEffect(() => {
     setValues(stored?.values ?? {})
     setRequests(stored?.requests?.length ? stored.requests : [emptyScopeRequest(`req_${Date.now()}`)])
+    setCustomQuestions(stored?.customQuestions ?? [])
   }, [stored?.opportunityId])
 
   useEffect(() => {
@@ -168,8 +170,31 @@ export function SiteVisit() {
     setValues((prev) => ({ ...prev, [fieldId]: v }))
 
   const persist = (finish: boolean) => {
-    save(opportunity.id, form.id, values, requests, finish)
+    save(opportunity.id, form.id, values, requests, finish, customQuestions)
     if (finish) navigate(`/opportunities/${opportunity.id}?tab=visits`)
+  }
+
+  const sectionCustomQuestions = (sectionId: string) =>
+    customQuestions.filter((q) => q.sectionId === sectionId)
+
+  const addCustomQuestion = (sectionId: string) => {
+    setCustomQuestions((prev) => [
+      ...prev,
+      {
+        id: `qa_${Date.now().toString(36)}`,
+        sectionId,
+        question: '',
+        answer: '',
+      },
+    ])
+  }
+
+  const updateCustomQuestion = (id: string, patch: Partial<SiteVisitCustomQA>) => {
+    setCustomQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...patch } : q)))
+  }
+
+  const removeCustomQuestion = (id: string) => {
+    setCustomQuestions((prev) => prev.filter((q) => q.id !== id))
   }
 
   const updateRequest = (reqId: string, patch: Partial<ScopeRequest>) => {
@@ -535,12 +560,71 @@ export function SiteVisit() {
 
           {currentSection && (
             <section className="mb-5">
-              <h2 className="mb-3 font-display text-lg text-primary">{currentSection.title}</h2>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-display text-lg text-primary">{currentSection.title}</h2>
+                {currentSection.allowCustomQuestions && (
+                  <Button size="sm" onClick={() => addCustomQuestion(currentSection.id)}>
+                    <Plus size={12} />
+                    Add question
+                  </Button>
+                )}
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 {currentSection.fields.map((f) => (
                   <Field key={f.id} field={f} value={values[f.id]} onChange={(v) => set(f.id, v)} />
                 ))}
               </div>
+              {currentSection.allowCustomQuestions && (
+                <div className="mt-4 space-y-3">
+                  {sectionCustomQuestions(currentSection.id).length === 0 ? (
+                    <p className="text-sm text-muted">
+                      Add any extra questions you asked — capture the question and the answer.
+                    </p>
+                  ) : (
+                    sectionCustomQuestions(currentSection.id).map((qa, index) => (
+                      <div
+                        key={qa.id}
+                        className="rounded-xl border border-subtle/50 bg-surface-sunken p-4"
+                      >
+                        <div className="mb-3 flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-primary">
+                            Extra question {index + 1}
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => removeCustomQuestion(qa.id)}
+                          >
+                            <Trash2 size={12} />
+                            Remove
+                          </Button>
+                        </div>
+                        <div className="grid gap-3">
+                          <FieldRow label="Question" required>
+                            <Input
+                              value={qa.question}
+                              onChange={(e) =>
+                                updateCustomQuestion(qa.id, { question: e.target.value })
+                              }
+                              placeholder="What did you ask?"
+                            />
+                          </FieldRow>
+                          <FieldRow label="Answer" required>
+                            <Textarea
+                              rows={2}
+                              value={qa.answer}
+                              onChange={(e) =>
+                                updateCustomQuestion(qa.id, { answer: e.target.value })
+                              }
+                              placeholder="What was the answer?"
+                            />
+                          </FieldRow>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </section>
           )}
 
@@ -672,8 +756,11 @@ export function SiteVisit() {
               <GatheredBlock
                 title="Answers & questions"
                 empty="No answers yet"
-                count={`${answeredEntries.length} fields`}
-                isEmpty={answeredEntries.length === 0}
+                count={`${answeredEntries.length + customQuestions.filter((q) => q.question.trim()).length} fields`}
+                isEmpty={
+                  answeredEntries.length === 0 &&
+                  customQuestions.every((q) => !q.question.trim())
+                }
               >
                 <dl className="grid gap-2 sm:grid-cols-2">
                   {answeredEntries.map(([key, raw]) => {
@@ -688,6 +775,20 @@ export function SiteVisit() {
                       </div>
                     )
                   })}
+                  {customQuestions
+                    .filter((q) => q.question.trim())
+                    .map((qa) => {
+                      const sectionTitle =
+                        form.sections.find((s) => s.id === qa.sectionId)?.title ?? 'Extra'
+                      return (
+                        <div key={qa.id} className="sm:col-span-2">
+                          <dt className="text-2xs font-semibold tracking-wider text-muted uppercase">
+                            {sectionTitle} · {qa.question}
+                          </dt>
+                          <dd className="text-sm text-primary">{qa.answer || '—'}</dd>
+                        </div>
+                      )
+                    })}
                 </dl>
               </GatheredBlock>
 

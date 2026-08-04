@@ -1087,6 +1087,7 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
   const assignVisitChecklist = useStore((s) => s.assignVisitChecklist)
   const assignVisitServiceTemplate = useStore((s) => s.assignVisitServiceTemplate)
   const patchVisitRequests = useStore((s) => s.patchVisitRequests)
+  const patchVisitCustomQuestions = useStore((s) => s.patchVisitCustomQuestions)
   const toggleChecklistItem = useStore((s) => s.toggleChecklistItem)
   const addChecklistInstanceItem = useStore((s) => s.addChecklistInstanceItem)
   const removeChecklistInstanceItem = useStore((s) => s.removeChecklistInstanceItem)
@@ -1129,6 +1130,8 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
 
   const answered = Object.entries(visit.values).filter(([, val]) => val !== '' && val !== undefined)
   const requests = visit.requests ?? []
+  const customQuestions = visit.customQuestions ?? []
+  const filledCustomQuestions = customQuestions.filter((q) => q.question.trim())
   const photos = artifacts.filter((a) => a.kind === 'photo' || a.kind === 'plan')
 
   return (
@@ -1295,8 +1298,12 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
       </Card>
 
       <Card>
-        <CardHeader title="Answers & questions" subtitle="Captured on the guided form" icon={<ClipboardList size={14} />} />
-        {answered.length === 0 ? (
+        <CardHeader
+          title="Answers & questions"
+          subtitle="Standard fields plus any extra Q&A added on the visit"
+          icon={<ClipboardList size={14} />}
+        />
+        {answered.length === 0 && filledCustomQuestions.length === 0 ? (
           <p className="p-4 text-sm text-muted">No answers yet.</p>
         ) : (
           <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 p-4 sm:grid-cols-2">
@@ -1320,9 +1327,113 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
                   )
                 }),
             )}
+            {filledCustomQuestions.map((qa) => {
+              const sectionTitle =
+                form.sections.find((s) => s.id === qa.sectionId)?.title ?? 'Extra question'
+              return (
+                <KeyValue
+                  key={qa.id}
+                  label={`${sectionTitle} · ${qa.question}`}
+                  className="sm:col-span-2"
+                >
+                  <span className="whitespace-normal">{qa.answer || '—'}</span>
+                </KeyValue>
+              )
+            })}
           </dl>
         )}
       </Card>
+
+      {form.sections
+        .filter((sec) => sec.allowCustomQuestions)
+        .map((sec) => {
+          const sectionQs = customQuestions.filter((q) => q.sectionId === sec.id)
+          return (
+            <Card key={sec.id}>
+              <CardHeader
+                title={`Extra questions · ${sec.title}`}
+                subtitle="Add any question you asked and the answer you got."
+                icon={<Plus size={14} />}
+                actions={
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      patchVisitCustomQuestions(opportunityId, [
+                        ...customQuestions,
+                        {
+                          id: `qa_${Date.now().toString(36)}`,
+                          sectionId: sec.id,
+                          question: '',
+                          answer: '',
+                        },
+                      ])
+                    }
+                  >
+                    <Plus size={12} />
+                    Add question
+                  </Button>
+                }
+              />
+              {sectionQs.length === 0 ? (
+                <p className="p-4 text-sm text-muted">No extra questions yet.</p>
+              ) : (
+                <div className="divide-y divide-subtle">
+                  {sectionQs.map((qa, index) => (
+                    <div key={qa.id} className="grid gap-3 px-4 py-3 sm:grid-cols-2">
+                      <div className="flex items-center justify-between gap-2 sm:col-span-2">
+                        <p className="text-sm font-semibold text-primary">
+                          Question {index + 1}
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            patchVisitCustomQuestions(
+                              opportunityId,
+                              customQuestions.filter((q) => q.id !== qa.id),
+                            )
+                          }
+                        >
+                          <XCircle size={12} />
+                          Remove
+                        </Button>
+                      </div>
+                      <FieldRow label="Question" required className="sm:col-span-2">
+                        <Input
+                          value={qa.question}
+                          onChange={(e) =>
+                            patchVisitCustomQuestions(
+                              opportunityId,
+                              customQuestions.map((q) =>
+                                q.id === qa.id ? { ...q, question: e.target.value } : q,
+                              ),
+                            )
+                          }
+                          placeholder="What did you ask?"
+                        />
+                      </FieldRow>
+                      <FieldRow label="Answer" required className="sm:col-span-2">
+                        <Textarea
+                          rows={2}
+                          value={qa.answer}
+                          onChange={(e) =>
+                            patchVisitCustomQuestions(
+                              opportunityId,
+                              customQuestions.map((q) =>
+                                q.id === qa.id ? { ...q, answer: e.target.value } : q,
+                              ),
+                            )
+                          }
+                          placeholder="What was the answer?"
+                        />
+                      </FieldRow>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )
+        })}
 
       {allowsPhotos ? (
         <Card>

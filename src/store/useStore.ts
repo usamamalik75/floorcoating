@@ -26,6 +26,7 @@ import type {
   Role,
   ScopeRequest,
   ScopeServiceTemplate,
+  SiteVisitCustomQA,
   User,
   SiteVisitForm,
   SiteVisitResponse,
@@ -145,7 +146,10 @@ interface State {
     values: Record<string, string | number | boolean>,
     requests: ScopeRequest[],
     complete: boolean,
+    customQuestions?: SiteVisitCustomQA[],
   ) => void
+  /** Add / update / remove free-form Q&A on a visit section. */
+  patchVisitCustomQuestions: (opportunityId: string, customQuestions: SiteVisitCustomQA[]) => void
 
   upsertEstimate: (e: Estimate) => void
   updateEstimate: (id: string, next: Partial<Estimate>) => void
@@ -339,7 +343,7 @@ const initial = () => ({
  * seed invalidates it and "Reset demo" always returns to the story's start.
  */
 const STORAGE_KEY = 'fcg-prototype'
-const STORAGE_VERSION = 13
+const STORAGE_VERSION = 14
 
 const createState: StateCreator<State> = (set, get) => ({
   ...initial(),
@@ -882,7 +886,17 @@ const createState: StateCreator<State> = (set, get) => ({
     }
   },
 
-  saveSiteVisit: (opportunityId, formId, values, requests, complete) => {
+  patchVisitCustomQuestions: (opportunityId, customQuestions) => {
+    const existing = get().siteVisits.find((v) => v.opportunityId === opportunityId)
+    if (!existing) return
+    set((s) => ({
+      siteVisits: s.siteVisits.map((v) =>
+        v.opportunityId === opportunityId ? { ...v, customQuestions } : v,
+      ),
+    }))
+  },
+
+  saveSiteVisit: (opportunityId, formId, values, requests, complete, customQuestions) => {
     const { siteVisits, viewerId } = get()
     const existing = siteVisits.find((v) => v.opportunityId === opportunityId)
     const next: SiteVisitResponse = {
@@ -891,6 +905,7 @@ const createState: StateCreator<State> = (set, get) => ({
       values,
       requests,
       serviceTemplateId: existing?.serviceTemplateId ?? null,
+      customQuestions: customQuestions ?? existing?.customQuestions ?? [],
       completedAt: complete ? new Date().toISOString() : (existing?.completedAt ?? null),
       completedById: complete ? viewerId : (existing?.completedById ?? null),
     }
