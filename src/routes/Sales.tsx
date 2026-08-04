@@ -98,7 +98,7 @@ export function Sales() {
     .reduce((s, o) => s + o.value, 0)
 
   return (
-    <div className="mx-auto w-full max-w-7xl h-full flex flex-col bg-surface-sunken">
+    <div className="w-full h-full flex flex-col bg-surface-sunken">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-subtle/50 bg-surface-raised px-6 py-4 rounded-b-xl shadow-sm mb-4">
         <h1 className="font-display text-lg text-primary">Sales</h1>
         <SegmentedControl

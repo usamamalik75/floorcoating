@@ -19,6 +19,8 @@ export function useReadinessInput(opportunityId: string): ReadinessInput | null 
       job: s.jobs.find((j) => j.opportunityId === opportunityId),
       invoices: s.invoices.filter((i) => i.opportunityId === opportunityId),
       changeOrders: s.changeOrders.filter((c) => c.opportunityId === opportunityId),
+      siteVisitForms: s.siteVisitForms,
+      checklistTemplates: s.checklistTemplates,
     } as ReadinessInput
   }, [
     opportunityId,
@@ -31,6 +33,8 @@ export function useReadinessInput(opportunityId: string): ReadinessInput | null 
     s.jobs,
     s.invoices,
     s.changeOrders,
+    s.siteVisitForms,
+    s.checklistTemplates,
   ])
 }
 
@@ -137,6 +141,18 @@ export function usePriceBookItems() {
 
 export function useProposalTemplates() {
   return useStore((s) => s.proposalTemplates)
+}
+
+export function useEstimatePacks() {
+  return useStore((s) => s.estimatePacks)
+}
+
+export function useEstimatePack(category?: string) {
+  const packs = useEstimatePacks()
+  return useMemo(
+    () => (category ? packs.find((pack) => pack.category === category) ?? null : null),
+    [packs, category],
+  )
 }
 
 export function useStageDefinitions() {

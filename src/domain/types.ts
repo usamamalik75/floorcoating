@@ -173,7 +173,7 @@ export type JobStatus =
 export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
   scheduling_required: 'Scheduling Required',
   scheduled: 'Scheduled',
-  procurement_required: 'Material Required',
+  procurement_required: 'Procurement Required',
   procurement_ordered: 'Resources Ordered',
   ready_to_start: 'Ready to Start',
   in_progress: 'In Progress',
@@ -579,9 +579,6 @@ export interface ProcurementOrder {
   purchaseOrderId: string | null
   trackingRef: string | null
 }
-
-export type MaterialLine = ProcurementLine
-export type MaterialOrder = ProcurementOrder
 
 export interface Job {
   id: string

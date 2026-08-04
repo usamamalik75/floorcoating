@@ -20,9 +20,7 @@ import {
   StickyNote,
   WifiOff,
 } from 'lucide-react'
-import { CHECKLIST_BY_ID } from '@/data/checklists'
 import { ACCOUNT_BY_ID, TODAY } from '@/data/seed'
-import { PRICE_BOOK_BY_ID } from '@/data/priceBook'
 import { STAGE_BY_ID, stageLabel } from '@/domain/stages'
 import { money, useStore } from '@/store/useStore'
 import { assignedTo } from '@/domain/jobs'
@@ -297,11 +295,14 @@ export function FieldJob() {
   const artifacts = useArtifactsFor(id ?? '')
   const issues = useIssuesFor(id ?? '')
   const checklists = useStore((s) => s.checklists)
+  const checklistTemplates = useStore((s) => s.checklistTemplates)
+  const priceBookItems = useStore((s) => s.priceBookItems)
   const toggle = useStore((s) => s.toggleChecklistItem)
   const addArtifact = useStore((s) => s.addArtifact)
   const updateJob = useStore((s) => s.updateJob)
   const addDailyLog = useStore((s) => s.addDailyLog)
   const viewerId = useStore((s) => s.viewerId)
+  const procurementOrder = useStore((s) => s.procurementOrders.find((m) => m.opportunityId === id))
 
   const [reporting, setReporting] = useState<'issue' | 'change' | null>(null)
   const [logNote, setLogNote] = useState('')
@@ -313,21 +314,20 @@ export function FieldJob() {
       </FieldFrame>
     )
 
-  const template = CHECKLIST_BY_ID['cl_install']
+  const template = checklistTemplates.find((t) => t.id === 'cl_install')
   const instance = checklists.find((c) => c.opportunityId === opp.id && c.templateId === 'cl_install')
   const notes = artifacts.filter((a) => a.kind === 'note')
   const plans = artifacts.filter((a) => a.kind === 'plan' || a.kind === 'map')
   const photos = artifacts.filter((a) => a.kind === 'photo')
   const account = ACCOUNT_BY_ID[opp.accountId]
-  const procurementOrder = useStore((s) => s.procurementOrders.find((m) => m.opportunityId === id))
 
   const scope = est?.options
     .filter((o) => o.kind === 'scope' || o.selectedByCustomer || o.recommended)
     .flatMap((o) => o.lineItems)
 
   const catalogueItems = [...new Set(scope?.map((l) => l.priceBookId) ?? [])]
-    .map((pid) => PRICE_BOOK_BY_ID[pid])
-    .filter(Boolean)
+    .map((pid) => priceBookItems.find((item) => item.id === pid))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
 
   return (
     <FieldFrame title="Job Sheet" back="/field">
@@ -457,7 +457,7 @@ export function FieldJob() {
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => updateJob(job.id, { dispatchState: 'at_risk', lastDispatchNote: 'Material or equipment issue reported from field.', syncStatus: 'pending' })}
+              onClick={() => updateJob(job.id, { dispatchState: 'at_risk', lastDispatchNote: 'Procurement or equipment issue reported from field.', syncStatus: 'pending' })}
             >
               Mark at risk
             </Button>
@@ -502,24 +502,26 @@ export function FieldJob() {
           </Card>
         )}
 
-        <Card>
-          <div className="flex items-center justify-between border-b border-subtle px-3 py-2.5">
-            <span className="text-md font-semibold text-primary">Installation checklist</span>
-            <Badge tone={(instance?.done.length ?? 0) >= template.items.length ? 'success' : 'warning'}>
-              {instance?.done.length ?? 0} / {template.items.length}
-            </Badge>
-          </div>
-          <div className="space-y-3 p-3">
-            {template.items.map((item) => (
-              <Checkbox
-                key={item.id}
-                checked={instance?.done.includes(item.id) ?? false}
-                onChange={() => toggle(opp.id, 'cl_install', item.id)}
-                label={item.label}
-              />
-            ))}
-          </div>
-        </Card>
+        {template && (
+          <Card>
+            <div className="flex items-center justify-between border-b border-subtle px-3 py-2.5">
+              <span className="text-md font-semibold text-primary">{template.name}</span>
+              <Badge tone={(instance?.done.length ?? 0) >= template.items.length ? 'success' : 'warning'}>
+                {instance?.done.length ?? 0} / {template.items.length}
+              </Badge>
+            </div>
+            <div className="space-y-3 p-3">
+              {template.items.map((item) => (
+                <Checkbox
+                  key={item.id}
+                  checked={instance?.done.includes(item.id) ?? false}
+                  onChange={() => toggle(opp.id, 'cl_install', item.id)}
+                  label={item.label}
+                />
+              ))}
+            </div>
+          </Card>
+        )}
 
         {issues.length > 0 && (
           <Card>

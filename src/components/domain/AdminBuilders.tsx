@@ -1,160 +1,103 @@
 import { useMemo, useState } from 'react'
-import { BookOpen, Building2, ClipboardCheck, FileSignature, KanbanSquare, ListChecks, SlidersHorizontal } from 'lucide-react'
-import type { ChecklistTemplate, Location, SiteVisitForm, StageDef } from '@/domain/types'
-import type { ConfigField } from '@/config/workspace'
+import {
+  ArrowLeft,
+  ClipboardCheck,
+  FileSignature,
+  ListChecks,
+  Package,
+} from 'lucide-react'
+import type { Category, ChecklistTemplate, Location, SiteVisitForm } from '@/domain/types'
+import { CATEGORY_LABEL } from '@/domain/types'
+import type { EstimateCategoryPack } from '@/data/estimating'
 import { useStore } from '@/store/useStore'
-import { Badge, Button, Card, CardHeader, FieldRow, Input, SectionTitle, Select, Textarea } from '@/components/ui'
+import { Badge, Button, Card, CardHeader, FieldRow, Input, Select, Textarea } from '@/components/ui'
 import { cn } from '@/lib/cn'
 
 const uid = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 
+type SetupArea = 'forms' | 'templates' | 'packs' | 'checklists'
+
+const SETUP_AREAS: {
+  id: SetupArea
+  label: string
+  description: string
+  icon: typeof FileSignature
+}[] = [
+  {
+    id: 'templates',
+    label: 'Proposal templates',
+    description: 'Deposit, validity, terms, and exclusions.',
+    icon: FileSignature,
+  },
+  {
+    id: 'packs',
+    label: 'Estimating packs',
+    description: 'Reminders and defaults by job type.',
+    icon: Package,
+  },
+  {
+    id: 'forms',
+    label: 'Assessment forms',
+    description: 'Fields captured during site visits.',
+    icon: ListChecks,
+  },
+  {
+    id: 'checklists',
+    label: 'Checklists',
+    description: 'Operational checklists for jobs and visits.',
+    icon: ClipboardCheck,
+  },
+]
+
 export function AdminBuilders() {
-  const [tab, setTab] = useState<'workspace' | 'locations' | 'forms' | 'catalogue' | 'templates' | 'checklists' | 'stages'>('workspace')
+  const [area, setArea] = useState<SetupArea | null>(null)
+  const active = SETUP_AREAS.find((item) => item.id === area)
 
-  return (
-    <section className="pb-8">
-      <SectionTitle>Configuration builders</SectionTitle>
-      <div className="mb-3 flex flex-wrap gap-1">
-        {(
-          [
-            ['workspace', 'Workspace', SlidersHorizontal],
-            ['locations', 'Locations', Building2],
-            ['forms', 'Forms', ListChecks],
-            ['catalogue', 'Products & Services', BookOpen],
-            ['templates', 'Proposal templates', FileSignature],
-            ['checklists', 'Checklists', ClipboardCheck],
-            ['stages', 'Stages', KanbanSquare],
-          ] as const
-        ).map(([id, label, Icon]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={cn(
-              'flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-base font-medium',
-              tab === id
-                ? 'border-action bg-action text-action-fg'
-                : 'border-subtle bg-surface-raised text-secondary hover:border-strong',
-            )}
-          >
-            <Icon size={13} />
-            {label}
-          </button>
-        ))}
+  if (!area || !active) {
+    return (
+      <div className="space-y-3">
+        <div>
+          <h2 className="font-display text-lg text-primary">Company setup</h2>
+          <p className="mt-0.5 text-sm text-muted">Choose one area to configure. Keep changes simple and focused.</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {SETUP_AREAS.map((item) => {
+            const Icon = item.icon
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setArea(item.id)}
+                className="rounded-lg border border-subtle bg-surface-raised p-4 text-left transition-colors hover:border-strong hover:bg-surface-inset"
+              >
+                <span className="mb-2 inline-flex rounded-md bg-surface-inset p-2 text-secondary">
+                  <Icon size={16} />
+                </span>
+                <p className="font-medium text-primary">{item.label}</p>
+                <p className="mt-0.5 text-sm text-muted">{item.description}</p>
+              </button>
+            )
+          })}
+        </div>
       </div>
-
-      {tab === 'workspace' && <WorkspaceBuilder />}
-      {tab === 'locations' && <LocationsBuilder />}
-      {tab === 'forms' && <FormsBuilder />}
-      {tab === 'catalogue' && <CatalogueBuilder />}
-      {tab === 'templates' && <ProposalTemplateBuilder />}
-      {tab === 'checklists' && <ChecklistBuilder />}
-      {tab === 'stages' && <StageBuilder />}
-    </section>
-  )
-}
-
-function WorkspaceBuilder() {
-  const template = useStore((s) => s.workspaceTemplate)
-  const update = useStore((s) => s.updateWorkspaceTemplate)
-
-  const patchField = (kind: 'opportunityFields' | 'jobFields', fieldId: string, next: Partial<ConfigField>) => {
-    update({
-      ...template,
-      [kind]: template[kind].map((field) => (field.id === fieldId ? { ...field, ...next } : field)),
-    })
-  }
-
-  const addField = (kind: 'opportunityFields' | 'jobFields') => {
-    update({
-      ...template,
-      [kind]: [
-        ...template[kind],
-        { id: uid('cfg'), label: 'New field', type: 'text' },
-      ],
-    })
+    )
   }
 
   return (
     <div className="space-y-4">
-      <Card className="p-4">
-        <div className="grid gap-3 lg:grid-cols-2">
-          <FieldRow label="Workspace name">
-            <Input value={template.name} onChange={(e) => update({ ...template, name: e.target.value })} />
-          </FieldRow>
-          <FieldRow label="Description">
-            <Input value={template.description} onChange={(e) => update({ ...template, description: e.target.value })} />
-          </FieldRow>
-        </div>
-      </Card>
-
-      <Card className="p-4">
-        <p className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">Terminology</p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {Object.entries(template.terminology).map(([key, value]) => (
-            <FieldRow key={key} label={key}>
-              <Input
-                value={value}
-                onChange={(e) =>
-                  update({
-                    ...template,
-                    terminology: { ...template.terminology, [key]: e.target.value },
-                  })
-                }
-              />
-            </FieldRow>
-          ))}
-        </div>
-      </Card>
-
-      <FieldListCard title="Opportunity fields" fields={template.opportunityFields} onPatch={(id, next) => patchField('opportunityFields', id, next)} onAdd={() => addField('opportunityFields')} />
-      <FieldListCard title="Job fields" fields={template.jobFields} onPatch={(id, next) => patchField('jobFields', id, next)} onAdd={() => addField('jobFields')} />
-    </div>
-  )
-}
-
-function FieldListCard({
-  title,
-  fields,
-  onPatch,
-  onAdd,
-}: {
-  title: string
-  fields: ConfigField[]
-  onPatch: (fieldId: string, next: Partial<ConfigField>) => void
-  onAdd: () => void
-}) {
-  return (
-    <Card>
-      <CardHeader title={title} actions={<Button size="sm" onClick={onAdd}>Add field</Button>} />
-      <div className="space-y-3 p-4">
-        {fields.map((field) => (
-          <div key={field.id} className="grid gap-3 rounded-md border border-subtle p-3 md:grid-cols-4">
-            <FieldRow label="Label">
-              <Input value={field.label} onChange={(e) => onPatch(field.id, { label: e.target.value })} />
-            </FieldRow>
-            <FieldRow label="Type">
-              <Select value={field.type} onChange={(e) => onPatch(field.id, { type: e.target.value as ConfigField['type'] })}>
-                <option value="text">Text</option>
-                <option value="number">Number</option>
-                <option value="boolean">Boolean</option>
-                <option value="select">Select</option>
-              </Select>
-            </FieldRow>
-            <FieldRow label="Unit">
-              <Input value={field.unit ?? ''} onChange={(e) => onPatch(field.id, { unit: e.target.value || undefined })} />
-            </FieldRow>
-            <FieldRow label="Options">
-              <Input
-                value={field.options?.join(', ') ?? ''}
-                onChange={(e) => onPatch(field.id, { options: e.target.value ? e.target.value.split(',').map((value) => value.trim()) : undefined })}
-                placeholder="comma separated"
-              />
-            </FieldRow>
-          </div>
-        ))}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="ghost" onClick={() => setArea(null)}>
+          <ArrowLeft size={13} />
+          All setup
+        </Button>
+        <span className="text-sm text-muted">/</span>
+        <span className="text-sm font-medium text-primary">{active.label}</span>
       </div>
-    </Card>
+      {area === 'forms' && <FormsBuilder />}
+      {area === 'templates' && <ProposalTemplateBuilder />}
+      {area === 'packs' && <EstimatingPackBuilder />}
+      {area === 'checklists' && <ChecklistBuilder />}
+    </div>
   )
 }
 
@@ -252,44 +195,6 @@ function FormsBuilder() {
   )
 }
 
-function CatalogueBuilder() {
-  const items = useStore((s) => s.priceBookItems)
-  const upsert = useStore((s) => s.upsertPriceBookItem)
-  const [selectedId, setSelectedId] = useState(items[0]?.id ?? '')
-  const item = items.find((candidate) => candidate.id === selectedId) ?? items[0]
-
-  if (!item) return null
-
-  return (
-    <Card>
-      <CardHeader
-        title="Products & Services builder"
-        subtitle="Adjust the pricing and packaged description the estimator pulls into proposals."
-        actions={
-          <Select value={item.id} onChange={(e) => setSelectedId(e.target.value)} className="min-w-48">
-            {items.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
-                {candidate.name}
-              </option>
-            ))}
-          </Select>
-        }
-      />
-      <div className="grid gap-3 p-4 lg:grid-cols-2">
-        <FieldRow label="Name">
-          <Input value={item.name} onChange={(e) => upsert({ ...item, name: e.target.value })} />
-        </FieldRow>
-        <FieldRow label="Unit price">
-          <Input type="number" value={item.unitPrice} onChange={(e) => upsert({ ...item, unitPrice: Number(e.target.value) })} />
-        </FieldRow>
-        <FieldRow label="Description" className="lg:col-span-2">
-          <Textarea rows={3} value={item.description} onChange={(e) => upsert({ ...item, description: e.target.value })} />
-        </FieldRow>
-      </div>
-    </Card>
-  )
-}
-
 function ProposalTemplateBuilder() {
   const templates = useStore((s) => s.proposalTemplates)
   const upsert = useStore((s) => s.upsertProposalTemplate)
@@ -332,6 +237,181 @@ function ProposalTemplateBuilder() {
         </FieldRow>
         <FieldRow label="Terms" className="lg:col-span-2">
           <Textarea rows={6} value={template.terms} onChange={(e) => upsert({ ...template, terms: e.target.value })} />
+        </FieldRow>
+      </div>
+    </Card>
+  )
+}
+
+function EstimatingPackBuilder() {
+  const packs = useStore((s) => s.estimatePacks)
+  const upsert = useStore((s) => s.upsertEstimatePack)
+  const proposalTemplates = useStore((s) => s.proposalTemplates)
+  const priceBookItems = useStore((s) => s.priceBookItems)
+  const [selectedCategory, setSelectedCategory] = useState<Category>(packs[0]?.category ?? 'residential')
+  const pack = packs.find((candidate) => candidate.category === selectedCategory) ?? packs[0]
+
+  if (!pack) return null
+
+  const categoryItems = useMemo(
+    () => priceBookItems.filter((item) => item.categories.includes(pack.category)),
+    [priceBookItems, pack.category],
+  )
+
+  const updatePack = (next: EstimateCategoryPack) => upsert(next)
+
+  return (
+    <Card>
+      <CardHeader
+        title="Estimating pack builder"
+        subtitle="Configure reminders, deposit defaults, proposal templates, and suggested catalogue systems by opportunity type."
+        actions={
+          <Select
+            value={pack.category}
+            onChange={(e) => setSelectedCategory(e.target.value as Category)}
+            className="min-w-48"
+          >
+            {packs.map((candidate) => (
+              <option key={candidate.category} value={candidate.category}>
+                {CATEGORY_LABEL[candidate.category]}
+              </option>
+            ))}
+          </Select>
+        }
+      />
+      <div className="space-y-4 p-4">
+        <div className="grid gap-3 lg:grid-cols-2">
+          <FieldRow label="Pack name">
+            <Input value={pack.label} onChange={(e) => updatePack({ ...pack, label: e.target.value })} />
+          </FieldRow>
+          <FieldRow label="Deposit %">
+            <Input
+              type="number"
+              value={pack.depositPct}
+              onChange={(e) => updatePack({ ...pack, depositPct: Number(e.target.value) || 0 })}
+            />
+          </FieldRow>
+          <FieldRow label="Proposal template">
+            <Select
+              value={pack.templateId}
+              onChange={(e) => updatePack({ ...pack, templateId: e.target.value })}
+            >
+              {proposalTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </Select>
+          </FieldRow>
+          <FieldRow label="Default suggested system">
+            <Select
+              value={pack.defaultSystemId}
+              onChange={(e) => updatePack({ ...pack, defaultSystemId: e.target.value })}
+            >
+              {categoryItems.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </Select>
+          </FieldRow>
+        </div>
+
+        <FieldRow
+          label="Alternate systems"
+          hint="Catalogue items the estimator can pick when overriding the suggestion. One id per line."
+        >
+          <Textarea
+            rows={4}
+            value={pack.alternateSystemIds.join('\n')}
+            onChange={(e) =>
+              updatePack({
+                ...pack,
+                alternateSystemIds: e.target.value
+                  .split('\n')
+                  .map((line) => line.trim())
+                  .filter(Boolean),
+              })
+            }
+          />
+        </FieldRow>
+
+        <div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold tracking-wider text-muted uppercase">Estimating reminders</p>
+            <Button
+              size="sm"
+              onClick={() =>
+                updatePack({
+                  ...pack,
+                  reminders: [
+                    ...pack.reminders,
+                    { id: uid('er'), label: 'New reminder', helper: '' },
+                  ],
+                })
+              }
+            >
+              Add reminder
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {pack.reminders.map((reminder) => (
+              <div key={reminder.id} className="grid gap-2 rounded-md border border-subtle p-3 md:grid-cols-[1fr_1fr_auto]">
+                <Input
+                  value={reminder.label}
+                  onChange={(e) =>
+                    updatePack({
+                      ...pack,
+                      reminders: pack.reminders.map((candidate) =>
+                        candidate.id === reminder.id ? { ...candidate, label: e.target.value } : candidate,
+                      ),
+                    })
+                  }
+                  placeholder="Reminder label"
+                />
+                <Input
+                  value={reminder.helper ?? ''}
+                  onChange={(e) =>
+                    updatePack({
+                      ...pack,
+                      reminders: pack.reminders.map((candidate) =>
+                        candidate.id === reminder.id ? { ...candidate, helper: e.target.value } : candidate,
+                      ),
+                    })
+                  }
+                  placeholder="Optional helper"
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    updatePack({
+                      ...pack,
+                      reminders: pack.reminders.filter((candidate) => candidate.id !== reminder.id),
+                    })
+                  }
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <FieldRow label="Form & price book hints" hint="One hint per line. Shown beside reminders on the estimate.">
+          <Textarea
+            rows={5}
+            value={pack.formHints.join('\n')}
+            onChange={(e) =>
+              updatePack({
+                ...pack,
+                formHints: e.target.value
+                  .split('\n')
+                  .map((line) => line.trim())
+                  .filter(Boolean),
+              })
+            }
+          />
         </FieldRow>
       </div>
     </Card>
@@ -406,7 +486,7 @@ function ChecklistBuilder() {
   )
 }
 
-function LocationsBuilder() {
+export function LocationsBuilder() {
   const locations = useStore((s) => s.locations)
   const upsert = useStore((s) => s.upsertLocation)
   const users = useStore((s) => s.users)
@@ -439,7 +519,7 @@ function LocationsBuilder() {
       <Card>
         <CardHeader
           title="Territories"
-          subtitle="UI-only network setup for adding branches, ZIP ownership, and pricing."
+          subtitle="Add branches, ZIP ownership, and pricing."
           actions={
             <Button size="sm" onClick={addLocation}>
               Add location
@@ -477,7 +557,7 @@ function LocationsBuilder() {
       <Card>
         <CardHeader
           title="Location builder"
-          subtitle="Design the territory, routing coverage, and commercial defaults shown in the admin workspace."
+          subtitle="Territory details, ZIP ownership, and commercial defaults."
         />
         <div className="space-y-4 p-4">
           <div className="grid gap-3 lg:grid-cols-2">
@@ -541,75 +621,5 @@ function LocationsBuilder() {
         </div>
       </Card>
     </div>
-  )
-}
-
-function StageBuilder() {
-  const stages = useStore((s) => s.stageDefinitions)
-  const upsert = useStore((s) => s.upsertStageDefinition)
-  const [selectedId, setSelectedId] = useState<string>(stages[0]?.id ?? '')
-  const stage = useMemo(() => stages.find((candidate) => candidate.id === selectedId) ?? stages[0], [stages, selectedId])
-
-  if (!stage) return null
-
-  const updateStage = (next: StageDef) => upsert(next)
-
-  return (
-    <Card>
-      <CardHeader
-        title="Stage builder"
-        subtitle="Refine stage purpose, probability, and the visible gate language used by the pipeline."
-        actions={
-          <Select value={stage.id} onChange={(e) => setSelectedId(e.target.value)} className="min-w-48">
-            {stages.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
-                {candidate.label}
-              </option>
-            ))}
-          </Select>
-        }
-      />
-      <div className="space-y-3 p-4">
-        <div className="grid gap-3 lg:grid-cols-3">
-          <FieldRow label="Label">
-            <Input value={stage.label} onChange={(e) => updateStage({ ...stage, label: e.target.value })} />
-          </FieldRow>
-          <FieldRow label="Probability">
-            <Input type="number" value={stage.probability} onChange={(e) => updateStage({ ...stage, probability: Number(e.target.value) })} />
-          </FieldRow>
-          <FieldRow label="Group">
-            <Input value={stage.group} readOnly />
-          </FieldRow>
-        </div>
-        <FieldRow label="Purpose">
-          <Textarea rows={3} value={stage.purpose} onChange={(e) => updateStage({ ...stage, purpose: e.target.value })} />
-        </FieldRow>
-
-        <div>
-          <p className="mb-2 text-xs font-semibold tracking-wider text-muted uppercase">Gate copy</p>
-          <div className="space-y-2">
-            {stage.gates.map((gate, index) => (
-              <div key={`${gate.kind}-${index}`} className="rounded-md border border-subtle p-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <Badge tone="neutral">{gate.kind}</Badge>
-                  <Badge tone={gate.blocking ? 'warning' : 'success'}>{gate.blocking ? 'blocking' : 'advisory'}</Badge>
-                </div>
-                <Input
-                  value={gate.label}
-                  onChange={(e) =>
-                    updateStage({
-                      ...stage,
-                      gates: stage.gates.map((candidate, candidateIndex) =>
-                        candidateIndex === index ? { ...candidate, label: e.target.value } : candidate,
-                      ),
-                    })
-                  }
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </Card>
   )
 }

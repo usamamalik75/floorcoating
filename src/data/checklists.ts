@@ -134,10 +134,14 @@ export const CHECKLIST_TEMPLATES: ChecklistTemplate[] = [
 
 export const CHECKLIST_BY_ID = Object.fromEntries(CHECKLIST_TEMPLATES.map((t) => [t.id, t]))
 
-export function templateForStage(stage: string, category?: string): ChecklistTemplate | undefined {
+export function templateForStage(
+  stage: string,
+  category?: string,
+  templates: ChecklistTemplate[] = CHECKLIST_TEMPLATES,
+): ChecklistTemplate | undefined {
   return (
-    CHECKLIST_TEMPLATES.find((t) => t.stage === stage && t.category === category) ??
-    CHECKLIST_TEMPLATES.find((t) => t.stage === stage && !t.category)
+    templates.find((t) => t.stage === stage && t.category === category) ??
+    templates.find((t) => t.stage === stage && !t.category)
   )
 }
 

@@ -193,8 +193,12 @@ export const VERTICALS: Vertical[] = [
   'Office Space', 'Commercial', 'Residential',
 ]
 
-export function deriveMaterial(priceBookId: string, quantity: number) {
-  const item = PRICE_BOOK_BY_ID[priceBookId]
+export function deriveMaterial(
+  priceBookId: string,
+  quantity: number,
+  items: PriceBookItem[] = PRICE_BOOK,
+) {
+  const item = items.find((candidate) => candidate.id === priceBookId)
   if (!item || item.materialRate === 0) return null
   const multiplier = Math.max(1, item.resourceMultiplier)
   const required = quantity * item.materialRate * multiplier * (1 + item.contingencyAllowance)

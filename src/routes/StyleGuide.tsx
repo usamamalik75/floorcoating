@@ -24,7 +24,7 @@ export function StyleGuide() {
 
   return (
     <div className="h-full overflow-y-auto scrollbar-thin">
-      <div className="mx-auto max-w-5xl space-y-8 p-6">
+      <div className="w-full space-y-8 p-6">
         <header>
           <h1 className="font-display text-2xl text-primary">Design System</h1>
           <p className="mt-1 max-w-2xl text-base text-secondary">

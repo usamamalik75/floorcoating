@@ -150,7 +150,7 @@ export function LeadIntake() {
 
   return (
     <div className="h-full overflow-y-auto scrollbar-thin">
-      <div className="mx-auto grid max-w-[74rem] gap-5 px-5 py-5 lg:grid-cols-[1fr_22rem]">
+      <div className="grid w-full gap-5 px-5 py-5 lg:grid-cols-[1fr_22rem]">
         <div>
           <h1 className="font-display text-2xl text-primary">Lead capture</h1>
           <p className="mt-0.5 mb-4 text-base text-muted">

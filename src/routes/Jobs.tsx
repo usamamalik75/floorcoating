@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertTriangle, Boxes, Camera, HardHat } from 'lucide-react'
 import { useStore, money } from '@/store/useStore'
-import { useScopedOpportunities, useUserDirectory } from '@/store/selectors'
-import { ACCOUNT_BY_ID, LOCATION_BY_ID } from '@/data/seed'
+import { useScopedOpportunities, useLocations, useUserDirectory } from '@/store/selectors'
+import { ACCOUNT_BY_ID } from '@/data/seed'
 import {
   JOB_STATUSES,
   jobStatusLabel,
@@ -80,7 +80,7 @@ export function Jobs() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl h-full flex flex-col bg-surface-sunken">
+    <div className="w-full h-full flex flex-col bg-surface-sunken">
       <div className="shrink-0 border-b border-subtle/50 bg-surface-raised px-6 py-4 rounded-b-xl shadow-sm mb-4">
         <div className="flex flex-wrap items-end gap-3">
           <div>
@@ -251,6 +251,7 @@ function JobCard({
 }) {
   const s = useStore()
   const userById = useUserDirectory()
+  const locations = useLocations()
   const job = s.jobs.find((j) => j.opportunityId === opp.id)
   const procurement = s.procurementOrders.find((m) => m.opportunityId === opp.id)
   const issues = s.issues.filter((i) => i.opportunityId === opp.id && i.status === 'open')
@@ -263,7 +264,7 @@ function JobCard({
         <p className="text-base font-medium text-primary leading-tight">{opp.name}</p>
         <p className="mt-0.5 text-sm text-muted">{ACCOUNT_BY_ID[opp.accountId]?.name}</p>
         <div className="mt-2 flex items-center justify-between text-2xs text-muted">
-          <span>{LOCATION_BY_ID[opp.locationId]?.name}</span>
+          <span>{locations.find((l) => l.id === opp.locationId)?.name}</span>
           <span className="font-mono">{money(opp.value, true)}</span>
         </div>
         {job && jobTeam(job).length > 0 && (

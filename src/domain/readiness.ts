@@ -1,7 +1,6 @@
-import type { Category, JobRole, JobStatus, StageId } from './types'
+import type { Category, ChecklistTemplate, JobRole, JobStatus, SiteVisitForm, StageId } from './types'
 import { visitVocab } from './types'
-import { formForCategory, requiredFields } from '@/data/siteVisitForms'
-import { CHECKLIST_BY_ID } from '@/data/checklists'
+import { requiredFields } from '@/data/siteVisitForms'
 import { estimateTotal } from '@/store/useStore'
 
 /* ==========================================================================
@@ -48,19 +47,23 @@ export interface ReadinessInput {
   job?: { status?: JobStatus; crewLeaderId: string | null; start: string; team?: { userId: string; role: JobRole }[] }
   invoices: { kind: string; amount: number; payments: { amount: number }[] }[]
   changeOrders: { status: string }[]
+  /** Live Admin Setup forms — drives guided-form readiness. */
+  siteVisitForms?: SiteVisitForm[]
+  /** Live Admin Setup checklists — drives prep/progress item counts. */
+  checklistTemplates?: ChecklistTemplate[]
 }
 
 const has = (input: ReadinessInput, kind: string, phase?: string) =>
   input.artifacts.some((a) => a.kind === kind && (!phase || a.photoPhase === phase))
 
 function checklistProgress(input: ReadinessInput, templateId: string) {
-  const tpl = CHECKLIST_BY_ID[templateId]
+  const tpl = input.checklistTemplates?.find((t) => t.id === templateId)
   const inst = input.checklists.find((c) => c.templateId === templateId)
   return { done: inst?.done.length ?? 0, total: tpl?.items.length ?? 0 }
 }
 
 function siteVisitChecks(input: ReadinessInput): Check[] {
-  const form = formForCategory(input.opportunity.category)
+  const form = input.siteVisitForms?.find((f) => f.category === input.opportunity.category)
   const required = form ? requiredFields(form) : []
   const answered = required.filter((f) => {
     const v = input.siteVisit?.values[f.id]
@@ -76,12 +79,15 @@ function siteVisitChecks(input: ReadinessInput): Check[] {
       r.unit.trim() &&
       r.quantity > 0,
   )
-  const visitChecklist = input.checklists.find((c) =>
-    ['cl_sales_call_residential', 'cl_site_visit_commercial', 'cl_site_visit_industrial'].includes(
-      c.templateId,
-    ),
+  const visitChecklist = input.checklists.find(
+    (c) =>
+      input.checklistTemplates?.some(
+        (t) => t.id === c.templateId && t.stage === 'site_visit_scheduled',
+      ) ||
+      ['cl_sales_call_residential', 'cl_site_visit_commercial', 'cl_site_visit_industrial'].includes(
+        c.templateId,
+      ),
   )
-  // Template item counts are fixed in seed; treat instance presence as the checklist track.
   const checklistDone = visitChecklist?.done.length ?? 0
   return [
     {
@@ -105,7 +111,10 @@ function siteVisitChecks(input: ReadinessInput): Check[] {
       id: 'form',
       label: `Guided ${v.singular} form completed`,
       ok: required.length > 0 && answered.length === required.length,
-      detail: `${answered.length} of ${required.length} required fields answered`,
+      detail:
+        required.length === 0
+          ? 'No required fields configured in Setup'
+          : `${answered.length} of ${required.length} required fields answered`,
       href: `/opportunities/${input.opportunity.id}/visit`,
     },
     ...(input.opportunity.category === 'residential'
@@ -222,7 +231,7 @@ export function checksForJobStatus(status: JobStatus, input: ReadinessInput): Ch
       return [
         {
           id: 'po',
-          label: 'Material order submitted',
+          label: 'Procurement order submitted',
           ok: Boolean(input.procurementOrder && input.procurementOrder.status !== 'draft'),
           detail: input.procurementOrder
             ? `Order is ${input.procurementOrder.status}`

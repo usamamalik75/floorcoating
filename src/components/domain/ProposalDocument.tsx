@@ -1,7 +1,7 @@
 import { format } from 'date-fns'
 import { CheckCircle2 } from 'lucide-react'
 import type { Estimate, Opportunity } from '@/domain/types'
-import { ACCOUNT_BY_ID, LOCATION_BY_ID } from '@/data/seed'
+import { ACCOUNT_BY_ID } from '@/data/seed'
 import { estimateTotal, money, optionTotal, useStore } from '@/store/useStore'
 import { Logo } from '@/components/layout/Logo'
 import { cn } from '@/lib/cn'
@@ -35,7 +35,8 @@ export function ProposalDocument({
   onSelectAlternative?: (optionId: string) => void
 }) {
   const account = ACCOUNT_BY_ID[opportunity.accountId]
-  const location = LOCATION_BY_ID[opportunity.locationId]
+  const locations = useStore((s) => s.locations)
+  const location = locations.find((l) => l.id === opportunity.locationId)
   const priceBookItems = useStore((s) => s.priceBookItems)
   const proposalTemplates = useStore((s) => s.proposalTemplates)
   const priceBookById = Object.fromEntries(priceBookItems.map((item) => [item.id, item])) as Record<string, typeof priceBookItems[number]>

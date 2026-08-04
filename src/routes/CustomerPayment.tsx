@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { AlertTriangle, ArrowLeft, CheckCircle2, CreditCard, Lock, ShieldCheck } from 'lucide-react'
@@ -6,8 +6,18 @@ import { ACCOUNT_BY_ID } from '@/data/seed'
 import { money, useStore } from '@/store/useStore'
 import { Button, Card, EmptyState } from '@/components/ui'
 
+function useStoreHydrated() {
+  const [hydrated, setHydrated] = useState(() => useStore.persist.hasHydrated())
+  useEffect(() => {
+    setHydrated(useStore.persist.hasHydrated())
+    return useStore.persist.onFinishHydration(() => setHydrated(true))
+  }, [])
+  return hydrated
+}
+
 export function CustomerPayment() {
   const { token = '' } = useParams()
+  const hydrated = useStoreHydrated()
   const request = useStore((s) => s.paymentRequests.find((candidate) => candidate.token === token))
   const updateStatus = useStore((s) => s.updatePaymentRequestStatus)
   const opportunity = useStore((s) => s.opportunities.find((candidate) => candidate.id === request?.opportunityId))
@@ -20,6 +30,14 @@ export function CustomerPayment() {
       updateStatus(request.id, 'viewed', 'Customer opened the payment page.', { recordInvoicePayment: false })
     }
   }, [request, updateStatus])
+
+  if (!hydrated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f4f4f5]">
+        <EmptyState title="Loading payment…" description="Restoring your secure link." />
+      </div>
+    )
+  }
 
   if (!request || !opportunity) {
     return (
@@ -38,7 +56,7 @@ export function CustomerPayment() {
 
   return (
     <div className="min-h-screen bg-[#f4f4f5] py-6">
-      <div className="mx-auto max-w-2xl px-4">
+      <div className="w-full px-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <Link
             to={`/opportunities/${opportunity.id}`}

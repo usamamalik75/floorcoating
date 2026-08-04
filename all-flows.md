@@ -69,13 +69,13 @@ Use these labels when speaking about the platform as a generic product:
 3. Platform owner updates company or contact details.
 4. Platform owner clicks `Update customer`.
 
-### 1.4 Create a prospecting request
+### 1.4 Import prospects from a sheet
 
 1. Platform owner goes to `Prospecting`.
-2. Platform owner clicks `New prospecting request`.
-3. Platform owner chooses a location, vertical, origin city, radius, and minimum employee size.
-4. Platform owner clicks `Create request`.
-5. The request appears in the prospecting queue as a pre-lead sourcing request.
+2. Platform owner clicks `Import prospects`.
+3. The import popup opens and shows the sheet source.
+4. Platform owner chooses a default location and clicks `Import from sheet`.
+5. The imported companies appear under `Imported prospects` as prospect accounts.
 
 ### 1.5 Add a location
 
@@ -97,8 +97,17 @@ Use these labels when speaking about the platform as a generic product:
 ### 1.7 Configure platform standards
 
 1. Platform owner goes to `Admin`.
-2. Platform owner opens the builders for `Workspace`, `Locations`, `Forms`, `Catalogue`, `Proposal templates`, `Checklists`, or `Stages`.
+2. Platform owner opens the builders for `Proposal templates`, `Estimating packs`, `Assessment forms`, or `Checklists`. Locations are managed on the Admin Locations tab; catalogue items on Products & Services.
+3. Edits persist in shared store state and show immediately on Estimates, Visits & Calls, stage gates, Field job sheets, proposals, procurement, and Settings.
 3. Platform owner updates configuration values directly in the builder UI.
+
+### 1.7a Configure an estimating pack
+
+1. Platform owner goes to `Admin`.
+2. Platform owner opens the `Estimating packs` builder.
+3. Platform owner selects Residential, Commercial, or Industrial.
+4. Platform owner edits pack name, deposit %, proposal template, default system, alternate systems, reminders, and form hints.
+5. New estimates for that opportunity type use the updated pack.
 
 ### 1.8 Add a product or service
 
@@ -120,8 +129,8 @@ Use these labels when speaking about the platform as a generic product:
 ### 2.2 Work a pre-lead prospecting journey
 
 1. Sales rep goes to `Prospecting`.
-2. Sales rep reviews prospecting requests and imported prospect companies.
-3. Sales rep uses this area as the pre-lead workspace before outreach converts a prospect into a real lead.
+2. Sales rep clicks `Import prospects` to pull companies from the sheet when needed.
+3. Sales rep reviews the imported prospect list and clicks `Create lead` to move a company into sales.
 
 ### 2.3 Start a customer conversation
 
@@ -149,10 +158,10 @@ Use these labels when speaking about the platform as a generic product:
 
 ### 3.2 Complete the site visit form
 
-1. Sales rep opens the assessment record.
-2. Sales rep fills the guided site visit form.
+1. Sales rep opens the opportunity Visits tab to review status, or opens the guided form at `/opportunities/:id/visit`.
+2. Capture and edit happen only on the guided form (checklist, scope requests, answers).
 3. Sales rep saves progress or completes the visit.
-4. The captured information feeds the downstream estimate journey.
+4. The Visits tab shows a read-only summary of what was gathered; the estimate journey uses that data.
 
 ### 3.3 Start a new estimate
 
@@ -283,7 +292,7 @@ This section explains each page by role: who uses it, why they open it, and what
 ### 8.3 `Prospecting`
 
 - **Primary roles:** admin, owner, sales.
-- **Journey:** platform owner or sales user goes to `Prospecting`, clicks `New prospecting request`, creates a shared prospecting request, imports matched prospect accounts, then clicks `Create lead` to push a prospect into the sales flow.
+- **Journey:** platform owner or sales user goes to `Prospecting`, clicks `Import prospects`, confirms the sheet import, reviews imported companies, then clicks `Create lead` to push a prospect into the sales flow.
 
 ### 8.4 `Customers`
 
@@ -368,7 +377,7 @@ This section explains each page by role: who uses it, why they open it, and what
 ### 8.20 `Admin`
 
 - **Primary roles:** admin, owner.
-- **Journey:** platform owner goes to `Admin` to add team members, design locations, and manage forms, catalogue, templates, checklists, stages, and workspace configuration.
+- **Journey:** platform owner goes to `Admin`, uses `Team` to add people, `Locations` to review routing, and `Setup` to open one company configuration area at a time.
 
 ### 8.21 `Opportunity Record`
 
@@ -397,7 +406,7 @@ This section explains each page by role: who uses it, why they open it, and what
 
 ## 9. Design Notes
 
-- The main journeys in this prototype are now backed by shared store state, including team setup, prospecting requests, procurement orders, communications, payment links, and location-driven routing.
+- The main journeys in this prototype are now backed by shared store state, including team setup, sheet-based prospect imports, procurement orders, communications, payment links, and location-driven routing.
 - A few integrations are still mocked even though the workflow state persists in-app:
   - external prospect-data providers
   - identity / authentication systems

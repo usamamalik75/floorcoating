@@ -22,8 +22,8 @@ import type { Estimate, EstimateOption, LineItem } from '@/domain/types'
 import { CATEGORY_LABEL } from '@/domain/types'
 import { ACCOUNT_BY_ID } from '@/data/seed'
 import { estimatePackFor, suggestFloorSystem } from '@/data/estimating'
-import { estimateTotal, money, optionTotal, useStore } from '@/store/useStore'
-import { useChecks, useUserDirectory, useUsers, useViewer } from '@/store/selectors'
+import { estimateTotal, money, optionTotal, proposalTokenFor, useStore } from '@/store/useStore'
+import { useChecks, useEstimatePacks, useUserDirectory, useUsers, useViewer } from '@/store/selectors'
 import {
   Badge,
   Button,
@@ -66,6 +66,7 @@ export function EstimateBuilder() {
   const scopeExtractions = useStore((s) => s.scopeExtractions)
   const priceBookItems = useStore((s) => s.priceBookItems)
   const proposalTemplates = useStore((s) => s.proposalTemplates)
+  const estimatePacks = useEstimatePacks()
   const upsertEstimate = useStore((s) => s.upsertEstimate)
   const updateEstimate = useStore((s) => s.updateEstimate)
   const approveEstimate = useStore((s) => s.approveEstimate)
@@ -101,11 +102,11 @@ export function EstimateBuilder() {
   )
 
   const grand = useMemo(() => (est ? estimateTotal(est) : 0), [est])
-  const pack = opp ? estimatePackFor(opp.category) : null
+  const pack = opp ? estimatePackFor(opp.category, estimatePacks) : null
   const suggestion = useMemo(() => {
     if (!opp) return null
-    return suggestFloorSystem(opp.category, siteVisit?.requests ?? [], siteVisit?.values ?? {})
-  }, [opp, siteVisit?.requests, siteVisit?.values])
+    return suggestFloorSystem(opp.category, siteVisit?.requests ?? [], siteVisit?.values ?? {}, estimatePacks)
+  }, [opp, siteVisit?.requests, siteVisit?.values, estimatePacks])
   const categoryPriceBook = useMemo(
     () => (opp ? priceBookItems.filter((pb) => pb.categories.includes(opp.category)) : []),
     [priceBookItems, opp],
@@ -147,11 +148,12 @@ export function EstimateBuilder() {
   }
 
   const createEstimate = () => {
-    const nextPack = estimatePackFor(opp.category)
+    const nextPack = estimatePackFor(opp.category, estimatePacks)
     const nextSuggestion = suggestFloorSystem(
       opp.category,
       siteVisit?.requests ?? [],
       siteVisit?.values ?? {},
+      estimatePacks,
     )
     upsertEstimate({
       id: uid('est'),
@@ -166,7 +168,7 @@ export function EstimateBuilder() {
       sentAt: null,
       signedAt: null,
       signedBy: null,
-      token: Math.random().toString(36).slice(2, 8),
+      token: proposalTokenFor(opp.id),
       depositPct: nextPack.depositPct,
       estimateRemindersDone: [],
       suggestedPriceBookId: nextSuggestion.priceBookId,
@@ -415,7 +417,7 @@ export function EstimateBuilder() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-        <div className="mx-auto max-w-5xl space-y-3 p-4">
+        <div className="w-full space-y-3 p-4">
           {!est ? (
             <Card>
               <EmptyState

@@ -3,8 +3,7 @@ import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import { ArrowRight, Boxes, Plus, Truck } from 'lucide-react'
 import { useStore } from '@/store/useStore'
-import { useViewer } from '@/store/selectors'
-import { LOCATION_BY_ID } from '@/data/seed'
+import { useLocations, useViewer } from '@/store/selectors'
 import type { ProcurementOrder } from '@/domain/types'
 import { Badge, Button, Card, EmptyState, Modal, Table, Td, Th, Tr } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -14,6 +13,7 @@ const FLOW: ProcurementOrder['status'][] = ['draft', 'submitted', 'approved', 's
 export function PurchasingOrders() {
   const orders = useStore((state) => state.procurementOrders)
   const opportunities = useStore((state) => state.opportunities)
+  const locations = useLocations()
   const advance = useStore((state) => state.advanceProcurementOrder)
   const locationFilter = useStore((state) => state.locationFilter)
   const viewer = useViewer()
@@ -54,7 +54,7 @@ export function PurchasingOrders() {
                       </Link>
                       <span className='flex items-center gap-1 text-sm text-muted'>Open job record <ArrowRight size={10} /></span>
                     </Td>
-                    <Td>{opportunity ? LOCATION_BY_ID[opportunity.locationId]?.name : '—'}</Td>
+                    <Td>{opportunity ? locations.find((l) => l.id === opportunity.locationId)?.name : '—'}</Td>
                     <Td>
                       {order.lines.map((line) => (
                         <span key={line.id} className='block text-sm text-secondary'>{line.qty} {line.unit} · {line.product}</span>
@@ -91,6 +91,7 @@ export function Purchasing() {
   const orders = useStore((state) => state.procurementOrders)
   const opportunities = useStore((state) => state.opportunities)
   const jobs = useStore((state) => state.jobs)
+  const locations = useLocations()
   const locationFilter = useStore((state) => state.locationFilter)
   const candidates = opportunities.filter((opportunity) => {
     if (opportunity.stage !== 'awarded') return false
@@ -102,7 +103,7 @@ export function Purchasing() {
 
   return (
     <div className='h-full overflow-y-auto scrollbar-thin'>
-      <div className='mx-auto max-w-[80rem] px-5 py-5'>
+      <div className='w-full px-5 py-5'>
         <header className='mb-4 flex flex-wrap items-end justify-between gap-3'>
           <div>
             <h1 className='font-display text-2xl text-primary'>Purchasing</h1>
@@ -120,11 +121,11 @@ export function Purchasing() {
           open={creating}
           onClose={() => setCreating(false)}
           title="Prepare order"
-          subtitle="Open a job that needs materials and create its material order."
+          subtitle="Open a job that needs procurement and create its order."
         >
           <div className="space-y-2">
             {candidates.length === 0 ? (
-              <EmptyState title="No jobs need ordering" description="Jobs move here when the workflow marks material as required." />
+              <EmptyState title="No jobs need ordering" description="Jobs move here when the workflow marks procurement as required." />
             ) : (
               candidates.map((opportunity) => (
                 <Link
@@ -135,9 +136,9 @@ export function Purchasing() {
                 >
                   <div className="min-w-0">
                     <p className="font-medium text-primary">{opportunity.name}</p>
-                    <p className="text-sm text-muted">{LOCATION_BY_ID[opportunity.locationId]?.name}</p>
+                    <p className="text-sm text-muted">{locations.find((l) => l.id === opportunity.locationId)?.name}</p>
                   </div>
-                  <Badge tone="warning">Material required</Badge>
+                  <Badge tone="warning">Procurement required</Badge>
                 </Link>
               ))
             )}

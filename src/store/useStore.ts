@@ -43,8 +43,13 @@ import {
   requestsFromServiceTemplate,
   SERVICE_TEMPLATES,
 } from '@/data/serviceTemplates'
-import { formForCategory, SITE_VISIT_FORMS } from '@/data/siteVisitForms'
-import { estimatePackFor, suggestFloorSystem } from '@/data/estimating'
+import { SITE_VISIT_FORMS } from '@/data/siteVisitForms'
+import {
+  ESTIMATE_PACK_LIST,
+  estimatePackFor,
+  suggestFloorSystem,
+  type EstimateCategoryPack,
+} from '@/data/estimating'
 import {
   ACCOUNTS,
   ACTIVITY,
@@ -68,6 +73,11 @@ import { STAGE_BY_ID, stageLabel, STAGES } from '@/domain/stages'
 
 let seq = 1000
 const nextId = (prefix: string) => `${prefix}_${++seq}`
+
+/** Stable public proposal token so reloads keep working even if the estimate is recreated. */
+export function proposalTokenFor(opportunityId: string) {
+  return `p_${opportunityId.replace(/^op_/, '')}`
+}
 
 export interface MoveMeta {
   reminderAt?: string
@@ -105,6 +115,7 @@ interface State {
   serviceTemplates: ScopeServiceTemplate[]
   priceBookItems: PriceBookItem[]
   proposalTemplates: ProposalTemplate[]
+  estimatePacks: EstimateCategoryPack[]
   stageDefinitions: StageDef[]
   messageThreads: CommunicationThread[]
   communicationTemplates: CommunicationTemplate[]
@@ -166,12 +177,6 @@ interface State {
   upsertProcurementOrder: (o: ProcurementOrder) => void
   submitProcurementOrder: (id: string) => void
   advanceProcurementOrder: (id: string) => void
-  /** @deprecated Compatibility alias; use upsertProcurementOrder. */
-  upsertMaterialOrder: (o: ProcurementOrder) => void
-  /** @deprecated Compatibility alias; use submitProcurementOrder. */
-  submitMaterialOrder: (id: string) => void
-  /** @deprecated Compatibility alias; use advanceProcurementOrder. */
-  advanceMaterialOrder: (id: string) => void
 
   addChangeOrder: (c: Omit<ChangeOrder, 'id'>) => void
   setChangeOrderStatus: (id: string, status: ChangeOrder['status']) => void
@@ -212,6 +217,7 @@ interface State {
   upsertChecklistTemplate: (template: ChecklistTemplate) => void
   upsertPriceBookItem: (item: PriceBookItem) => void
   upsertProposalTemplate: (template: ProposalTemplate) => void
+  upsertEstimatePack: (pack: EstimateCategoryPack) => void
   upsertStageDefinition: (stage: StageDef) => void
 
 
@@ -330,6 +336,7 @@ const initial = () => ({
   serviceTemplates: structuredClone(SERVICE_TEMPLATES),
   priceBookItems: structuredClone(PRICE_BOOK),
   proposalTemplates: structuredClone(PROPOSAL_TEMPLATES),
+  estimatePacks: structuredClone(ESTIMATE_PACK_LIST),
   stageDefinitions: structuredClone(STAGES),
   messageThreads: createMessageThreads(),
   communicationTemplates: createCommunicationTemplates(),
@@ -343,7 +350,7 @@ const initial = () => ({
  * seed invalidates it and "Reset demo" always returns to the story's start.
  */
 const STORAGE_KEY = 'fcg-prototype'
-const STORAGE_VERSION = 14
+const STORAGE_VERSION = 15
 
 const createState: StateCreator<State> = (set, get) => ({
   ...initial(),
@@ -448,7 +455,7 @@ const createState: StateCreator<State> = (set, get) => ({
 
     // Stage changes create related module records — they do not redirect the user.
     if (to === 'site_visit_scheduled' || to === 'site_visit_required') {
-      const form = get().siteVisitForms.find((candidate) => candidate.category === o.category) ?? formForCategory(o.category)
+      const form = get().siteVisitForms.find((candidate) => candidate.category === o.category)
       if (form && !get().siteVisits.some((v) => v.opportunityId === opportunityId)) {
         const serviceTpl = preferredServiceTemplate(get().serviceTemplates, o.category)
         const seededRequests = serviceTpl
@@ -483,7 +490,7 @@ const createState: StateCreator<State> = (set, get) => ({
         const visitChecklist =
           get().checklistTemplates.find(
             (t) => t.stage === 'site_visit_scheduled' && t.category === o.category,
-          ) ?? templateForStage('site_visit_scheduled', o.category)
+          ) ?? templateForStage('site_visit_scheduled', o.category, get().checklistTemplates)
         if (visitChecklist) {
           set((s) => ({
             checklists: [
@@ -831,9 +838,7 @@ const createState: StateCreator<State> = (set, get) => ({
     const requests = requestsFromServiceTemplate(tpl, () => nextId('req'))
     const existing = get().siteVisits.find((v) => v.opportunityId === opportunityId)
     const opp = get().opportunities.find((o) => o.id === opportunityId)
-    const form =
-      get().siteVisitForms.find((candidate) => candidate.category === opp?.category) ??
-      (opp ? formForCategory(opp.category) : undefined)
+    const form = get().siteVisitForms.find((candidate) => candidate.category === opp?.category)
 
     if (!existing) {
       if (!form) return
@@ -1009,11 +1014,17 @@ const createState: StateCreator<State> = (set, get) => ({
     const existing = get().estimates.find((e) => e.opportunityId === opportunityId)
     if (existing) return existing.id
     const opp = get().opportunities.find((o) => o.id === opportunityId)
-    const pack = estimatePackFor(opp?.category ?? 'commercial')
+    const packs = get().estimatePacks
+    const pack = estimatePackFor(opp?.category ?? 'commercial', packs)
     const visit = get().siteVisits.find((v) => v.opportunityId === opportunityId)
-    const suggestion = suggestFloorSystem(opp?.category ?? 'commercial', visit?.requests ?? [], visit?.values ?? {})
+    const suggestion = suggestFloorSystem(
+      opp?.category ?? 'commercial',
+      visit?.requests ?? [],
+      visit?.values ?? {},
+      packs,
+    )
     const id = nextId('est')
-    const token = id.replace('est_', '').slice(0, 6)
+    const token = proposalTokenFor(opportunityId)
     const estimate: Estimate = {
       id,
       opportunityId,
@@ -1123,7 +1134,7 @@ const createState: StateCreator<State> = (set, get) => ({
     get().logActivity(
       mo.opportunityId,
       'system',
-      `Material order ${purchaseOrderId} submitted to purchasing.`,
+      `Procurement order ${purchaseOrderId} submitted to purchasing.`,
     )
   },
 
@@ -1143,12 +1154,8 @@ const createState: StateCreator<State> = (set, get) => ({
         materialOrders: procurementOrders,
       }
     })
-    get().logActivity(mo.opportunityId, 'system', `Material order ${mo.purchaseOrderId ?? ''} is now ${next}.`)
+    get().logActivity(mo.opportunityId, 'system', `Procurement order ${mo.purchaseOrderId ?? ''} is now ${next}.`)
   },
-
-  upsertMaterialOrder: (o) => get().upsertProcurementOrder(o),
-  submitMaterialOrder: (id) => get().submitProcurementOrder(id),
-  advanceMaterialOrder: (id) => get().advanceProcurementOrder(id),
 
   addChangeOrder: (c) => {
     set((s) => ({ changeOrders: [...s.changeOrders, { ...c, id: nextId('co') }] }))
@@ -1411,6 +1418,13 @@ const createState: StateCreator<State> = (set, get) => ({
         : [...s.proposalTemplates, template],
     })),
 
+  upsertEstimatePack: (pack) =>
+    set((s) => ({
+      estimatePacks: s.estimatePacks.some((existing) => existing.category === pack.category)
+        ? s.estimatePacks.map((existing) => (existing.category === pack.category ? pack : existing))
+        : [...s.estimatePacks, pack],
+    })),
+
   upsertStageDefinition: (stage) =>
     set((s) => ({
       stageDefinitions: s.stageDefinitions.some((existing) => existing.id === stage.id)
@@ -1435,6 +1449,22 @@ export const useStore = create<State>()(
     name: STORAGE_KEY,
     version: STORAGE_VERSION,
     storage: createJSONStorage(() => sessionStorage),
+    migrate: (persistedState) => {
+      const prev = (persistedState ?? {}) as Partial<ReturnType<typeof initial>>
+      const defaults = initial()
+      const procurementOrders =
+        prev.procurementOrders ?? prev.materialOrders ?? defaults.procurementOrders
+      return {
+        ...defaults,
+        ...prev,
+        procurementOrders,
+        materialOrders: procurementOrders,
+        estimatePacks: prev.estimatePacks ?? defaults.estimatePacks,
+        serviceTemplates: prev.serviceTemplates ?? defaults.serviceTemplates,
+        users: prev.users ?? defaults.users,
+        prospectRequests: prev.prospectRequests ?? defaults.prospectRequests,
+      }
+    },
     // Actions are rebuilt on load; only the data and the demo lenses persist.
     partialize: (s) => ({
       accounts: s.accounts,
@@ -1460,6 +1490,7 @@ export const useStore = create<State>()(
       serviceTemplates: s.serviceTemplates,
       priceBookItems: s.priceBookItems,
       proposalTemplates: s.proposalTemplates,
+      estimatePacks: s.estimatePacks,
       stageDefinitions: s.stageDefinitions,
       messageThreads: s.messageThreads,
       communicationTemplates: s.communicationTemplates,

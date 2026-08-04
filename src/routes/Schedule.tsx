@@ -40,7 +40,7 @@ function ProcurementPanel({ opportunityId }: { opportunityId: string }) {
     <div className="rounded-md border border-subtle bg-surface-inset p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 text-base text-primary">
-          <Package size={13} /> Material order
+          <Package size={13} /> Procurement order
         </span>
         <Badge tone={order?.status === 'delivered' ? 'success' : order ? 'attention' : 'warning'}>
           {order ? order.status : 'not ordered'}

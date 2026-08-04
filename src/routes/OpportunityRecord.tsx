@@ -27,34 +27,30 @@ import {
   User as UserIcon,
   XCircle,
 } from 'lucide-react'
-import type { ArtifactKind, JobStatus, ScopeRequest, StageId } from '@/domain/types'
+import type { ArtifactKind, JobStatus, StageId } from '@/domain/types'
 import {
   ACCOUNT_RELATIONSHIP_LABEL,
   CATEGORY_LABEL,
   SALES_PIPELINE_LABEL,
-  SCOPE_UNITS,
   salesPipelineOf,
   visitVocab,
 } from '@/domain/types'
 import { STAGE_BY_ID, defaultHubTabForStage, jobStatusIndex, stageLabel } from '@/domain/stages'
 import {
-  CHECKLIST_BY_ID,
   resolveChecklistItems,
   visitChecklistTemplates,
 } from '@/data/checklists'
-import { emptyScopeRequest } from '@/data/siteVisitForms'
-import { visitServiceTemplates } from '@/data/serviceTemplates'
-import { formForCategory } from '@/data/siteVisitForms'
-import { ACCOUNT_BY_ID, LOCATION_BY_ID } from '@/data/seed'
-import { PRICE_BOOK_BY_ID } from '@/data/priceBook'
+import { ACCOUNT_BY_ID } from '@/data/seed'
 import { estimateTotal, money, optionTotal, useStore } from '@/store/useStore'
 import {
   useArtifactsFor,
   useChangeOrdersFor,
   useChecks,
+  useFormForCategory,
   useIssuesFor,
   useMessageThreads,
   usePaymentRequests,
+  usePriceBookItems,
   useUserDirectory,
 } from '@/store/selectors'
 import { StageGate } from '@/components/domain/StageGate'
@@ -129,6 +125,11 @@ export function OpportunityRecord() {
   const reminder = s.reminders.find((r) => r.opportunityId === id && !r.done)
   const threads = useMessageThreads(id)
   const paymentRequests = usePaymentRequests(id)
+  const priceBookItems = usePriceBookItems()
+  const priceBookById = useMemo(
+    () => Object.fromEntries(priceBookItems.map((item) => [item.id, item])),
+    [priceBookItems],
+  )
   const mine = s.artifacts.filter((a) => a.opportunityId === id)
   const visit = s.siteVisits.find((v) => v.opportunityId === id)
   const log = s.activity.filter((a) => a.opportunityId === id).slice().reverse()
@@ -181,7 +182,7 @@ export function OpportunityRecord() {
   )
 
   const account = s.accounts.find((a) => a.id === opp.accountId) ?? ACCOUNT_BY_ID[opp.accountId]
-  const location = LOCATION_BY_ID[opp.locationId]
+  const location = s.locations.find((l) => l.id === opp.locationId)
   const relationship = account?.anchorStage
   const relationshipTone =
     relationship === 'customer' ? 'success' : relationship === 'contact' ? 'info' : 'neutral'
@@ -344,7 +345,11 @@ export function OpportunityRecord() {
                 <Link to={`/opportunities/${opp.id}/visit`}>
                   <Button size="sm">
                     <Ruler size={12} />
-                    {visit?.completedAt ? 'Review form' : 'Open guided form'}
+                    {!visit
+                      ? 'Start guided form'
+                      : visit.completedAt
+                        ? 'Review / edit form'
+                        : 'Continue guided form'}
                   </Button>
                 </Link>
               }
@@ -525,7 +530,7 @@ export function OpportunityRecord() {
                       <div key={l.id} className="flex items-center gap-3 px-4 py-2">
                         <span
                           className="h-5 w-5 shrink-0 rounded-xs border border-subtle"
-                          style={{ background: PRICE_BOOK_BY_ID[l.priceBookId]?.swatch }}
+                          style={{ background: priceBookById[l.priceBookId]?.swatch }}
                         />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-base text-primary">{l.product}</p>
@@ -961,122 +966,7 @@ function ArtifactRow({ artifact, category }: { artifact: ReturnType<typeof Objec
   )
 }
 
-/* ---- Scope request line editor (hub tab) -------------------------------- */
-
-function ScopeRequestEditor({
-  index,
-  request,
-  serviceOptions,
-  canRemove,
-  onChange,
-  onRemove,
-}: {
-  index: number
-  request: ScopeRequest
-  serviceOptions: string[]
-  canRemove: boolean
-  onChange: (patch: Partial<ScopeRequest>) => void
-  onRemove: () => void
-}) {
-  const isCustom =
-    Boolean(request.serviceType) && !serviceOptions.includes(request.serviceType)
-  const selectValue = isCustom
-    ? '__custom__'
-    : request.serviceType && serviceOptions.includes(request.serviceType)
-      ? request.serviceType
-      : request.serviceType
-        ? '__custom__'
-        : ''
-
-  return (
-    <div className="space-y-3 px-4 py-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-primary">
-          {index + 1}. {request.serviceType || 'Untitled request'}
-        </p>
-        {canRemove && (
-          <Button size="sm" variant="ghost" onClick={onRemove}>
-            <XCircle size={12} />
-            Remove
-          </Button>
-        )}
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <FieldRow label="Service required" required>
-          {serviceOptions.length > 0 ? (
-            <>
-              <Select
-                value={selectValue}
-                onChange={(e) => {
-                  if (e.target.value === '__custom__') {
-                    onChange({ serviceType: isCustom ? request.serviceType : '' })
-                    return
-                  }
-                  onChange({ serviceType: e.target.value })
-                }}
-              >
-                <option value="" disabled>
-                  Select service…
-                </option>
-                {serviceOptions.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-                <option value="__custom__">Other / custom…</option>
-              </Select>
-              {(selectValue === '__custom__' || isCustom) && (
-                <Input
-                  className="mt-2"
-                  value={request.serviceType}
-                  onChange={(e) => onChange({ serviceType: e.target.value })}
-                  placeholder="Custom service name"
-                />
-              )}
-            </>
-          ) : (
-            <Input
-              value={request.serviceType}
-              onChange={(e) => onChange({ serviceType: e.target.value })}
-              placeholder="e.g. Garage floor coating"
-            />
-          )}
-        </FieldRow>
-        <FieldRow label="Area / equipment" required>
-          <Input
-            value={request.areaOrEquipment}
-            onChange={(e) => onChange({ areaOrEquipment: e.target.value })}
-          />
-        </FieldRow>
-        <FieldRow label="Quantity" required>
-          <Input
-            type="number"
-            value={request.quantity || ''}
-            onChange={(e) => onChange({ quantity: Number(e.target.value) || 0 })}
-          />
-        </FieldRow>
-        <FieldRow label="Unit" required>
-          <Select value={request.unit} onChange={(e) => onChange({ unit: e.target.value })}>
-            {SCOPE_UNITS.map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </Select>
-        </FieldRow>
-        <FieldRow label="Concern or outcome" className="sm:col-span-2">
-          <Textarea
-            rows={2}
-            value={request.concernOrOutcome}
-            onChange={(e) => onChange({ concernOrOutcome: e.target.value })}
-          />
-        </FieldRow>
-      </div>
-    </div>
-  )
-}
-
-/* ---- What we gathered at the visit / call ------------------------------- */
+/* ---- What we gathered at the visit / call (read-only summary) ----------- */
 
 function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
   const opp = useStore((s) => s.opportunities.find((o) => o.id === opportunityId))!
@@ -1084,28 +974,15 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
   const artifacts = useArtifactsFor(opportunityId)
   const checklists = useStore((s) => s.checklists)
   const checklistTemplates = useStore((s) => s.checklistTemplates)
-  const assignVisitChecklist = useStore((s) => s.assignVisitChecklist)
-  const assignVisitServiceTemplate = useStore((s) => s.assignVisitServiceTemplate)
-  const patchVisitRequests = useStore((s) => s.patchVisitRequests)
-  const patchVisitCustomQuestions = useStore((s) => s.patchVisitCustomQuestions)
-  const toggleChecklistItem = useStore((s) => s.toggleChecklistItem)
-  const addChecklistInstanceItem = useStore((s) => s.addChecklistInstanceItem)
-  const removeChecklistInstanceItem = useStore((s) => s.removeChecklistInstanceItem)
-  const serviceTemplates = useStore((s) => s.serviceTemplates)
   const checks = useChecks(opportunityId, 'site_visit_completed')
-  const form = formForCategory(opp.category)
+  const form = useFormForCategory(opp.category)
   const userById = useUserDirectory()
   const v = visitVocab(opp.category)
   const allowsPhotos = opp.category !== 'residential'
-  const [newItem, setNewItem] = useState('')
 
   const visitTemplates = useMemo(
     () => visitChecklistTemplates(checklistTemplates),
     [checklistTemplates],
-  )
-  const serviceVisitTemplates = useMemo(
-    () => visitServiceTemplates(serviceTemplates),
-    [serviceTemplates],
   )
   const checklistInstance = useMemo(
     () =>
@@ -1116,13 +993,22 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
   )
   const checklistTemplate = visitTemplates.find((t) => t.id === checklistInstance?.templateId)
   const checklistItems = resolveChecklistItems(checklistInstance, checklistTemplate)
+  const checklistDone = checklistInstance?.done.length ?? 0
 
   if (!visit || !form) {
     return (
       <Card>
         <EmptyState
           title={`${v.Singular} not started`}
-          description={`Schedule the ${v.singular} to start the checklist and guided form. Everything captured will log here.`}
+          description={`Capture checklist, scope, and answers on the guided form. Results will show here.`}
+          action={
+            <Link to={`/opportunities/${opportunityId}/visit`}>
+              <Button size="sm" variant="primary">
+                <Ruler size={12} />
+                Start guided form
+              </Button>
+            </Link>
+          }
         />
       </Card>
     )
@@ -1142,7 +1028,7 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
           subtitle={
             visit.completedAt
               ? `Submitted by ${userById[visit.completedById ?? '']?.name} on ${format(new Date(visit.completedAt), 'd MMM yyyy')}`
-              : 'In progress — checklist, requests, and answers land here'
+              : 'In progress — edit only on the guided form'
           }
           icon={<ClipboardList size={14} />}
           actions={
@@ -1155,143 +1041,54 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
 
       <Card>
         <CardHeader
-          title="Checklist"
-          subtitle="Select a template, then add or remove items for this visit."
+          title={checklistTemplate?.name ?? 'Checklist'}
+          subtitle={`${checklistDone} of ${checklistItems.length} items complete`}
           icon={<ClipboardCheck size={14} />}
-          actions={
-            <Select
-              value={checklistInstance?.templateId ?? ''}
-              onChange={(e) => assignVisitChecklist(opportunityId, e.target.value)}
-              className="min-w-52"
-            >
-              <option value="" disabled>
-                Select template…
-              </option>
-              {visitTemplates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </Select>
-          }
         />
-        <div className="space-y-2 p-4">
-          {checklistItems.map((item) => (
-            <div key={item.id} className="flex items-start gap-2">
-              <div className="min-w-0 flex-1">
-                <Checkbox
-                  checked={checklistInstance?.done.includes(item.id) ?? false}
-                  onChange={() =>
-                    checklistInstance &&
-                    toggleChecklistItem(opportunityId, checklistInstance.templateId, item.id)
-                  }
-                  label={item.label}
-                  description={item.helper}
-                />
-              </div>
-              {checklistInstance && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() =>
-                    removeChecklistInstanceItem(opportunityId, checklistInstance.templateId, item.id)
-                  }
-                >
-                  <XCircle size={12} />
-                </Button>
-              )}
-            </div>
-          ))}
-          {checklistInstance && (
-            <div className="flex flex-wrap items-end gap-2 border-t border-subtle pt-3">
-              <FieldRow label="Add item" className="min-w-56 flex-1">
-                <Input
-                  value={newItem}
-                  onChange={(e) => setNewItem(e.target.value)}
-                  placeholder="Custom checklist item"
-                />
-              </FieldRow>
-              <Button
-                size="sm"
-                onClick={() => {
-                  addChecklistInstanceItem(opportunityId, checklistInstance.templateId, newItem)
-                  setNewItem('')
-                }}
-              >
-                <Plus size={12} />
-                Add
-              </Button>
-            </div>
-          )}
-        </div>
+        {checklistItems.length === 0 ? (
+          <p className="p-4 text-sm text-muted">No checklist assigned yet. Open the guided form to choose one.</p>
+        ) : (
+          <ul className="divide-y divide-(--border-subtle)">
+            {checklistItems.map((item) => {
+              const done = checklistInstance?.done.includes(item.id) ?? false
+              return (
+                <li key={item.id} className="flex items-start gap-2 px-4 py-2.5">
+                  <CheckCircle2
+                    size={14}
+                    className={cn('mt-0.5 shrink-0', done ? 'text-success-text' : 'text-muted opacity-40')}
+                  />
+                  <div className="min-w-0">
+                    <p className={cn('text-sm', done ? 'text-primary' : 'text-muted')}>{item.label}</p>
+                    {item.helper && <p className="text-2xs text-muted">{item.helper}</p>}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
       </Card>
 
       <Card>
         <CardHeader
           title="Scope requests"
-          subtitle="Select a service template, then edit surfaces for this visit."
+          subtitle={`${requests.length} request${requests.length === 1 ? '' : 's'} captured`}
           icon={<Ruler size={14} />}
-          actions={
-            <div className="flex flex-wrap items-center gap-2">
-              <Select
-                value={visit.serviceTemplateId ?? ''}
-                onChange={(e) => assignVisitServiceTemplate(opportunityId, e.target.value)}
-                className="min-w-52"
-              >
-                <option value="" disabled>
-                  Select service template…
-                </option>
-                {serviceVisitTemplates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </Select>
-              <Button
-                size="sm"
-                onClick={() =>
-                  patchVisitRequests(opportunityId, [
-                    ...requests,
-                    emptyScopeRequest(`req_${Date.now().toString(36)}`),
-                  ])
-                }
-              >
-                <Plus size={12} />
-                Add
-              </Button>
-            </div>
-          }
         />
         {requests.length === 0 ? (
-          <p className="p-4 text-sm text-muted">
-            Select a service template to seed scope lines, or add a request.
-          </p>
+          <p className="p-4 text-sm text-muted">No scope requests yet.</p>
         ) : (
-          <div className="divide-y divide-subtle">
+          <div className="divide-y divide-(--border-subtle)">
             {requests.map((req, i) => (
-              <ScopeRequestEditor
-                key={req.id}
-                index={i}
-                request={req}
-                serviceOptions={
-                  serviceVisitTemplates.find((t) => t.id === visit.serviceTemplateId)?.lines.map(
-                    (l) => l.serviceType,
-                  ) ?? []
-                }
-                canRemove={requests.length > 1}
-                onChange={(patch) =>
-                  patchVisitRequests(
-                    opportunityId,
-                    requests.map((r) => (r.id === req.id ? { ...r, ...patch } : r)),
-                  )
-                }
-                onRemove={() =>
-                  patchVisitRequests(
-                    opportunityId,
-                    requests.filter((r) => r.id !== req.id),
-                  )
-                }
-              />
+              <div key={req.id} className="px-4 py-2.5">
+                <p className="text-sm font-medium text-primary">
+                  {i + 1}. {req.serviceType || 'Untitled request'}
+                </p>
+                <p className="mt-0.5 text-sm text-muted">
+                  {[req.areaOrEquipment, req.quantity > 0 ? `${req.quantity} ${req.unit}` : null, req.concernOrOutcome]
+                    .filter(Boolean)
+                    .join(' · ') || 'Incomplete'}
+                </p>
+              </div>
             ))}
           </div>
         )}
@@ -1300,7 +1097,7 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
       <Card>
         <CardHeader
           title="Answers & questions"
-          subtitle="Standard fields plus any extra Q&A added on the visit"
+          subtitle="From the guided form"
           icon={<ClipboardList size={14} />}
         />
         {answered.length === 0 && filledCustomQuestions.length === 0 ? (
@@ -1344,102 +1141,11 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
         )}
       </Card>
 
-      {form.sections
-        .filter((sec) => sec.allowCustomQuestions)
-        .map((sec) => {
-          const sectionQs = customQuestions.filter((q) => q.sectionId === sec.id)
-          return (
-            <Card key={sec.id}>
-              <CardHeader
-                title={`Extra questions · ${sec.title}`}
-                subtitle="Add any question you asked and the answer you got."
-                icon={<Plus size={14} />}
-                actions={
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      patchVisitCustomQuestions(opportunityId, [
-                        ...customQuestions,
-                        {
-                          id: `qa_${Date.now().toString(36)}`,
-                          sectionId: sec.id,
-                          question: '',
-                          answer: '',
-                        },
-                      ])
-                    }
-                  >
-                    <Plus size={12} />
-                    Add question
-                  </Button>
-                }
-              />
-              {sectionQs.length === 0 ? (
-                <p className="p-4 text-sm text-muted">No extra questions yet.</p>
-              ) : (
-                <div className="divide-y divide-subtle">
-                  {sectionQs.map((qa, index) => (
-                    <div key={qa.id} className="grid gap-3 px-4 py-3 sm:grid-cols-2">
-                      <div className="flex items-center justify-between gap-2 sm:col-span-2">
-                        <p className="text-sm font-semibold text-primary">
-                          Question {index + 1}
-                        </p>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            patchVisitCustomQuestions(
-                              opportunityId,
-                              customQuestions.filter((q) => q.id !== qa.id),
-                            )
-                          }
-                        >
-                          <XCircle size={12} />
-                          Remove
-                        </Button>
-                      </div>
-                      <FieldRow label="Question" required className="sm:col-span-2">
-                        <Input
-                          value={qa.question}
-                          onChange={(e) =>
-                            patchVisitCustomQuestions(
-                              opportunityId,
-                              customQuestions.map((q) =>
-                                q.id === qa.id ? { ...q, question: e.target.value } : q,
-                              ),
-                            )
-                          }
-                          placeholder="What did you ask?"
-                        />
-                      </FieldRow>
-                      <FieldRow label="Answer" required className="sm:col-span-2">
-                        <Textarea
-                          rows={2}
-                          value={qa.answer}
-                          onChange={(e) =>
-                            patchVisitCustomQuestions(
-                              opportunityId,
-                              customQuestions.map((q) =>
-                                q.id === qa.id ? { ...q, answer: e.target.value } : q,
-                              ),
-                            )
-                          }
-                          placeholder="What was the answer?"
-                        />
-                      </FieldRow>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-          )
-        })}
-
       {allowsPhotos ? (
         <Card>
           <CardHeader
             title="Photos & documents"
-            subtitle={`${photos.length} attached from the site visit`}
+            subtitle={`${photos.length} attached from the ${v.singular}`}
             icon={<Camera size={14} />}
           />
           {photos.length === 0 ? (
@@ -1476,7 +1182,7 @@ function ChecklistCard({
   subtitle: string
 }) {
   const templates = useStore((s) => s.checklistTemplates)
-  const tpl = templates.find((t) => t.id === templateId) ?? CHECKLIST_BY_ID[templateId]
+  const tpl = templates.find((t) => t.id === templateId)
   const instance = useStore((s) =>
     s.checklists.find((c) => c.opportunityId === opportunityId && c.templateId === templateId),
   )

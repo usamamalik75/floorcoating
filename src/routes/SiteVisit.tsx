@@ -223,6 +223,9 @@ export function SiteVisit() {
           <p className="ml-8 text-sm text-white/70">
             {account?.name} · {opportunity.address}
           </p>
+          <p className="ml-8 text-xs text-white/50">
+            Capture here — results show on the opportunity Visits tab.
+          </p>
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 pb-8 scrollbar-thin">

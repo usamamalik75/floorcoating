@@ -18,8 +18,8 @@ import {
 } from 'lucide-react'
 import { useStore, money, estimateTotal } from '@/store/useStore'
 import { assignedTo } from '@/domain/jobs'
-import { useScopedOpportunities, useUserDirectory, useViewer } from '@/store/selectors'
-import { LOCATION_BY_ID, TODAY } from '@/data/seed'
+import { useScopedOpportunities, useLocations, useUserDirectory, useViewer } from '@/store/selectors'
+import { TODAY } from '@/data/seed'
 import { STAGE_BY_ID, stageLabel } from '@/domain/stages'
 import type { Opportunity, StageId } from '@/domain/types'
 import { Badge, Button, Card, CardHeader, EmptyState, StageChip, HorizontalBarChart, TrendMetric } from '@/components/ui'
@@ -36,6 +36,7 @@ import { cn } from '@/lib/cn'
 
 export function Dashboard() {
   const viewer = useViewer()
+  const locations = useLocations()
   if (!viewer) return null
 
   // A crew leader or technician has no use for a desktop workspace. Their home
@@ -43,6 +44,10 @@ export function Dashboard() {
   if (viewer.role === 'crew_leader' || viewer.role === 'tech') {
     return <Navigate to="/field" replace />
   }
+
+  const locationName = viewer.locationId
+    ? locations.find((l) => l.id === viewer.locationId)?.name
+    : undefined
 
   const common = {
     admin: <CompanyHome />,
@@ -57,7 +62,7 @@ export function Dashboard() {
 
   return (
     <div className="h-full overflow-y-auto scrollbar-thin bg-surface-sunken">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
         <header className="mb-6">
           <div className="flex flex-wrap items-end gap-3">
             <div>
@@ -67,7 +72,7 @@ export function Dashboard() {
               </h1>
               <p className="mt-0.5 text-base text-muted">
                 {viewer.title}
-                {viewer.locationId && ` · ${LOCATION_BY_ID[viewer.locationId].name}`}
+                {locationName && ` · ${locationName}`}
               </p>
             </div>
             {['admin', 'owner', 'sales'].includes(viewer.role) && (
@@ -124,6 +129,8 @@ function Stat({
 }
 
 function OppRow({ o, right }: { o: Opportunity; right?: ReactNode }) {
+  const locations = useLocations()
+  const locationName = locations.find((l) => l.id === o.locationId)?.name
   return (
     <Link
       to={`/opportunities/${o.id}`}
@@ -132,7 +139,7 @@ function OppRow({ o, right }: { o: Opportunity; right?: ReactNode }) {
       <div className="min-w-0 flex-1">
         <p className="truncate text-base font-medium text-primary">{o.name}</p>
         <p className="truncate text-sm text-muted">
-          {o.code} · {LOCATION_BY_ID[o.locationId]?.name}
+          {o.code} · {locationName}
         </p>
       </div>
       {right ?? (

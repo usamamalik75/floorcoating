@@ -98,7 +98,7 @@ export function Communications() {
 
   return (
     <div className="h-full overflow-y-auto scrollbar-thin">
-      <div className="mx-auto max-w-[88rem] px-5 py-5">
+      <div className="w-full px-5 py-5">
         <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl text-primary">Communications</h1>

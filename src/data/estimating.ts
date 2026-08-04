@@ -92,8 +92,17 @@ export const ESTIMATE_PACKS: Record<Category, EstimateCategoryPack> = {
   },
 }
 
-export function estimatePackFor(category: Category): EstimateCategoryPack {
-  return ESTIMATE_PACKS[category]
+export const ESTIMATE_PACK_LIST: EstimateCategoryPack[] = [
+  ESTIMATE_PACKS.residential,
+  ESTIMATE_PACKS.commercial,
+  ESTIMATE_PACKS.industrial,
+]
+
+export function estimatePackFor(
+  category: Category,
+  packs: EstimateCategoryPack[] = ESTIMATE_PACK_LIST,
+): EstimateCategoryPack {
+  return packs.find((pack) => pack.category === category) ?? ESTIMATE_PACKS[category]
 }
 
 export interface SystemSuggestion {
@@ -111,8 +120,9 @@ export function suggestFloorSystem(
   category: Category,
   requests: ScopeRequest[] = [],
   visitValues: Record<string, string | number | boolean> = {},
+  packs: EstimateCategoryPack[] = ESTIMATE_PACK_LIST,
 ): SystemSuggestion {
-  const pack = estimatePackFor(category)
+  const pack = estimatePackFor(category, packs)
   const blob = [
     ...requests.map((r) => `${r.serviceType} ${r.concernOrOutcome} ${r.areaOrEquipment} ${r.notes ?? ''}`),
     ...Object.values(visitValues).map(String),

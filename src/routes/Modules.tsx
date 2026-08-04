@@ -3,11 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { format, isToday, parseISO } from 'date-fns'
 import { FileText, MapPin, Ruler } from 'lucide-react'
 import { useStore, money, estimateTotal } from '@/store/useStore'
-import { useScopedOpportunities, useUserDirectory } from '@/store/selectors'
-import { ACCOUNT_BY_ID, LOCATION_BY_ID } from '@/data/seed'
-import { PRICE_BOOK } from '@/data/priceBook'
-import { CHECKLIST_TEMPLATES } from '@/data/checklists'
-import { PROPOSAL_TEMPLATES } from '@/data/priceBook'
+import { useScopedOpportunities, useChecklistTemplates, useLocations, usePriceBookItems, useProposalTemplates, useUserDirectory } from '@/store/selectors'
+import { ACCOUNT_BY_ID } from '@/data/seed'
 import { STAGE_BY_ID, stageLabel, JOB_STATUSES, jobStatusLabel } from '@/domain/stages'
 import { VISIT_MODULE_LABEL, visitVocab } from '@/domain/types'
 import { Customers as CustomerWorkspace } from '@/routes/Customers'
@@ -450,6 +447,7 @@ export function Reports() {
   const opps = useStore((s) => s.opportunities)
   const jobs = useStore((s) => s.jobs)
   const invoices = useStore((s) => s.invoices)
+  const locations = useLocations()
 
   const sales = opps.filter((o) => STAGE_BY_ID[o.stage]?.phase === 'sales')
   const awarded = opps.filter((o) => o.stage === 'awarded')
@@ -457,7 +455,7 @@ export function Reports() {
   const billed = invoices.reduce((s, i) => s + i.amount, 0)
   const paid = invoices.reduce((s, i) => s + i.payments.reduce((a, p) => a + p.amount, 0), 0)
 
-  const byLocation = Object.values(LOCATION_BY_ID).map((loc) => {
+  const byLocation = locations.map((loc) => {
     const locOpps = opps.filter((o) => o.locationId === loc.id)
     const won = locOpps.filter((o) => o.stage === 'awarded')
     return {
@@ -470,7 +468,7 @@ export function Reports() {
 
   return (
     <div className="h-full overflow-y-auto scrollbar-thin">
-      <div className="mx-auto max-w-[80rem] px-5 py-5">
+      <div className="w-full px-5 py-5">
         <header className="mb-5">
           <h1 className="font-display text-2xl text-primary">Reports</h1>
           <p className="mt-0.5 text-base text-muted">
@@ -538,25 +536,29 @@ export function Reports() {
 }
 
 export function Settings() {
+  const priceBookItems = usePriceBookItems()
+  const proposalTemplates = useProposalTemplates()
+  const checklistTemplates = useChecklistTemplates()
+
   return (
     <div className="h-full overflow-y-auto scrollbar-thin">
-      <div className="mx-auto max-w-[80rem] px-5 py-5">
+      <div className="w-full px-5 py-5">
         <header className="mb-5">
           <h1 className="font-display text-2xl text-primary">Settings</h1>
           <p className="mt-0.5 text-base text-muted">
-            Workspace configuration — catalogue, document templates, workflows, and checklists.
+            Live company standards from Admin Setup — catalogue, proposal templates, and checklists.
           </p>
         </header>
 
         <SectionTitle>Builder entry points</SectionTitle>
         <div className="mb-5 grid gap-3 md:grid-cols-3">
           <Card className="p-4">
-            <p className="text-base font-medium text-primary">Workspace and forms</p>
+            <p className="text-base font-medium text-primary">Admin Setup</p>
             <p className="mt-1 text-sm text-muted">
-              Edit terminology, fields, and guided forms from the administrator builder.
+              Edit proposal templates, estimating packs, assessment forms, and checklists.
             </p>
             <Link to="/admin">
-              <Button size="sm" className="mt-3">Open admin builder</Button>
+              <Button size="sm" className="mt-3">Open Admin</Button>
             </Link>
           </Card>
           <Card className="p-4">
@@ -592,7 +594,7 @@ export function Settings() {
               </tr>
             </thead>
             <tbody>
-              {PRICE_BOOK.slice(0, 8).map((p) => (
+              {priceBookItems.slice(0, 8).map((p) => (
                 <Tr key={p.id}>
                   <Td>{p.name}</Td>
                   <Td align="right" mono>
@@ -607,7 +609,7 @@ export function Settings() {
 
         <SectionTitle>Proposal templates</SectionTitle>
         <div className="mb-5 grid gap-2 sm:grid-cols-2">
-          {PROPOSAL_TEMPLATES.map((t) => (
+          {proposalTemplates.map((t) => (
             <Card key={t.id} className="p-3">
               <p className="font-medium text-primary">{t.name}</p>
               <p className="mt-1 text-sm text-muted">
@@ -619,7 +621,7 @@ export function Settings() {
 
         <SectionTitle>Checklist standards</SectionTitle>
         <div className="grid gap-2 sm:grid-cols-2">
-          {CHECKLIST_TEMPLATES.map((c) => (
+          {checklistTemplates.map((c) => (
             <Card key={c.id} className="p-3">
               <p className="font-medium text-primary">{c.name}</p>
               <p className="mt-1 text-sm text-muted">
@@ -668,7 +670,7 @@ function ModuleShell({
 }) {
   return (
     <div className="h-full overflow-y-auto scrollbar-thin">
-      <div className="mx-auto max-w-[80rem] px-5 py-5">
+      <div className="w-full px-5 py-5">
         <header className="mb-4">
           <div className="flex flex-wrap items-center gap-3">
             <div>

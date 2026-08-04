@@ -13,7 +13,7 @@ import {
   Truck,
 } from 'lucide-react'
 import { useStore, money } from '@/store/useStore'
-import { PRICE_BOOK_BY_ID, deriveMaterial } from '@/data/priceBook'
+import { deriveMaterial } from '@/data/priceBook'
 import { ACCOUNT_BY_ID, iso } from '@/data/seed'
 import type { ProcurementLine, ProcurementOrder as PO } from '@/domain/types'
 import {
@@ -31,7 +31,7 @@ import {
 import { cn } from '@/lib/cn'
 
 /* ==========================================================================
-  Material planning and ordering
+  Procurement planning and ordering
    ==========================================================================
    The client's calculation, made explicit:
 
@@ -67,6 +67,7 @@ export function ProcurementOrderPage() {
   const advance = useStore((s) => s.advanceProcurementOrder)
   const setJobStatus = useStore((s) => s.setJobStatus)
   const jobs = useStore((s) => s.jobs)
+  const priceBookItems = useStore((s) => s.priceBookItems)
   const [neededBy, setNeededBy] = useState(iso(7).slice(0, 10))
 
   /**
@@ -83,7 +84,7 @@ export function ProcurementOrderPage() {
 
     return [...byProduct.entries()]
       .map(([priceBookId, qty]) => {
-        const d = deriveMaterial(priceBookId, qty)
+        const d = deriveMaterial(priceBookId, qty, priceBookItems)
         if (!d) return null
         return {
           id: uid('ml'),
@@ -96,7 +97,7 @@ export function ProcurementOrderPage() {
         }
       })
       .filter(Boolean) as ProcurementLine[]
-  }, [estimate])
+  }, [estimate, priceBookItems])
 
   if (!opportunity) return <EmptyState title="Opportunity not found" className="h-full" />
 
@@ -137,7 +138,7 @@ export function ProcurementOrderPage() {
 
   return (
     <div className="h-full overflow-y-auto scrollbar-thin">
-      <div className="mx-auto max-w-[62rem] px-5 py-5">
+      <div className="w-full px-5 py-5">
         <Link
           to={`/opportunities/${opportunity.id}`}
           className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted hover:text-primary"
@@ -148,7 +149,7 @@ export function ProcurementOrderPage() {
 
         <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="font-display text-2xl text-primary">Material Order</h1>
+            <h1 className="font-display text-2xl text-primary">Procurement order</h1>
             <p className="mt-0.5 text-base text-muted">
               {account?.name} · {opportunity.name}
             </p>
@@ -268,7 +269,7 @@ export function ProcurementOrderPage() {
               </thead>
               <tbody>
                 {lines.map((l) => {
-                  const pb = PRICE_BOOK_BY_ID[l.priceBookId]
+                  const pb = priceBookItems.find((item) => item.id === l.priceBookId)
                   return (
                     <Tr key={l.id}>
                       <Td>
@@ -327,7 +328,10 @@ export function ProcurementOrderPage() {
               <span className="font-mono text-base font-semibold text-primary tabular">
                 {money(
                   lines.reduce(
-                    (s, l) => s + l.qty * (PRICE_BOOK_BY_ID[l.priceBookId]?.materialCost ?? 0),
+                    (s, l) =>
+                      s +
+                      l.qty *
+                        (priceBookItems.find((item) => item.id === l.priceBookId)?.materialCost ?? 0),
                     0,
                   ),
                 )}
@@ -339,5 +343,3 @@ export function ProcurementOrderPage() {
     </div>
   )
 }
-
-export const MaterialOrder = ProcurementOrderPage

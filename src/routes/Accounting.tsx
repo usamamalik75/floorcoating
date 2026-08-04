@@ -14,8 +14,8 @@ import {
   Send,
 } from 'lucide-react'
 import { useStore, money, estimateTotal } from '@/store/useStore'
-import { useScopedOpportunities, useViewer } from '@/store/selectors'
-import { ACCOUNT_BY_ID, LOCATION_BY_ID, iso } from '@/data/seed'
+import { useScopedOpportunities, useLocations, useViewer } from '@/store/selectors'
+import { ACCOUNT_BY_ID, iso } from '@/data/seed'
 import type { Invoice, InvoiceKind, Opportunity } from '@/domain/types'
 import {
   Badge,
@@ -54,6 +54,7 @@ export function Accounting() {
   const s = useStore()
   const viewer = useViewer()
   const opps = useScopedOpportunities()
+  const locations = useLocations()
   const createInvoice = useStore((st) => st.createInvoice)
   const recordPayment = useStore((st) => st.recordPayment)
   const setJobStatus = useStore((st) => st.setJobStatus)
@@ -82,7 +83,7 @@ export function Accounting() {
 
   return (
     <div className="h-full overflow-y-auto scrollbar-thin">
-      <div className="mx-auto max-w-[80rem] px-5 py-5">
+      <div className="w-full px-5 py-5">
         <header className="mb-5">
           <div className="flex flex-wrap items-center gap-3">
             <div>
@@ -169,7 +170,7 @@ export function Accounting() {
                           {o.name}
                         </Link>
                         <span className="block text-sm text-muted">
-                          {LOCATION_BY_ID[o.locationId]?.name} · {o.code}
+                          {locations.find((l) => l.id === o.locationId)?.name} · {o.code}
                         </span>
                       </Td>
                       <Td>

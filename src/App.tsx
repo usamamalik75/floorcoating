@@ -15,7 +15,7 @@ import {
 import { OpportunityRecord } from '@/routes/OpportunityRecord'
 import { SiteVisit } from '@/routes/SiteVisit'
 import { EstimateBuilder } from '@/routes/EstimateBuilder'
-import { ProcurementOrderPage } from '@/routes/MaterialOrder'
+import { ProcurementOrderPage } from '@/routes/ProcurementOrder'
 import { Schedule } from '@/routes/Schedule'
 import { LeadIntake } from '@/routes/LeadIntake'
 import { FieldJob, FieldToday, FieldVisit } from '@/routes/Field'
@@ -58,14 +58,11 @@ export function App() {
           <Route path="/projects" element={<Navigate to="/jobs" replace />} />
           <Route path="/accounts" element={<Navigate to="/customers" replace />} />
           <Route path="/accounting" element={<Navigate to="/finance" replace />} />
-          <Route path="/materials" element={<Navigate to="/purchasing" replace />} />
 
           <Route path="/intake" element={<LeadIntake />} />
           <Route path="/opportunities/:id" element={<OpportunityRecord />} />
           <Route path="/opportunities/:id/visit" element={<SiteVisit />} />
           <Route path="/opportunities/:id/procurement" element={<ProcurementOrderPage />} />
-          <Route path="/opportunities/:id/purchasing" element={<ProcurementOrderPage />} />
-          <Route path="/opportunities/:id/material" element={<ProcurementOrderPage />} />
           <Route path="/estimate/:id" element={<EstimateBuilder />} />
           <Route path="/schedule" element={<Schedule />} />
           <Route path="/field" element={<FieldToday />} />

@@ -87,7 +87,7 @@ export function Customers() {
 
   return (
     <div className='h-full overflow-y-auto scrollbar-thin bg-surface-sunken'>
-      <div className='mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 space-y-6'>
+      <div className='w-full px-4 py-6 sm:px-6 lg:px-8 space-y-6'>
         <header>
           <h1 className='font-display text-xl text-primary'>Customers</h1>
           <p className='mt-0.5 max-w-2xl text-base text-muted'>

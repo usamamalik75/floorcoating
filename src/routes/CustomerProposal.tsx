@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { ArrowLeft, CheckCircle2, CreditCard, Lock, PenLine, ShieldCheck } from 'lucide-react'
 import { useStore, money, estimateTotal } from '@/store/useStore'
 import { useArtifactsFor, useChangeOrdersFor } from '@/store/selectors'
 import { ACCOUNT_BY_ID } from '@/data/seed'
+import type { Estimate } from '@/domain/types'
 import { ProposalDocument } from '@/components/domain/ProposalDocument'
 import { Logo } from '@/components/layout/Logo'
 import { Button, EmptyState, Input } from '@/components/ui'
@@ -18,9 +19,31 @@ import { Button, EmptyState, Input } from '@/components/ui'
    screen.
    ========================================================================== */
 
+function useStoreHydrated() {
+  const [hydrated, setHydrated] = useState(() => useStore.persist.hasHydrated())
+  useEffect(() => {
+    setHydrated(useStore.persist.hasHydrated())
+    return useStore.persist.onFinishHydration(() => setHydrated(true))
+  }, [])
+  return hydrated
+}
+
+function findEstimateByToken(estimates: Estimate[], token: string) {
+  if (!token) return undefined
+  return estimates.find(
+    (estimate) =>
+      estimate.token === token ||
+      estimate.id === token ||
+      estimate.opportunityId === token ||
+      estimate.token === `p_${token.replace(/^op_/, '')}` ||
+      estimate.opportunityId === (token.startsWith('op_') ? token : `op_${token}`),
+  )
+}
+
 export function CustomerProposal() {
   const { token = '' } = useParams()
-  const estimate = useStore((s) => s.estimates.find((e) => e.token === token || e.id === token))
+  const hydrated = useStoreHydrated()
+  const estimate = useStore((s) => findEstimateByToken(s.estimates, token))
   const opportunity = useStore((s) =>
     s.opportunities.find((o) => o.id === estimate?.opportunityId),
   )
@@ -32,6 +55,14 @@ export function CustomerProposal() {
   const [selected, setSelected] = useState<string | undefined>(undefined)
   const [name, setName] = useState('')
   const [signing, setSigning] = useState(false)
+
+  if (!hydrated) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#f4f4f5]">
+        <EmptyState title="Loading proposal…" description="Restoring your secure link." />
+      </div>
+    )
+  }
 
   if (!estimate || !opportunity) {
     return (
@@ -110,7 +141,7 @@ export function CustomerProposal() {
 
   return (
     <div className="min-h-screen bg-[#f4f4f5] py-6">
-      <div className="mx-auto max-w-4xl px-4">
+      <div className="w-full px-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <Link
             to={`/opportunities/${opportunity.id}?tab=proposals`}
@@ -265,7 +296,7 @@ export function CustomerSignoff() {
 
   return (
     <div className="min-h-screen bg-[#f4f4f5] py-6">
-      <div className="mx-auto max-w-2xl px-4">
+      <div className="w-full px-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <Link
             to={`/opportunities/${opportunity.id}?tab=job`}

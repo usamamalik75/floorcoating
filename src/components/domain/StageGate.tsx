@@ -18,9 +18,9 @@ import {
 import type { CommunicationChannel, Gate, Opportunity, StageId } from '@/domain/types'
 import { ROLE_LABEL, withVisitVocab } from '@/domain/types'
 import { STAGE_BY_ID, stageLabel } from '@/domain/stages'
-import { templateForStage, CHECKLIST_BY_ID } from '@/data/checklists'
+import { templateForStage } from '@/data/checklists'
 import { useStore } from '@/store/useStore'
-import { useChecks, useUsers } from '@/store/selectors'
+import { useChecks, useChecklistTemplates, useUsers } from '@/store/selectors'
 import { Badge, Button, Checkbox, Input, Modal, Select, StageChip, Textarea } from '@/components/ui'
 import { cn } from '@/lib/cn'
 
@@ -80,6 +80,7 @@ export function StageGate({
   const moveStage = useStore((s) => s.moveStage)
   const checklists = useStore((s) => s.checklists)
   const toggleChecklistItem = useStore((s) => s.toggleChecklistItem)
+  const checklistTemplates = useChecklistTemplates()
   const users = useUsers()
 
   const [satisfied, setSatisfied] = useState<Record<number, boolean>>({})
@@ -108,11 +109,12 @@ export function StageGate({
     if (!def || !opportunity) return undefined
     const gate = def.gates.find((g) => g.kind === 'checklist')
     if (!gate) return undefined
+    const gateTemplateId = (gate as Extract<Gate, { kind: 'checklist' }>).templateId
     return (
-      templateForStage(def.id, opportunity.category) ??
-      CHECKLIST_BY_ID[(gate as Extract<Gate, { kind: 'checklist' }>).templateId]
+      templateForStage(def.id, opportunity.category, checklistTemplates) ??
+      checklistTemplates.find((t) => t.id === gateTemplateId)
     )
-  }, [def, opportunity])
+  }, [checklistTemplates, def, opportunity])
 
   const instance = checklists.find(
     (c) => c.opportunityId === opportunity?.id && c.templateId === checklistTemplate?.id,
