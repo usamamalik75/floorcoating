@@ -31,7 +31,7 @@ import {
 import { cn } from '@/lib/cn'
 
 /* ==========================================================================
-  Procurement planning and ordering
+  Material planning and ordering
    ==========================================================================
    The client's calculation, made explicit:
 
@@ -148,7 +148,7 @@ export function ProcurementOrderPage() {
 
         <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="font-display text-2xl text-primary">Procurement order</h1>
+            <h1 className="font-display text-2xl text-primary">Material Order</h1>
             <p className="mt-0.5 text-base text-muted">
               {account?.name} · {opportunity.name}
             </p>

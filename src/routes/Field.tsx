@@ -99,7 +99,7 @@ export function FieldToday() {
   )
 
   return (
-    <FieldFrame title="Field Operations">
+    <FieldFrame title="Field execution">
       <div className="space-y-6 p-5">
         <p className="text-sm font-medium text-muted">
           {format(TODAY, 'EEEE, MMMM d')} · {viewer?.name}
@@ -233,7 +233,7 @@ export function FieldVisit() {
         <Card className="p-3">
           <div className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 text-md font-semibold text-primary">
-              <ClipboardList size={15} /> Guided form
+              <ClipboardList size={15} /> Checklist & form
             </span>
             <Badge tone={visit?.completedAt ? 'success' : 'warning'}>
               {visit?.completedAt ? 'Submitted' : 'Not submitted'}
@@ -241,12 +241,12 @@ export function FieldVisit() {
           </div>
           <p className="mt-1.5 text-base text-muted">
             {opp.category === 'residential'
-              ? 'Requested service, asset details, site access, hazards, and customer expectations.'
-              : 'Scope, asset inventory, operating constraints, safety, access, and commercial requirements.'}
+              ? 'Checklist, scope requests, and answers — sales calls do not collect photos.'
+              : 'Checklist, scope requests, answers, and photos — all logged under what you gathered.'}
           </p>
           <Link to={`/opportunities/${opp.id}/visit`}>
             <Button variant="primary" size="lg" className="mt-2 w-full">
-              {visit?.completedAt ? 'Review answers' : 'Open the form'}
+              {visit?.completedAt ? 'Review answers' : 'Open checklist & form'}
             </Button>
           </Link>
         </Card>

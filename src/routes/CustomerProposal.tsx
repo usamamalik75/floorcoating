@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
-import { CheckCircle2, CreditCard, Lock, PenLine, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, CreditCard, Lock, PenLine, ShieldCheck } from 'lucide-react'
 import { useStore, money, estimateTotal } from '@/store/useStore'
 import { useArtifactsFor, useChangeOrdersFor } from '@/store/selectors'
 import { ACCOUNT_BY_ID } from '@/data/seed'
@@ -111,6 +111,16 @@ export function CustomerProposal() {
   return (
     <div className="min-h-screen bg-[#f4f4f5] py-6">
       <div className="mx-auto max-w-4xl px-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <Link
+            to={`/opportunities/${opportunity.id}?tab=proposals`}
+            className="inline-flex items-center gap-1.5 rounded-md border border-[#d0d0d4] bg-white px-3 py-1.5 text-sm font-medium text-[#323A45] shadow-sm hover:bg-[#fafafa]"
+          >
+            <ArrowLeft size={14} />
+            Back to lead
+          </Link>
+          <span className="text-xs text-[#8a8a8a]">Prototype preview — returns to the opportunity record</span>
+        </div>
         <div className="mb-3 flex items-center justify-between gap-3 rounded-md bg-[#323A45] px-4 py-2.5 text-white">
           <span className="flex items-center gap-2 text-sm">
             <ShieldCheck size={14} />
@@ -133,7 +143,7 @@ export function CustomerProposal() {
               <div className="flex items-start gap-3 rounded-md border border-[#2f7d4f] bg-[#2f7d4f]/8 px-4 py-4">
                 <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-[#2f7d4f]" />
                 <div>
-                  <p className="font-display text-lg text-[#1a1a1a]">Proposal accepted</p>
+                  <p className="font-display text-lg text-[#1a1a1a]">Proposal acceptance recorded</p>
                   <p className="mt-0.5 text-sm text-[#5a5a5a]">
                     Signed by {estimate.signedBy} on{' '}
                     {format(new Date(estimate.signedAt!), 'd MMMM yyyy')}. Your project team has been
@@ -256,6 +266,16 @@ export function CustomerSignoff() {
   return (
     <div className="min-h-screen bg-[#f4f4f5] py-6">
       <div className="mx-auto max-w-2xl px-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <Link
+            to={`/opportunities/${opportunity.id}?tab=job`}
+            className="inline-flex items-center gap-1.5 rounded-md border border-[#d0d0d4] bg-white px-3 py-1.5 text-sm font-medium text-[#323A45] shadow-sm hover:bg-[#fafafa]"
+          >
+            <ArrowLeft size={14} />
+            Back to lead
+          </Link>
+          <span className="text-xs text-[#8a8a8a]">Prototype preview — returns to the opportunity record</span>
+        </div>
         <div className="overflow-hidden rounded-lg border border-[#e0e0e2] bg-white shadow-sm">
           <div className="border-b-2 border-[#7E2F3F] px-6 py-5">
             <Logo size={36} />

@@ -20,7 +20,7 @@ export function AdminBuilders() {
             ['workspace', 'Workspace', SlidersHorizontal],
             ['locations', 'Locations', Building2],
             ['forms', 'Forms', ListChecks],
-            ['catalogue', 'Catalogue', BookOpen],
+            ['catalogue', 'Products & Services', BookOpen],
             ['templates', 'Proposal templates', FileSignature],
             ['checklists', 'Checklists', ClipboardCheck],
             ['stages', 'Stages', KanbanSquare],
@@ -263,7 +263,7 @@ function CatalogueBuilder() {
   return (
     <Card>
       <CardHeader
-        title="Catalogue builder"
+        title="Products & Services builder"
         subtitle="Adjust the pricing and packaged description the estimator pulls into proposals."
         actions={
           <Select value={item.id} onChange={(e) => setSelectedId(e.target.value)} className="min-w-48">

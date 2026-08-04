@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import {
@@ -28,13 +28,32 @@ import {
   XCircle,
 } from 'lucide-react'
 import type { ArtifactKind, JobStatus, StageId } from '@/domain/types'
-import { STAGE_BY_ID, jobStatusIndex, stageLabel } from '@/domain/stages'
-import { CHECKLIST_BY_ID } from '@/data/checklists'
+import {
+  ACCOUNT_RELATIONSHIP_LABEL,
+  CATEGORY_LABEL,
+  SALES_PIPELINE_LABEL,
+  salesPipelineOf,
+  visitVocab,
+} from '@/domain/types'
+import { STAGE_BY_ID, defaultHubTabForStage, jobStatusIndex, stageLabel } from '@/domain/stages'
+import {
+  CHECKLIST_BY_ID,
+  resolveChecklistItems,
+  visitChecklistTemplates,
+} from '@/data/checklists'
 import { formForCategory } from '@/data/siteVisitForms'
 import { ACCOUNT_BY_ID, LOCATION_BY_ID } from '@/data/seed'
 import { PRICE_BOOK_BY_ID } from '@/data/priceBook'
 import { estimateTotal, money, optionTotal, useStore } from '@/store/useStore'
-import { useChangeOrdersFor, useChecks, useIssuesFor, useMessageThreads, usePaymentRequests, useUserDirectory } from '@/store/selectors'
+import {
+  useArtifactsFor,
+  useChangeOrdersFor,
+  useChecks,
+  useIssuesFor,
+  useMessageThreads,
+  usePaymentRequests,
+  useUserDirectory,
+} from '@/store/selectors'
 import { StageGate } from '@/components/domain/StageGate'
 import { StageStepper } from '@/components/domain/StageStepper'
 import { NextActionPanel } from '@/components/domain/NextActionPanel'
@@ -59,9 +78,9 @@ import {
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
 
-const TABS = [
+const BASE_TABS = [
   { id: 'overview', label: 'Overview', icon: ClipboardList },
-  { id: 'visits', label: 'Site Visits', icon: MapPin },
+  { id: 'visits', label: 'Visits', icon: MapPin },
   { id: 'estimates', label: 'Estimates', icon: FileText },
   { id: 'proposals', label: 'Proposals', icon: FileSignature },
   { id: 'documents', label: 'Documents', icon: ClipboardCheck },
@@ -97,7 +116,6 @@ export function OpportunityRecord() {
   const [messageChannel, setMessageChannel] = useState<'email' | 'sms'>('email')
   const [messageSubject, setMessageSubject] = useState('')
   const [messageBody, setMessageBody] = useState('')
-  const tab = params.get('tab') ?? 'overview'
 
   const opp = s.opportunities.find((o) => o.id === id)
 
@@ -111,6 +129,31 @@ export function OpportunityRecord() {
   const mine = s.artifacts.filter((a) => a.opportunityId === id)
   const visit = s.siteVisits.find((v) => v.opportunityId === id)
   const log = s.activity.filter((a) => a.opportunityId === id).slice().reverse()
+
+  const prevOppIdRef = useRef<string | null>(null)
+  const prevStageRef = useRef<StageId | null>(null)
+
+  useEffect(() => {
+    if (!opp) return
+    const stageDefault = defaultHubTabForStage(opp.stage)
+    const explicitTab = params.get('tab')
+
+    // Opened a different opportunity — default tab from stage unless URL already set one.
+    if (prevOppIdRef.current !== opp.id) {
+      prevOppIdRef.current = opp.id
+      prevStageRef.current = opp.stage
+      if (!explicitTab) {
+        setParams({ tab: stageDefault }, { replace: true })
+      }
+      return
+    }
+
+    // Same opportunity advanced stages — follow the workflow tab.
+    if (prevStageRef.current !== opp.stage) {
+      prevStageRef.current = opp.stage
+      setParams({ tab: stageDefault }, { replace: true })
+    }
+  }, [opp?.id, opp?.stage, setParams])
 
   if (!opp) {
     return (
@@ -127,11 +170,18 @@ export function OpportunityRecord() {
     )
   }
 
-  const setTab = (id: string) => setParams({ tab: id })
-  const visibleTabs = TABS.filter((t) => !('awardedOnly' in t && t.awardedOnly) || opp.stage === 'awarded')
+  const tab = params.get('tab') ?? defaultHubTabForStage(opp.stage)
+  const setTab = (next: string) => setParams({ tab: next })
+  const vocab = visitVocab(opp.category)
+  const visibleTabs = BASE_TABS.filter((t) => !('awardedOnly' in t && t.awardedOnly) || opp.stage === 'awarded').map(
+    (t) => (t.id === 'visits' ? { ...t, label: vocab.Plural } : t),
+  )
 
-  const account = ACCOUNT_BY_ID[opp.accountId]
+  const account = s.accounts.find((a) => a.id === opp.accountId) ?? ACCOUNT_BY_ID[opp.accountId]
   const location = LOCATION_BY_ID[opp.locationId]
+  const relationship = account?.anchorStage
+  const relationshipTone =
+    relationship === 'customer' ? 'success' : relationship === 'contact' ? 'info' : 'neutral'
   const def = STAGE_BY_ID[opp.stage]
   const thread = threads[0]
   const jobReached = (status: JobStatus) =>
@@ -231,9 +281,19 @@ export function OpportunityRecord() {
 
               <Card className="p-4">
                 <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                  <KeyValue label="Category">
-                    <span className="capitalize">{opp.category}</span>
+                  <KeyValue label="Relationship">
+                    {relationship ? (
+                      <Badge tone={relationshipTone}>
+                        {ACCOUNT_RELATIONSHIP_LABEL[relationship]}
+                      </Badge>
+                    ) : (
+                      '—'
+                    )}
                   </KeyValue>
+                  <KeyValue label="Pipeline">
+                    {SALES_PIPELINE_LABEL[salesPipelineOf(opp.category)]}
+                  </KeyValue>
+                  <KeyValue label="Project type">{CATEGORY_LABEL[opp.category]}</KeyValue>
                   <KeyValue label="Estimated quantity">{opp.estimatedQuantity.toLocaleString()} units</KeyValue>
                   <KeyValue label="Secondary quantity">{opp.secondaryQuantity > 0 ? `${opp.secondaryQuantity} units` : '—'}</KeyValue>
                   <KeyValue label="Source">{opp.source}</KeyValue>
@@ -272,11 +332,11 @@ export function OpportunityRecord() {
             </Section>
             </div>
 
-            {/* == Site Visits tab == */}
+            {/* == Site visit / sales call tab == */}
             <div className={tab === 'visits' ? 'space-y-6' : 'hidden'}>
             <Section
               id="sitevisit"
-              title="Site visit"
+              title={`What we gathered · ${vocab.Singular}`}
               action={
                 <Link to={`/opportunities/${opp.id}/visit`}>
                   <Button size="sm">
@@ -286,7 +346,7 @@ export function OpportunityRecord() {
                 </Link>
               }
             >
-              <SiteVisitSummary opportunityId={opp.id} />
+              <GatheredAtVisit opportunityId={opp.id} />
             </Section>
             </div>
 
@@ -308,7 +368,7 @@ export function OpportunityRecord() {
                 <Card>
                   <EmptyState
                     title="No estimate yet"
-                    description="The estimator works from the site visit data above — nothing gets re-keyed."
+                    description={`The estimator works from the ${vocab.singular} data above — nothing gets re-keyed.`}
                   />
                 </Card>
               ) : (
@@ -397,7 +457,7 @@ export function OpportunityRecord() {
                     <KeyValue label="Signed by">{est.signedBy ?? '—'}</KeyValue>
                     <KeyValue label="Deposit">{est.depositPct}%</KeyValue>
                   </div>
-                  <div className="mt-3 flex gap-2 border-t border-subtle pt-3">
+                  <div className="mt-3 flex flex-wrap gap-2 border-t border-subtle pt-3">
                     <Link to={`/proposal/${est.token}`} target="_blank">
                       <Button size="sm">
                         <FileSignature size={12} />
@@ -410,6 +470,14 @@ export function OpportunityRecord() {
                         Completion sign-off link
                       </Button>
                     </Link>
+                    {(est.status === 'signed' || opp.stage === 'awarded') && (
+                      <Link to="/jobs">
+                        <Button size="sm">
+                          <HardHat size={12} />
+                          Open Job
+                        </Button>
+                      </Link>
+                    )}
                   </div>
                 </Card>
               )}
@@ -483,10 +551,31 @@ export function OpportunityRecord() {
 
             {/* == Job tab == */}
             <div className={tab === 'job' ? 'space-y-6' : 'hidden'}>
-            <Section id="job" title="Job and crew">
+            <Section
+              id="job"
+              title="Job and crew"
+              action={
+                <Link to="/jobs">
+                  <Button size="sm">
+                    <HardHat size={12} />
+                    Open Jobs board
+                  </Button>
+                </Link>
+              }
+            >
               {!job ? (
                 <Card>
-                  <EmptyState title="Not scheduled" description="Awarded work appears on the schedule board." />
+                  <EmptyState
+                    title="Not scheduled"
+                    description="Awarded work appears on the Jobs board."
+                    action={
+                      <Link to="/jobs">
+                        <Button size="sm" variant="primary">
+                          Go to Jobs
+                        </Button>
+                      </Link>
+                    }
+                  />
                 </Card>
               ) : (
                 <Card className="p-4">
@@ -869,67 +958,229 @@ function ArtifactRow({ artifact, category }: { artifact: ReturnType<typeof Objec
   )
 }
 
-/* ---- Site visit summary ------------------------------------------------- */
+/* ---- What we gathered at the visit / call ------------------------------- */
 
-function SiteVisitSummary({ opportunityId }: { opportunityId: string }) {
+function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
   const opp = useStore((s) => s.opportunities.find((o) => o.id === opportunityId))!
   const visit = useStore((s) => s.siteVisits.find((v) => v.opportunityId === opportunityId))
+  const artifacts = useArtifactsFor(opportunityId)
+  const checklists = useStore((s) => s.checklists)
+  const checklistTemplates = useStore((s) => s.checklistTemplates)
+  const assignVisitChecklist = useStore((s) => s.assignVisitChecklist)
+  const toggleChecklistItem = useStore((s) => s.toggleChecklistItem)
+  const addChecklistInstanceItem = useStore((s) => s.addChecklistInstanceItem)
+  const removeChecklistInstanceItem = useStore((s) => s.removeChecklistInstanceItem)
   const checks = useChecks(opportunityId, 'site_visit_completed')
   const form = formForCategory(opp.category)
   const userById = useUserDirectory()
+  const v = visitVocab(opp.category)
+  const allowsPhotos = opp.category !== 'residential'
+  const [newItem, setNewItem] = useState('')
+
+  const visitTemplates = useMemo(
+    () => visitChecklistTemplates(checklistTemplates),
+    [checklistTemplates],
+  )
+  const checklistInstance = useMemo(
+    () =>
+      checklists.find(
+        (c) => c.opportunityId === opportunityId && visitTemplates.some((t) => t.id === c.templateId),
+      ),
+    [checklists, opportunityId, visitTemplates],
+  )
+  const checklistTemplate = visitTemplates.find((t) => t.id === checklistInstance?.templateId)
+  const checklistItems = resolveChecklistItems(checklistInstance, checklistTemplate)
 
   if (!visit || !form) {
     return (
       <Card>
         <EmptyState
-          title="Site visit not started"
-          description="The guided form is generated automatically when the visit is scheduled."
+          title={`${v.Singular} not started`}
+          description={`Schedule the ${v.singular} to start the checklist and guided form. Everything captured will log here.`}
         />
       </Card>
     )
   }
 
-  const answered = Object.entries(visit.values).filter(([, v]) => v !== '' && v !== undefined)
+  const answered = Object.entries(visit.values).filter(([, val]) => val !== '' && val !== undefined)
+  const requests = visit.requests ?? []
+  const photos = artifacts.filter((a) => a.kind === 'photo' || a.kind === 'plan')
 
   return (
-    <Card>
-      <CardHeader
-        title={form.name}
-        subtitle={
-          visit.completedAt
-            ? `Completed on site by ${userById[visit.completedById ?? '']?.name} on ${format(new Date(visit.completedAt), 'd MMM yyyy')}`
-            : 'In progress'
-        }
-        icon={<ClipboardList size={14} />}
-        actions={
-          <Badge tone={visit.completedAt ? 'success' : 'warning'}>
-            {checks.filter((c) => c.ok).length}/{checks.length} checks
-          </Badge>
-        }
-      />
-      <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 p-4 sm:grid-cols-2">
-        {form.sections.flatMap((sec) =>
-          sec.fields
-            .filter((f) => answered.some(([k]) => k === f.id))
-            .map((f) => {
-              const raw = visit.values[f.id]
-              const value = typeof raw === 'boolean' ? (raw ? 'Yes' : 'No') : String(raw)
-              return (
-                <KeyValue
-                  key={f.id}
-                  label={f.label}
-                  className={f.type === 'longtext' ? 'sm:col-span-2' : undefined}
+    <div className="space-y-4">
+      <Card>
+        <CardHeader
+          title={`${v.Singular} log`}
+          subtitle={
+            visit.completedAt
+              ? `Submitted by ${userById[visit.completedById ?? '']?.name} on ${format(new Date(visit.completedAt), 'd MMM yyyy')}`
+              : 'In progress — checklist, requests, and answers land here'
+          }
+          icon={<ClipboardList size={14} />}
+          actions={
+            <Badge tone={visit.completedAt ? 'success' : 'warning'}>
+              {checks.filter((c) => c.ok).length}/{checks.length} checks
+            </Badge>
+          }
+        />
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Checklist"
+          subtitle="Select a template, then add or remove items for this visit."
+          icon={<ClipboardCheck size={14} />}
+          actions={
+            <Select
+              value={checklistInstance?.templateId ?? ''}
+              onChange={(e) => assignVisitChecklist(opportunityId, e.target.value)}
+              className="min-w-52"
+            >
+              <option value="" disabled>
+                Select template…
+              </option>
+              {visitTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </Select>
+          }
+        />
+        <div className="space-y-2 p-4">
+          {checklistItems.map((item) => (
+            <div key={item.id} className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <Checkbox
+                  checked={checklistInstance?.done.includes(item.id) ?? false}
+                  onChange={() =>
+                    checklistInstance &&
+                    toggleChecklistItem(opportunityId, checklistInstance.templateId, item.id)
+                  }
+                  label={item.label}
+                  description={item.helper}
+                />
+              </div>
+              {checklistInstance && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    removeChecklistInstanceItem(opportunityId, checklistInstance.templateId, item.id)
+                  }
                 >
-                  <span className={cn(f.type === 'longtext' && 'whitespace-normal')}>
-                    {value}
-                    {f.unit && ` ${f.unit}`}
-                  </span>
-                </KeyValue>
-              )
-            }),
+                  <XCircle size={12} />
+                </Button>
+              )}
+            </div>
+          ))}
+          {checklistInstance && (
+            <div className="flex flex-wrap items-end gap-2 border-t border-subtle pt-3">
+              <FieldRow label="Add item" className="min-w-56 flex-1">
+                <Input
+                  value={newItem}
+                  onChange={(e) => setNewItem(e.target.value)}
+                  placeholder="Custom checklist item"
+                />
+              </FieldRow>
+              <Button
+                size="sm"
+                onClick={() => {
+                  addChecklistInstanceItem(opportunityId, checklistInstance.templateId, newItem)
+                  setNewItem('')
+                }}
+              >
+                <Plus size={12} />
+                Add
+              </Button>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Scope requests"
+          subtitle={`${requests.length} surface${requests.length === 1 ? '' : 's'}`}
+          icon={<Ruler size={14} />}
+        />
+        {requests.length === 0 ? (
+          <p className="p-4 text-sm text-muted">No scope requests yet — open the guided form to add them.</p>
+        ) : (
+          <div className="divide-y divide-subtle">
+            {requests.map((req, i) => (
+              <div key={req.id} className="px-4 py-3">
+                <p className="text-sm font-semibold text-primary">
+                  {i + 1}. {req.serviceType || 'Untitled request'}
+                </p>
+                <p className="mt-0.5 text-sm text-secondary">
+                  {req.areaOrEquipment || 'No area'} · {req.quantity || 0} {req.unit}
+                </p>
+                {req.concernOrOutcome && (
+                  <p className="mt-1 text-sm text-muted">{req.concernOrOutcome}</p>
+                )}
+              </div>
+            ))}
+          </div>
         )}
-      </dl>
-    </Card>
+      </Card>
+
+      <Card>
+        <CardHeader title="Answers & questions" subtitle="Captured on the guided form" icon={<ClipboardList size={14} />} />
+        {answered.length === 0 ? (
+          <p className="p-4 text-sm text-muted">No answers yet.</p>
+        ) : (
+          <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 p-4 sm:grid-cols-2">
+            {form.sections.flatMap((sec) =>
+              sec.fields
+                .filter((f) => answered.some(([k]) => k === f.id))
+                .map((f) => {
+                  const raw = visit.values[f.id]
+                  const value = typeof raw === 'boolean' ? (raw ? 'Yes' : 'No') : String(raw)
+                  return (
+                    <KeyValue
+                      key={f.id}
+                      label={f.label}
+                      className={f.type === 'longtext' ? 'sm:col-span-2' : undefined}
+                    >
+                      <span className={cn(f.type === 'longtext' && 'whitespace-normal')}>
+                        {value}
+                        {f.unit && ` ${f.unit}`}
+                      </span>
+                    </KeyValue>
+                  )
+                }),
+            )}
+          </dl>
+        )}
+      </Card>
+
+      {allowsPhotos ? (
+        <Card>
+          <CardHeader
+            title="Photos & documents"
+            subtitle={`${photos.length} attached from the site visit`}
+            icon={<Camera size={14} />}
+          />
+          {photos.length === 0 ? (
+            <p className="p-4 text-sm text-muted">No photos or plans yet.</p>
+          ) : (
+            <ul className="space-y-2 p-4">
+              {photos.map((a) => (
+                <li key={a.id} className="flex items-center gap-2 text-sm text-secondary">
+                  <CheckCircle2 size={14} className="text-success-text" />
+                  {a.name}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      ) : (
+        <p className="rounded-lg border border-subtle bg-surface-sunken px-3 py-2 text-sm text-muted">
+          Sales calls do not collect photos.
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -944,13 +1195,15 @@ function ChecklistCard({
   templateId: string
   subtitle: string
 }) {
-  const tpl = CHECKLIST_BY_ID[templateId]
+  const templates = useStore((s) => s.checklistTemplates)
+  const tpl = templates.find((t) => t.id === templateId) ?? CHECKLIST_BY_ID[templateId]
   const instance = useStore((s) =>
     s.checklists.find((c) => c.opportunityId === opportunityId && c.templateId === templateId),
   )
   const toggle = useStore((s) => s.toggleChecklistItem)
   if (!tpl) return null
 
+  const items = resolveChecklistItems(instance, tpl)
   const done = instance?.done.length ?? 0
 
   return (
@@ -962,14 +1215,14 @@ function ChecklistCard({
         actions={
           <>
             {tpl.managedByCompany && <Badge tone="info">Company standard</Badge>}
-            <Badge tone={done === tpl.items.length ? 'success' : 'neutral'}>
-              {done}/{tpl.items.length}
+            <Badge tone={done === items.length && items.length > 0 ? 'success' : 'neutral'}>
+              {done}/{items.length}
             </Badge>
           </>
         }
       />
       <div className="space-y-2 p-4">
-        {tpl.items.map((item) => (
+        {items.map((item) => (
           <Checkbox
             key={item.id}
             checked={instance?.done.includes(item.id) ?? false}

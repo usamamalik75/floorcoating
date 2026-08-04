@@ -16,7 +16,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import type { CommunicationChannel, Gate, Opportunity, StageId } from '@/domain/types'
-import { ROLE_LABEL } from '@/domain/types'
+import { ROLE_LABEL, withVisitVocab } from '@/domain/types'
 import { STAGE_BY_ID, stageLabel } from '@/domain/stages'
 import { templateForStage, CHECKLIST_BY_ID } from '@/data/checklists'
 import { useStore } from '@/store/useStore'
@@ -168,7 +168,7 @@ export function StageGate({
       size="lg"
       icon={<ArrowRight size={17} className="text-attention" />}
       title={<span className="flex items-center gap-2">Moving to {stageLabel(targetStage, opportunity.category)}</span>}
-      subtitle={def.purpose}
+      subtitle={withVisitVocab(def.purpose, opportunity.category)}
       footer={
         <>
           {hasBlockingReminder ? (
@@ -237,7 +237,9 @@ export function StageGate({
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-base font-medium text-primary">{gate.label}</p>
+                      <p className="text-base font-medium text-primary">
+                        {withVisitVocab(gate.label, opportunity.category)}
+                      </p>
                       {gate.blocking && !met && (
                         <Badge tone="warning" icon={<Lock size={9} />}>
                           Required
@@ -251,7 +253,9 @@ export function StageGate({
                     </div>
 
                     {'helper' in gate && gate.helper && (
-                      <p className="mt-0.5 text-sm leading-snug text-muted">{gate.helper}</p>
+                      <p className="mt-0.5 text-sm leading-snug text-muted">
+                        {withVisitVocab(gate.helper, opportunity.category)}
+                      </p>
                     )}
 
                     {/* ---- Gate bodies ---- */}

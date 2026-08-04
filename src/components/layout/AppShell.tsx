@@ -37,21 +37,25 @@ interface NavItem {
 
 const OFFICE: Role[] = ['admin', 'owner', 'sales', 'estimator', 'pm', 'accounting']
 
-/** Modules = types of work. Pipeline stages are not menu items. */
-const OPERATIONS: NavItem[] = [
+/** Core journey — top of the left menu, in process order. */
+const PRIMARY: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/customers', label: 'Customers', icon: Building2, roles: OFFICE },
   { to: '/prospecting', label: 'Prospecting', icon: Search, roles: ['admin', 'owner', 'sales'] },
   { to: '/sales', label: 'Sales', icon: KanbanSquare, roles: OFFICE },
-  { to: '/communications', label: 'Communications', icon: MessagesSquare, roles: OFFICE },
-  { to: '/site-visits', label: 'Assessments', icon: MapPin, roles: [...OFFICE, 'crew_leader'] },
-  { to: '/estimates', label: 'Quotes', icon: Ruler, roles: ['admin', 'owner', 'sales', 'estimator', 'pm'] },
+  { to: '/site-visits', label: 'Visits & Calls', icon: MapPin, roles: [...OFFICE, 'crew_leader'] },
+  { to: '/estimates', label: 'Estimates', icon: Ruler, roles: ['admin', 'owner', 'sales', 'estimator', 'pm'] },
   { to: '/proposals', label: 'Proposals', icon: FileText, roles: ['admin', 'owner', 'sales', 'estimator'] },
   { to: '/jobs', label: 'Jobs', icon: ClipboardList, roles: ['admin', 'owner', 'pm', 'estimator', 'crew_leader', 'accounting'] },
   { to: '/schedule', label: 'Schedule', icon: CalendarDays, roles: [...OFFICE, 'crew_leader'] },
-  { to: '/field', label: 'Field Operations', icon: HardHat },
-  { to: '/purchasing', label: 'Procurement', icon: ShoppingCart, roles: ['admin', 'owner', 'pm', 'accounting'] },
-  { to: '/catalog', label: 'Catalogue', icon: BookOpen, roles: OFFICE },
+  { to: '/purchasing', label: 'Purchasing', icon: ShoppingCart, roles: ['admin', 'owner', 'pm', 'accounting'] },
+  { to: '/catalog', label: 'Products & Services', icon: BookOpen, roles: OFFICE },
+  { to: '/customers', label: 'Customers', icon: Building2, roles: OFFICE },
+]
+
+/** Supporting modules — shown below the core journey. */
+const SECONDARY: NavItem[] = [
+  { to: '/field', label: 'Field execution', icon: HardHat },
+  { to: '/communications', label: 'Communications', icon: MessagesSquare, roles: OFFICE },
   { to: '/finance', label: 'Finance', icon: Receipt, roles: ['admin', 'owner', 'accounting', 'pm'] },
   { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['admin', 'owner'] },
   { to: '/admin', label: 'Admin', icon: ShieldCheck, roles: ['admin', 'owner'] },
@@ -79,8 +83,9 @@ export function AppShell() {
           <Logo size={40} variant="white" />
         </div>
 
-        <NavGroup title="Customer Operations" items={visible(OPERATIONS)} pathname={pathname} />
-        
+        <NavGroup items={visible(PRIMARY)} pathname={pathname} />
+        <NavGroup title="More" items={visible(SECONDARY)} pathname={pathname} />
+
 
         <div className="mt-auto border-t border-white/10 px-2 py-2">
           <NavGroup items={[{ to: '/styleguide', label: 'Design System', icon: Palette }]} pathname={pathname} />

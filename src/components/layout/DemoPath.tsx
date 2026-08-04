@@ -7,7 +7,7 @@ const STEPS: { to: string; title: string; body: string }[] = [
   {
     to: '/sales',
     title: 'Sales pipeline — modules, not stages, in the menu',
-    body: 'The left nav is business modules. Sales holds the lead-to-award board. Site Visits, Estimates and Proposals are separate modules that the pipeline creates and links to.',
+    body: 'The left nav is business modules. Sales holds the lead-to-award board. Visits & Calls, Estimates and Proposals are separate modules that the pipeline creates and links to.',
   },
   {
     to: '/sales',
@@ -17,7 +17,7 @@ const STEPS: { to: string; title: string; body: string }[] = [
   {
     to: '/opportunities/op_midwest_plant3',
     title: 'Opportunity as the hub',
-    body: 'Tabs for Overview, Site Visits, Estimates, Proposals and Job. Same record from the pipeline, module lists, or dashboard — no hunting across menus.',
+    body: 'Tabs for Overview, Site Visit (or Sales Call on residential), Estimates, Proposals and Job. Same record from the pipeline, module lists, or dashboard — no hunting across menus.',
   },
   {
     to: '/estimate/op_midwest_plant3',

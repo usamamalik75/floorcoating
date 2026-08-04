@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight, Sparkles } from 'lucide-react'
 import type { Opportunity, StageId } from '@/domain/types'
+import { visitVocab } from '@/domain/types'
 import { useStore } from '@/store/useStore'
 import { Button, Card } from '@/components/ui'
 
@@ -20,7 +21,7 @@ export function NextActionPanel({
   const job = useStore((s) => s.jobs.find((j) => j.opportunityId === opportunity.id))
   const estimate = useStore((s) => s.estimates.find((e) => e.opportunityId === opportunity.id))
 
-  const actions = actionsFor(opportunity.stage, {
+  const actions = actionsFor(opportunity, {
     hasEstimate: Boolean(estimate),
     hasJob: Boolean(job),
     estimateId: estimate?.opportunityId,
@@ -91,24 +92,26 @@ type ActionBtn =
   | { kind: 'ensureEstimate'; label: string }
 
 function actionsFor(
-  stage: StageId,
+  opportunity: Opportunity,
   ctx: { hasEstimate: boolean; hasJob: boolean; estimateId?: string; token?: string },
 ): { title: string; body: string; buttons: ActionBtn[] } | null {
-  switch (stage) {
+  const v = visitVocab(opportunity.category)
+
+  switch (opportunity.stage) {
     case 'qualified':
     case 'site_visit_required':
       return {
         title: 'Lead qualified',
-        body: 'A site visit is usually required before estimating. You stay in control of where you go next.',
+        body: `A ${v.singular} is usually required before estimating. You stay in control of where you go next.`,
         buttons: [
-          { kind: 'stage', label: 'Schedule Site Visit', toStage: 'site_visit_scheduled', primary: true },
+          { kind: 'stage', label: `Schedule ${v.Singular}`, toStage: 'site_visit_scheduled', primary: true },
           { kind: 'ensureEstimate', label: 'Create Estimate' },
           { kind: 'link', label: 'Return to Sales', to: '/sales' },
         ],
       }
     case 'site_visit_completed':
       return {
-        title: 'Site visit completed',
+        title: `${v.Singular} completed`,
         body: 'Measurements and photos are on the record. Create or open the estimate when you are ready.',
         buttons: [
           ctx.hasEstimate
@@ -150,9 +153,14 @@ function actionsFor(
         buttons: [
           {
             kind: 'link',
-            label: ctx.hasJob ? 'Open Job' : 'Go to Jobs',
-            to: ctx.hasJob ? `?tab=job` : '/jobs',
+            label: 'Open Job',
+            to: '/jobs',
             primary: true,
+          },
+          {
+            kind: 'link',
+            label: 'Job on this lead',
+            to: `/opportunities/${opportunity.id}?tab=job`,
           },
           { kind: 'link', label: 'Return to Sales', to: '/sales' },
         ],

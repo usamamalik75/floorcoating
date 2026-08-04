@@ -15,18 +15,23 @@ import {
   Sparkles,
   Trash2,
   Truck,
+  UserPlus,
   XCircle,
 } from 'lucide-react'
 import type { Estimate, EstimateOption, LineItem } from '@/domain/types'
+import { CATEGORY_LABEL } from '@/domain/types'
 import { ACCOUNT_BY_ID } from '@/data/seed'
+import { estimatePackFor, suggestFloorSystem } from '@/data/estimating'
 import { estimateTotal, money, optionTotal, useStore } from '@/store/useStore'
-import { useChecks, useUserDirectory, useViewer } from '@/store/selectors'
+import { useChecks, useUserDirectory, useUsers, useViewer } from '@/store/selectors'
 import {
   Badge,
   Button,
   Card,
   CardHeader,
+  Checkbox,
   EmptyState,
+  FieldRow,
   Input,
   Modal,
   SectionTitle,
@@ -55,6 +60,7 @@ export function EstimateBuilder() {
   const { id = '' } = useParams<{ id: string }>()
   const viewer = useViewer()
   const userById = useUserDirectory()
+  const users = useUsers()
   const opportunities = useStore((s) => s.opportunities)
   const estimates = useStore((s) => s.estimates)
   const scopeExtractions = useStore((s) => s.scopeExtractions)
@@ -65,9 +71,12 @@ export function EstimateBuilder() {
   const approveEstimate = useStore((s) => s.approveEstimate)
   const rejectEstimate = useStore((s) => s.rejectEstimate)
   const moveStage = useStore((s) => s.moveStage)
+  const patchOpportunity = useStore((s) => s.patchOpportunity)
+  const logActivity = useStore((s) => s.logActivity)
   const sendMessage = useStore((s) => s.sendMessage)
 
   const [pickerFor, setPickerFor] = useState<string | null>(null)
+  const [overridePicker, setOverridePicker] = useState(false)
   const [preview, setPreview] = useState(false)
   const [rejecting, setRejecting] = useState(false)
   const [rejectNote, setRejectNote] = useState('')
@@ -78,6 +87,7 @@ export function EstimateBuilder() {
 
   const opp = opportunities.find((o) => o.id === id)
   const est = estimates.find((e) => e.opportunityId === id)
+  const siteVisit = useStore((s) => s.siteVisits.find((v) => v.opportunityId === id))
   const scopeExtraction = scopeExtractions.find((t) => t.opportunityId === id)
   const account = opp ? ACCOUNT_BY_ID[opp.accountId] : undefined
   const checks = useChecks(id, 'estimate_ready')
@@ -91,18 +101,63 @@ export function EstimateBuilder() {
   )
 
   const grand = useMemo(() => (est ? estimateTotal(est) : 0), [est])
+  const pack = opp ? estimatePackFor(opp.category) : null
+  const suggestion = useMemo(() => {
+    if (!opp) return null
+    return suggestFloorSystem(opp.category, siteVisit?.requests ?? [], siteVisit?.values ?? {})
+  }, [opp, siteVisit?.requests, siteVisit?.values])
+  const categoryPriceBook = useMemo(
+    () => (opp ? priceBookItems.filter((pb) => pb.categories.includes(opp.category)) : []),
+    [priceBookItems, opp],
+  )
 
   if (!opp) return <EmptyState title="Opportunity not found" className="h-full" />
 
+  const estimators = users.filter(
+    (u) => u.role === 'estimator' || u.role === 'owner' || u.role === 'admin',
+  )
+  const estimatorMissing = !opp.estimatorId
   const canApprove = viewer?.role === 'estimator' || viewer?.role === 'owner' || viewer?.role === 'admin'
   const readyForApproval = checks.every((c) => c.ok)
+  const canSendEstimationRequest = grand > 0 && !estimatorMissing
 
-  const createEstimate = () =>
+  const assignEstimator = (estimatorId: string) => {
+    patchOpportunity(opp.id, { estimatorId: estimatorId || null })
+    if (estimatorId) {
+      logActivity(
+        opp.id,
+        'system',
+        `Estimator assigned: ${userById[estimatorId]?.name ?? estimatorId}.`,
+      )
+    }
+  }
+
+  const sendEstimationRequest = () => {
+    if (!est || !canSendEstimationRequest) return
+    patch({ status: 'pending_approval' })
+    if (opp.stage === 'estimate_in_progress' || opp.stage === 'site_visit_completed') {
+      moveStage(opp.id, 'estimate_ready')
+    }
+    const name = userById[opp.estimatorId!]?.name ?? 'assigned estimator'
+    logActivity(
+      opp.id,
+      'system',
+      `Estimation request sent — approval pending with ${name}.`,
+    )
+  }
+
+  const createEstimate = () => {
+    const nextPack = estimatePackFor(opp.category)
+    const nextSuggestion = suggestFloorSystem(
+      opp.category,
+      siteVisit?.requests ?? [],
+      siteVisit?.values ?? {},
+    )
     upsertEstimate({
       id: uid('est'),
       opportunityId: opp.id,
       options: [{ id: uid('eo'), label: 'Scope 1', kind: 'scope', recommended: true, lineItems: [] }],
-      templateId: opp.category === 'residential' ? 'pt_residential' : 'pt_standard',
+      templateId: nextPack.templateId,
       internalNotes: '',
       status: 'draft',
       approvedById: null,
@@ -112,8 +167,12 @@ export function EstimateBuilder() {
       signedAt: null,
       signedBy: null,
       token: Math.random().toString(36).slice(2, 8),
-      depositPct: opp.category === 'residential' ? 25 : 40,
+      depositPct: nextPack.depositPct,
+      estimateRemindersDone: [],
+      suggestedPriceBookId: nextSuggestion.priceBookId,
+      suggestionDecision: 'pending',
     })
+  }
 
   const patch = (next: Partial<Estimate>) => est && updateEstimate(est.id, next)
   const setOptions = (options: EstimateOption[]) => patch({ options })
@@ -135,21 +194,102 @@ export function EstimateBuilder() {
     ])
   }
 
-  const addLine = (optionId: string, priceBookId: string) => {
-    if (!est) return
+  const lineFromPriceBook = (priceBookId: string, qtyOverride?: number): LineItem | null => {
     const pb = priceBookById[priceBookId]
-    if (!pb) return
-    const line: LineItem = {
+    if (!pb) return null
+    const qty =
+      qtyOverride ??
+      (['visit', 'unit', 'day', 'each'].includes(pb.unit)
+        ? 1
+        : pb.id === 'svc_access_equipment'
+          ? opp.secondaryQuantity || 1
+          : opp.estimatedQuantity || 1)
+    return {
       id: uid('li'),
       priceBookId: pb.id,
       name: pb.name,
       description: pb.description,
-      qty: ['visit', 'unit', 'day', 'each'].includes(pb.unit) ? 1 : pb.id === 'svc_access_equipment' ? opp.secondaryQuantity || 1 : opp.estimatedQuantity,
+      qty,
       unit: pb.unit,
       unitPrice: pb.unitPrice,
     }
+  }
+
+  const addLine = (optionId: string, priceBookId: string) => {
+    if (!est) return
+    const line = lineFromPriceBook(priceBookId)
+    if (!line) return
     setOptions(est.options.map((o) => (o.id === optionId ? { ...o, lineItems: [...o.lineItems, line] } : o)))
     setPickerFor(null)
+    setOverridePicker(false)
+  }
+
+  const acceptSuggestedSystem = () => {
+    if (!est || !suggestion) return
+    const requests = siteVisit?.requests?.filter((r) => r.quantity > 0) ?? []
+    const targetId = est.options[0]?.id ?? uid('eo')
+    let options = est.options
+    if (options.length === 0) {
+      options = [{ id: targetId, label: 'Scope 1', kind: 'scope', recommended: true, lineItems: [] }]
+    }
+    const lines: LineItem[] =
+      requests.length > 0
+        ? requests
+            .map((r) => lineFromPriceBook(suggestion.priceBookId, r.quantity))
+            .filter((l): l is LineItem => Boolean(l))
+            .map((l, i) => ({
+              ...l,
+              id: uid('li'),
+              name: `${l.name} — ${requests[i].areaOrEquipment || `Area ${i + 1}`}`,
+              description: requests[i].concernOrOutcome
+                ? `${l.description}\n\nScope: ${requests[i].concernOrOutcome}`
+                : l.description,
+              unit: requests[i].unit || l.unit,
+            }))
+        : (() => {
+            const line = lineFromPriceBook(suggestion.priceBookId)
+            return line ? [line] : []
+          })()
+
+    const nextOptions = options.map((o, idx) =>
+      idx === 0 ? { ...o, lineItems: [...o.lineItems, ...lines] } : o,
+    )
+    updateEstimate(est.id, {
+      options: nextOptions,
+      suggestedPriceBookId: suggestion.priceBookId,
+      suggestionDecision: 'accepted',
+      templateId: pack?.templateId ?? est.templateId,
+      depositPct: pack?.depositPct ?? est.depositPct,
+    })
+  }
+
+  const overrideSuggestedSystem = (priceBookId: string) => {
+    if (!est) return
+    const line = lineFromPriceBook(priceBookId)
+    if (!line) return
+    const options =
+      est.options.length > 0
+        ? est.options.map((o, idx) =>
+            idx === 0 ? { ...o, lineItems: [...o.lineItems, line] } : o,
+          )
+        : [{ id: uid('eo'), label: 'Scope 1', kind: 'scope' as const, recommended: true, lineItems: [line] }]
+    updateEstimate(est.id, {
+      options,
+      suggestedPriceBookId: priceBookId,
+      suggestionDecision: 'overridden',
+    })
+    setOverridePicker(false)
+    setPickerFor(null)
+  }
+
+  const toggleReminder = (reminderId: string) => {
+    if (!est) return
+    const done = est.estimateRemindersDone ?? []
+    patch({
+      estimateRemindersDone: done.includes(reminderId)
+        ? done.filter((id) => id !== reminderId)
+        : [...done, reminderId],
+    })
   }
 
   const patchLine = (optionId: string, lineId: string, next: Partial<LineItem>) => {
@@ -209,15 +349,23 @@ export function EstimateBuilder() {
             {est.status === 'draft' && (
               <Button
                 variant="primary"
-                disabled={grand === 0}
-                onClick={() => {
-                  patch({ status: 'pending_approval' })
-                  if (opp.stage === 'estimate_in_progress') moveStage(opp.id, 'estimate_ready')
-                }}
+                disabled={!canSendEstimationRequest}
+                title={
+                  estimatorMissing
+                    ? 'Assign an estimator before sending the estimation request'
+                    : grand === 0
+                      ? 'Add line items before sending'
+                      : undefined
+                }
+                onClick={sendEstimationRequest}
               >
-                <ShieldCheck size={13} />
-                Request approval
+                <Send size={13} />
+                Send estimation request
               </Button>
+            )}
+
+            {est.status === 'pending_approval' && (
+              <Badge tone="attention">Approval pending</Badge>
             )}
 
             {est.status === 'pending_approval' && canApprove && (
@@ -273,7 +421,7 @@ export function EstimateBuilder() {
               <EmptyState
                 icon={<Layers size={28} />}
                 title="No estimate yet"
-                description="Start one and the catalogue will populate the description, unit, price, service document, resource requirement, and job checklist."
+                description="Starts with the residential / commercial / industrial estimating pack — reminders, proposal form, price book filter, and a suggested floor system you can accept or override."
                 action={
                   <Button variant="primary" onClick={createEstimate}>
                     <Plus size={13} />
@@ -291,12 +439,201 @@ export function EstimateBuilder() {
                 </Card>
               )}
 
+              <Card
+                className={cn(
+                  estimatorMissing && 'border-(--status-warning) bg-warning-soft/40',
+                )}
+              >
+                <CardHeader
+                  title="Assigned estimator"
+                  subtitle={
+                    estimatorMissing
+                      ? 'Assignment is missing — select who owns this estimate before you can send the estimation request.'
+                      : 'This person owns the estimate and receives the approval request.'
+                  }
+                  icon={<UserPlus size={14} />}
+                  actions={
+                    estimatorMissing ? (
+                      <Badge tone="warning">Assignment missing</Badge>
+                    ) : (
+                      <Badge tone="success">Assigned</Badge>
+                    )
+                  }
+                />
+                <div className="p-4">
+                  <FieldRow label="Estimator" required>
+                    <Select
+                      value={opp.estimatorId ?? ''}
+                      onChange={(e) => assignEstimator(e.target.value)}
+                    >
+                      <option value="">Select assigned estimator…</option>
+                      {estimators.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name}
+                          {u.role !== 'estimator' ? ` (${u.role})` : ''}
+                        </option>
+                      ))}
+                    </Select>
+                  </FieldRow>
+                  {estimatorMissing && (
+                    <p className="mt-2 text-sm text-warning-text">
+                      Send estimation request stays disabled until an estimator is assigned.
+                    </p>
+                  )}
+                </div>
+              </Card>
+
+              {est.status === 'pending_approval' && (
+                <Card className="border-(--accent-attention) bg-attention-soft/40 px-4 py-3">
+                  <p className="flex items-center gap-2 text-base font-medium text-primary">
+                    <ShieldCheck size={14} className="text-attention-text" />
+                    Estimation request sent — approval pending
+                    {opp.estimatorId && (
+                      <span className="font-normal text-secondary">
+                        with {userById[opp.estimatorId]?.name}
+                      </span>
+                    )}
+                  </p>
+                </Card>
+              )}
+
               {est.status === 'approved' && (
                 <Card className="border-(--status-success) bg-success-soft px-4 py-3">
                   <p className="flex items-center gap-2 text-base font-medium text-primary">
                     <CheckCircle2 size={14} className="text-success-text" />
                     Approved by {userById[est.approvedById ?? '']?.name}. Ready to send to the
                     customer.
+                  </p>
+                </Card>
+              )}
+
+              {pack && (
+                <Card>
+                  <CardHeader
+                    title={pack.label}
+                    subtitle={`${CATEGORY_LABEL[opp.category]} opportunity — reminders, estimating form, and price book are filtered to this type.`}
+                    icon={<FileText size={14} />}
+                    actions={<Badge tone="info">{CATEGORY_LABEL[opp.category]}</Badge>}
+                  />
+                  <div className="grid gap-4 p-4 lg:grid-cols-2">
+                    <div>
+                      <p className="mb-2 text-xs font-semibold tracking-wider text-muted uppercase">
+                        Estimating reminders
+                      </p>
+                      <div className="space-y-2">
+                        {pack.reminders.map((r) => (
+                          <Checkbox
+                            key={r.id}
+                            checked={(est.estimateRemindersDone ?? []).includes(r.id)}
+                            onChange={() => toggleReminder(r.id)}
+                            label={r.label}
+                            description={r.helper}
+                          />
+                        ))}
+                      </div>
+                      <p className="mt-2 text-2xs text-muted">
+                        {(est.estimateRemindersDone ?? []).length}/{pack.reminders.length} acknowledged
+                      </p>
+                    </div>
+                    <div>
+                      <p className="mb-2 text-xs font-semibold tracking-wider text-muted uppercase">
+                        Form & price book
+                      </p>
+                      <ul className="space-y-1.5 text-sm text-secondary">
+                        {pack.formHints.map((hint) => (
+                          <li key={hint} className="flex items-start gap-1.5">
+                            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-(--color-steel-400)" />
+                            {hint}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="mt-3 text-sm text-muted">
+                        Template:{' '}
+                        <span className="font-medium text-primary">
+                          {templateById[pack.templateId]?.name ?? pack.templateId}
+                        </span>
+                        {' · '}
+                        {categoryPriceBook.length} price-book items for {CATEGORY_LABEL[opp.category].toLowerCase()}
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {suggestion && (est.suggestionDecision ?? 'pending') === 'pending' && (
+                <Card className="border-(--accent-attention) bg-attention-soft/30">
+                  <CardHeader
+                    title="Suggested floor system"
+                    subtitle="Based on opportunity type and what was gathered at the site visit / sales call. Accept to build lines from scope requests, or override and pick manually."
+                    icon={<Sparkles size={14} />}
+                    actions={
+                      <Badge tone="attention">
+                        {Math.round(suggestion.confidence * 100)}% confidence
+                      </Badge>
+                    }
+                  />
+                  <div className="space-y-3 p-4">
+                    {(() => {
+                      const pb = priceBookById[suggestion.priceBookId]
+                      if (!pb) return <p className="text-sm text-muted">Suggested system not in price book.</p>
+                      return (
+                        <div className="flex items-start gap-3 rounded-md border border-subtle bg-surface-raised px-3 py-2.5">
+                          <span
+                            className="mt-0.5 h-8 w-8 shrink-0 rounded-sm border border-subtle"
+                            style={{ background: pb.swatch }}
+                          />
+                          <div className="min-w-0">
+                            <p className="text-base font-medium text-primary">{pb.name}</p>
+                            <p className="text-sm text-muted">
+                              {pb.catalogueGroup} · {money(pb.unitPrice)} / {pb.unit}
+                            </p>
+                            <p className="mt-1.5 text-sm text-secondary">{suggestion.rationale}</p>
+                          </div>
+                        </div>
+                      )
+                    })()}
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="primary" onClick={acceptSuggestedSystem}>
+                        <CheckCircle2 size={13} />
+                        Accept suggestion
+                      </Button>
+                      <Button onClick={() => setOverridePicker(true)}>
+                        Override — pick from price book
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => patch({ suggestionDecision: 'dismissed' })}
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {suggestion && est.suggestionDecision && est.suggestionDecision !== 'pending' && (
+                <Card className="px-4 py-3">
+                  <p className="flex flex-wrap items-center gap-2 text-sm text-secondary">
+                    <Sparkles size={13} className="text-attention-text" />
+                    Floor system{' '}
+                    {est.suggestionDecision === 'accepted'
+                      ? 'accepted'
+                      : est.suggestionDecision === 'overridden'
+                        ? 'manually overridden'
+                        : 'dismissed'}
+                    {est.suggestedPriceBookId && priceBookById[est.suggestedPriceBookId] && (
+                      <>
+                        :{' '}
+                        <span className="font-medium text-primary">
+                          {priceBookById[est.suggestedPriceBookId].name}
+                        </span>
+                      </>
+                    )}
+                    {est.suggestionDecision !== 'accepted' && (
+                      <Button size="sm" variant="ghost" onClick={() => patch({ suggestionDecision: 'pending' })}>
+                        Revisit suggestion
+                      </Button>
+                    )}
                   </p>
                 </Card>
               )}
@@ -616,20 +953,31 @@ export function EstimateBuilder() {
         </div>
       </div>
 
-      {/* ---- Price book picker ---- */}
+      {/* ---- Price book picker (add line or override suggestion) ---- */}
       <Modal
-        open={Boolean(pickerFor)}
-        onClose={() => setPickerFor(null)}
+        open={Boolean(pickerFor) || overridePicker}
+        onClose={() => {
+          setPickerFor(null)
+          setOverridePicker(false)
+        }}
         size="lg"
         icon={<Layers size={17} />}
-        title="Price book"
-        subtitle="Selecting a catalogue item brings its description, pricing, service document, resource requirement, job checklist, required resources and exclusions with it."
+        title={overridePicker ? 'Override floor system' : 'Price book'}
+        subtitle={
+          overridePicker
+            ? `Manual pick from the ${CATEGORY_LABEL[opp.category].toLowerCase()} price book. Spec, resources, and exclusions still attach automatically.`
+            : `Showing ${CATEGORY_LABEL[opp.category].toLowerCase()}-eligible catalogue items. Selecting one pulls description, pricing, service document, resources and exclusions.`
+        }
       >
         <div className="space-y-1.5">
-          {priceBookItems.filter((pb) => pb.categories.includes(opp.category)).map((pb) => (
+          {categoryPriceBook.map((pb) => (
             <button
               key={pb.id}
-              onClick={() => pickerFor && addLine(pickerFor, pb.id)}
+              type="button"
+              onClick={() => {
+                if (overridePicker) overrideSuggestedSystem(pb.id)
+                else if (pickerFor) addLine(pickerFor, pb.id)
+              }}
               className="flex w-full items-start gap-3 rounded-md border border-subtle bg-surface-raised px-3 py-2.5 text-left transition-colors duration-(--duration-fast) hover:border-strong hover:bg-surface-inset"
             >
               <span

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
-import { AlertTriangle, CheckCircle2, CreditCard, Lock, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CheckCircle2, CreditCard, Lock, ShieldCheck } from 'lucide-react'
 import { ACCOUNT_BY_ID } from '@/data/seed'
 import { money, useStore } from '@/store/useStore'
 import { Button, Card, EmptyState } from '@/components/ui'
@@ -39,6 +39,16 @@ export function CustomerPayment() {
   return (
     <div className="min-h-screen bg-[#f4f4f5] py-6">
       <div className="mx-auto max-w-2xl px-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <Link
+            to={`/opportunities/${opportunity.id}`}
+            className="inline-flex items-center gap-1.5 rounded-md border border-[#d0d0d4] bg-white px-3 py-1.5 text-sm font-medium text-[#323A45] shadow-sm hover:bg-[#fafafa]"
+          >
+            <ArrowLeft size={14} />
+            Back to lead
+          </Link>
+          <span className="text-xs text-[#8a8a8a]">Prototype preview — returns to the opportunity record</span>
+        </div>
         <div className="mb-3 flex items-center justify-between gap-3 rounded-md bg-[#323A45] px-4 py-2.5 text-white">
           <span className="flex items-center gap-2 text-sm">
             <ShieldCheck size={14} />

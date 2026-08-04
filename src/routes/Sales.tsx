@@ -1,9 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Filter, LayoutGrid, Plus, Rows3, Search } from 'lucide-react'
-import { SALES_BOARD_STAGES, STAGE_BY_ID, stageLabel } from '@/domain/stages'
-import type { Category, LeadTemperature, Opportunity, StageId } from '@/domain/types'
-import { TEMPERATURE_LABEL } from '@/domain/types'
+import { SALES_BOARD_STAGES, STAGE_BY_ID, stageLabel, stageLabelForPipeline } from '@/domain/stages'
+import type { LeadTemperature, Opportunity, SalesPipeline, StageId } from '@/domain/types'
+import {
+  CATEGORY_LABEL,
+  SALES_PIPELINE_LABEL,
+  TEMPERATURE_LABEL,
+  categoriesInPipeline,
+  salesPipelineOf,
+} from '@/domain/types'
 import { ACCOUNT_BY_ID } from '@/data/seed'
 import { money, useStore } from '@/store/useStore'
 import { OpportunityCard } from '@/components/domain/OpportunityCard'
@@ -37,6 +43,7 @@ export function Sales() {
   const view = (params.get('view') as 'board' | 'table') ?? 'board'
   const tab = params.get('tab') ?? 'all'
   const temp = (params.get('temp') as LeadTemperature | 'all') ?? 'all'
+  const pipeline = (params.get('pipeline') as SalesPipeline | 'all') ?? 'commercial_industrial'
 
   const opportunities = useStore((s) => s.opportunities)
   const locationFilter = useStore((s) => s.locationFilter)
@@ -44,17 +51,22 @@ export function Sales() {
   const userById = useUserDirectory()
 
   const [query, setQuery] = useState('')
-  const [category, setCategory] = useState<Category | 'all'>('all')
   const [rep, setRep] = useState('all')
   const [dragId, setDragId] = useState<string | null>(null)
   const [gate, setGate] = useState<{ opp: Opportunity; to: StageId } | null>(null)
 
+  const setPipeline = (next: SalesPipeline | 'all') =>
+    setParams({ view, tab, temp, pipeline: next })
+
   const visibleOpps = useMemo(() => {
     let rows = opportunities.filter((o) => STAGE_BY_ID[o.stage]?.phase === 'sales')
     if (locationFilter !== 'all') rows = rows.filter((o) => o.locationId === locationFilter)
+    if (pipeline !== 'all') {
+      const allowed = categoriesInPipeline(pipeline)
+      rows = rows.filter((o) => allowed.includes(o.category))
+    }
     if (tab !== 'all') rows = rows.filter((o) => o.stage === tab)
     if (temp !== 'all') rows = rows.filter((o) => o.temperature === temp)
-    if (category !== 'all') rows = rows.filter((o) => o.category === category)
     if (rep !== 'all') rows = rows.filter((o) => o.ownerId === rep)
     if (query.trim()) {
       const q = query.toLowerCase()
@@ -66,7 +78,7 @@ export function Sales() {
       )
     }
     return rows
-  }, [opportunities, locationFilter, tab, temp, category, rep, query])
+  }, [opportunities, locationFilter, pipeline, tab, temp, rep, query])
 
   const reps = users.filter(
     (u) =>
@@ -89,6 +101,15 @@ export function Sales() {
     <div className="mx-auto w-full max-w-7xl h-full flex flex-col bg-surface-sunken">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-subtle/50 bg-surface-raised px-6 py-4 rounded-b-xl shadow-sm mb-4">
         <h1 className="font-display text-lg text-primary">Sales</h1>
+        <SegmentedControl
+          value={pipeline}
+          onChange={(v) => setPipeline(v as SalesPipeline | 'all')}
+          options={[
+            { value: 'residential', label: SALES_PIPELINE_LABEL.residential },
+            { value: 'commercial_industrial', label: SALES_PIPELINE_LABEL.commercial_industrial },
+            { value: 'all', label: 'Both' },
+          ]}
+        />
         <Badge tone="brand">{money(totalOpen, true)} open</Badge>
         <Badge tone="neutral">{visibleOpps.length} opportunities</Badge>
 
@@ -114,7 +135,7 @@ export function Sales() {
         <select
           aria-label="Temperature"
           value={temp}
-          onChange={(e) => setParams({ view, tab, temp: e.target.value })}
+          onChange={(e) => setParams({ view, tab, temp: e.target.value, pipeline })}
           className="h-(--control-h) rounded-md border border-strong bg-surface-raised px-2 text-base"
         >
           <option value="all">All temperatures</option>
@@ -123,17 +144,6 @@ export function Sales() {
               {TEMPERATURE_LABEL[t]}
             </option>
           ))}
-        </select>
-
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value as Category | 'all')}
-          className="h-(--control-h) rounded-md border border-strong bg-surface-raised px-2 text-base"
-        >
-          <option value="all">All categories</option>
-          <option value="residential">Residential</option>
-          <option value="commercial">Commercial</option>
-          <option value="industrial">Industrial</option>
         </select>
 
         <select
@@ -151,7 +161,7 @@ export function Sales() {
 
         <SegmentedControl
           value={view}
-          onChange={(v) => setParams({ view: v, tab, temp })}
+          onChange={(v) => setParams({ view: v, tab, temp, pipeline })}
           options={[
             { value: 'board', label: <LayoutGrid size={12} /> },
             { value: 'table', label: <Rows3 size={12} /> },
@@ -159,12 +169,20 @@ export function Sales() {
         />
       </div>
 
+      <p className="shrink-0 border-b border-subtle bg-surface-base px-6 py-1.5 text-sm text-muted">
+        {pipeline === 'residential'
+          ? 'Residential pipeline — sales calls and homeowner work.'
+          : pipeline === 'commercial_industrial'
+            ? 'Commercial & Industrial pipeline — facility site visits. Project type (commercial vs industrial) is kept on each opportunity for forms and pricing.'
+            : 'Both sales pipelines. Switch above to focus on one.'}
+      </p>
+
       <div className="flex shrink-0 gap-1 border-b border-subtle bg-surface-base px-3 py-1.5">
         {LEAD_TABS.map((t) => (
           <button
             key={t.value}
             type="button"
-            onClick={() => setParams({ view, tab: t.value, temp })}
+            onClick={() => setParams({ view, tab: t.value, temp, pipeline })}
             className={cn(
               'rounded-md px-2.5 py-1 text-sm font-medium transition-colors',
               tab === t.value ? 'bg-action-soft text-brand' : 'text-muted hover:text-primary',
@@ -197,7 +215,9 @@ export function Sales() {
                   />
                   <header className="shrink-0 border-b border-subtle px-2.5 py-2">
                     <div className="flex items-center justify-between gap-1.5">
-                      <h2 className="truncate text-sm font-semibold text-primary">{def.label}</h2>
+                      <h2 className="truncate text-sm font-semibold text-primary">
+                        {stageLabelForPipeline(stageId, pipeline)}
+                      </h2>
                       <span className="shrink-0 rounded-full bg-surface-sunken px-1.5 text-2xs font-medium tabular text-muted">
                         {cards.length}
                       </span>
@@ -230,6 +250,7 @@ export function Sales() {
                 <Th width={110}>Code</Th>
                 <Th>Project</Th>
                 <Th>Account</Th>
+                <Th width={100}>Type</Th>
                 <Th width={130}>Stage</Th>
                 <Th width={80}>Temp</Th>
                 <Th width={140}>Owner</Th>
@@ -252,6 +273,11 @@ export function Sales() {
                     </Link>
                   </Td>
                   <Td className="text-secondary">{ACCOUNT_BY_ID[o.accountId]?.name}</Td>
+                  <Td className="text-secondary">
+                    <span title={SALES_PIPELINE_LABEL[salesPipelineOf(o.category)]}>
+                      {CATEGORY_LABEL[o.category]}
+                    </span>
+                  </Td>
                   <Td>
                     <StageChip group={STAGE_BY_ID[o.stage].group} label={stageLabel(o.stage, o.category)} />
                   </Td>

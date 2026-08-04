@@ -24,6 +24,7 @@ import type {
   ProposalTemplate,
   Reminder,
   Role,
+  ScopeRequest,
   User,
   SiteVisitForm,
   SiteVisitResponse,
@@ -31,11 +32,12 @@ import type {
   StageId,
   ScopeExtraction,
 } from '@/domain/types'
-import { ROLE_LABEL } from '@/domain/types'
+import { ROLE_LABEL, visitVocab, withVisitVocab } from '@/domain/types'
 import { WORKSPACE_TEMPLATE, type WorkspaceTemplate } from '@/config/workspace'
-import { CHECKLIST_TEMPLATES } from '@/data/checklists'
+import { CHECKLIST_TEMPLATES, templateForStage } from '@/data/checklists'
 import { PRICE_BOOK, PROPOSAL_TEMPLATES } from '@/data/priceBook'
 import { formForCategory, SITE_VISIT_FORMS } from '@/data/siteVisitForms'
+import { estimatePackFor, suggestFloorSystem } from '@/data/estimating'
 import {
   ACCOUNTS,
   ACTIVITY,
@@ -55,8 +57,7 @@ import {
   USERS,
   iso,
 } from '@/data/seed'
-import { STAGE_BY_ID, stageLabel } from '@/domain/stages'
-import { STAGES } from '@/domain/stages'
+import { STAGE_BY_ID, stageLabel, STAGES } from '@/domain/stages'
 
 let seq = 1000
 const nextId = (prefix: string) => `${prefix}_${++seq}`
@@ -123,7 +124,17 @@ interface State {
 
   addArtifact: (a: Omit<Artifact, 'id'>) => void
   toggleChecklistItem: (opportunityId: string, templateId: string, itemId: string) => void
-  saveSiteVisit: (opportunityId: string, formId: string, values: Record<string, string | number | boolean>, complete: boolean) => void
+  /** Select / replace the visit checklist from a company template (copies items). */
+  assignVisitChecklist: (opportunityId: string, templateId: string) => void
+  addChecklistInstanceItem: (opportunityId: string, templateId: string, label: string) => void
+  removeChecklistInstanceItem: (opportunityId: string, templateId: string, itemId: string) => void
+  saveSiteVisit: (
+    opportunityId: string,
+    formId: string,
+    values: Record<string, string | number | boolean>,
+    requests: ScopeRequest[],
+    complete: boolean,
+  ) => void
 
   upsertEstimate: (e: Estimate) => void
   updateEstimate: (id: string, next: Partial<Estimate>) => void
@@ -206,6 +217,10 @@ export interface LeadInput {
   message: string
   locationId: string
   estimatedQuantity: number
+  /** new_contact = create/link a Contact; known_customer = attach to existing Customer. */
+  accountMode?: 'new_contact' | 'known_customer'
+  /** Required when accountMode is known_customer. */
+  accountId?: string
 }
 
 const createCommunicationTemplates = (): CommunicationTemplate[] => [
@@ -312,7 +327,7 @@ const initial = () => ({
  * seed invalidates it and "Reset demo" always returns to the story's start.
  */
 const STORAGE_KEY = 'fcg-prototype'
-const STORAGE_VERSION = 7
+const STORAGE_VERSION = 12
 
 const createState: StateCreator<State> = (set, get) => ({
   ...initial(),
@@ -408,7 +423,11 @@ const createState: StateCreator<State> = (set, get) => ({
     }
 
     def.notify.forEach((n) =>
-      get().logActivity(opportunityId, 'system', `Notified ${ROLE_LABEL[n.role]}: ${n.message}`),
+      get().logActivity(
+        opportunityId,
+        'system',
+        `Notified ${ROLE_LABEL[n.role]}: ${withVisitVocab(n.message, o.category)}`,
+      ),
     )
 
     // Stage changes create related module records — they do not redirect the user.
@@ -422,12 +441,43 @@ const createState: StateCreator<State> = (set, get) => ({
               opportunityId,
               formId: form.id,
               values: {},
+              requests: [],
               completedAt: null,
               completedById: null,
             },
           ],
         }))
-        get().logActivity(opportunityId, 'system', 'Site Visit record created — open it from Site Visits or this opportunity.')
+        const v = visitVocab(o.category)
+        get().logActivity(
+          opportunityId,
+          'system',
+          `${v.Singular} record created — open it from Visits & Calls or this opportunity.`,
+        )
+      }
+      const hasVisitChecklist = get().checklists.some((c) => {
+        const tpl = get().checklistTemplates.find((t) => t.id === c.templateId)
+        return c.opportunityId === opportunityId && tpl?.stage === 'site_visit_scheduled'
+      })
+      if (!hasVisitChecklist) {
+        const visitChecklist =
+          get().checklistTemplates.find(
+            (t) => t.stage === 'site_visit_scheduled' && t.category === o.category,
+          ) ?? templateForStage('site_visit_scheduled', o.category)
+        if (visitChecklist) {
+          set((s) => ({
+            checklists: [
+              ...s.checklists,
+              {
+                id: nextId('ci'),
+                templateId: visitChecklist.id,
+                opportunityId,
+                items: structuredClone(visitChecklist.items),
+                done: [],
+                completedAt: null,
+              },
+            ],
+          }))
+        }
       }
     }
 
@@ -436,6 +486,19 @@ const createState: StateCreator<State> = (set, get) => ({
     }
 
     if (to === 'awarded') {
+      const account = get().accounts.find((a) => a.id === o.accountId)
+      if (account && account.anchorStage !== 'customer') {
+        get().upsertAccount({
+          ...account,
+          anchorStage: 'customer',
+          lastActivityAt: new Date().toISOString(),
+        })
+        get().logActivity(
+          opportunityId,
+          'system',
+          `Contact converted to Customer — ${account.name}. Job is assigned to this customer.`,
+        )
+      }
       const existing = get().jobs.find((j) => j.opportunityId === opportunityId)
       if (!existing) {
         get().scheduleJob({
@@ -531,9 +594,18 @@ const createState: StateCreator<State> = (set, get) => ({
 
   createLead: (input) => {
     const { accounts } = get()
-    let account = accounts.find(
-      (a) => a.name.toLowerCase() === input.company.toLowerCase() && a.locationId === input.locationId,
-    )
+    const mode = input.accountMode ?? 'new_contact'
+    let account =
+      mode === 'known_customer' && input.accountId
+        ? accounts.find((a) => a.id === input.accountId && a.anchorStage === 'customer')
+        : accounts.find(
+            (a) =>
+              a.name.toLowerCase() === input.company.toLowerCase() &&
+              a.locationId === input.locationId,
+          )
+
+    if (mode === 'known_customer' && !account) return ''
+
     if (!account) {
       account = {
         id: nextId('ac'),
@@ -555,8 +627,16 @@ const createState: StateCreator<State> = (set, get) => ({
       }
       const created = account
       set((s) => ({ accounts: [...s.accounts, created] }))
+    } else if (account.anchorStage === 'prospect') {
+      get().upsertAccount({
+        ...account,
+        anchorStage: 'contact',
+        lastActivityAt: new Date().toISOString(),
+      })
+      account = { ...account, anchorStage: 'contact' }
     }
 
+    const companyName = account.name
     const code = `JOB-${input.locationId.replace('loc_', '').toUpperCase()}-${1100 + get().opportunities.length}`
     const id = nextId('op')
     set((s) => ({
@@ -565,7 +645,7 @@ const createState: StateCreator<State> = (set, get) => ({
         {
           id,
           code,
-          name: `${input.company} — new enquiry`,
+          name: `${companyName} — new enquiry`,
           accountId: account!.id,
           locationId: input.locationId,
           category: input.category,
@@ -588,7 +668,13 @@ const createState: StateCreator<State> = (set, get) => ({
         },
       ],
     }))
-    get().logActivity(id, 'system', `Lead captured from ${input.source} and routed by zip ${input.zip}.`)
+    get().logActivity(
+      id,
+      'system',
+      mode === 'known_customer'
+        ? `Lead opened on known customer ${companyName} from ${input.source}.`
+        : `Lead captured from ${input.source} and routed by zip ${input.zip}. Account is a Contact until awarded.`,
+    )
     if (input.message) get().logActivity(id, 'note', `Customer message: “${input.message}”`)
     return id
   },
@@ -608,13 +694,24 @@ const createState: StateCreator<State> = (set, get) => ({
   },
 
   toggleChecklistItem: (opportunityId, templateId, itemId) => {
-    const { checklists } = get()
+    const { checklists, checklistTemplates } = get()
     const existing = checklists.find(
       (c) => c.opportunityId === opportunityId && c.templateId === templateId,
     )
     if (!existing) {
+      const tpl = checklistTemplates.find((t) => t.id === templateId)
       set({
-        checklists: [...checklists, { id: nextId('ci'), templateId, opportunityId, done: [itemId], completedAt: null }],
+        checklists: [
+          ...checklists,
+          {
+            id: nextId('ci'),
+            templateId,
+            opportunityId,
+            items: tpl ? structuredClone(tpl.items) : undefined,
+            done: [itemId],
+            completedAt: null,
+          },
+        ],
       })
       return
     }
@@ -624,13 +721,97 @@ const createState: StateCreator<State> = (set, get) => ({
     set({ checklists: checklists.map((c) => (c.id === existing.id ? { ...c, done } : c)) })
   },
 
-  saveSiteVisit: (opportunityId, formId, values, complete) => {
+  assignVisitChecklist: (opportunityId, templateId) => {
+    const { checklists, checklistTemplates } = get()
+    const tpl = checklistTemplates.find((t) => t.id === templateId)
+    if (!tpl || tpl.stage !== 'site_visit_scheduled') return
+
+    const others = checklists.filter((c) => {
+      if (c.opportunityId !== opportunityId) return true
+      const t = checklistTemplates.find((x) => x.id === c.templateId)
+      return t?.stage !== 'site_visit_scheduled'
+    })
+
+    set({
+      checklists: [
+        ...others,
+        {
+          id: nextId('ci'),
+          templateId,
+          opportunityId,
+          items: structuredClone(tpl.items),
+          done: [],
+          completedAt: null,
+        },
+      ],
+    })
+    get().logActivity(opportunityId, 'checklist', `Selected checklist template: ${tpl.name}.`)
+  },
+
+  addChecklistInstanceItem: (opportunityId, templateId, label) => {
+    const trimmed = label.trim()
+    if (!trimmed) return
+    const { checklists, checklistTemplates } = get()
+    const existing = checklists.find(
+      (c) => c.opportunityId === opportunityId && c.templateId === templateId,
+    )
+    const tpl = checklistTemplates.find((t) => t.id === templateId)
+    const baseItems = existing?.items?.length
+      ? existing.items
+      : structuredClone(tpl?.items ?? [])
+    const item = { id: nextId('cli'), label: trimmed }
+    if (!existing) {
+      set({
+        checklists: [
+          ...checklists,
+          {
+            id: nextId('ci'),
+            templateId,
+            opportunityId,
+            items: [...baseItems, item],
+            done: [],
+            completedAt: null,
+          },
+        ],
+      })
+      return
+    }
+    set({
+      checklists: checklists.map((c) =>
+        c.id === existing.id ? { ...c, items: [...baseItems, item] } : c,
+      ),
+    })
+  },
+
+  removeChecklistInstanceItem: (opportunityId, templateId, itemId) => {
+    const { checklists, checklistTemplates } = get()
+    const existing = checklists.find(
+      (c) => c.opportunityId === opportunityId && c.templateId === templateId,
+    )
+    if (!existing) return
+    const tpl = checklistTemplates.find((t) => t.id === templateId)
+    const baseItems = existing.items?.length ? existing.items : structuredClone(tpl?.items ?? [])
+    set({
+      checklists: checklists.map((c) =>
+        c.id === existing.id
+          ? {
+              ...c,
+              items: baseItems.filter((i) => i.id !== itemId),
+              done: c.done.filter((d) => d !== itemId),
+            }
+          : c,
+      ),
+    })
+  },
+
+  saveSiteVisit: (opportunityId, formId, values, requests, complete) => {
     const { siteVisits, viewerId } = get()
     const existing = siteVisits.find((v) => v.opportunityId === opportunityId)
     const next: SiteVisitResponse = {
       opportunityId,
       formId,
       values,
+      requests,
       completedAt: complete ? new Date().toISOString() : (existing?.completedAt ?? null),
       completedById: complete ? viewerId : (existing?.completedById ?? null),
     }
@@ -640,18 +821,21 @@ const createState: StateCreator<State> = (set, get) => ({
         : [...siteVisits, next],
     })
 
-    // Measurements captured on site flow straight into the record, so the
-    // estimator never re-keys them.
-    const estimatedQuantity = Number(values.estimatedQuantity)
-    const secondaryQuantityValue = Number(values.secondary_quantity)
+    // Sum quantities from scope requests so estimating never re-keys.
+    const estimatedQuantity = requests.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0)
     get().patchOpportunity(opportunityId, {
-      ...(Number.isFinite(estimatedQuantity) && estimatedQuantity > 0 ? { estimatedQuantity } : {}),
-      ...(Number.isFinite(secondaryQuantityValue) && secondaryQuantityValue > 0 ? { secondaryQuantity: secondaryQuantityValue } : {}),
+      ...(estimatedQuantity > 0 ? { estimatedQuantity } : {}),
     })
 
     if (complete) {
-      get().logActivity(opportunityId, 'checklist', 'Guided site visit form submitted from the field.')
-      const opp = get().opportunities.find((o) => o.id === opportunityId)
+      const oppForLog = get().opportunities.find((o) => o.id === opportunityId)
+      const v = visitVocab(oppForLog?.category ?? 'commercial')
+      get().logActivity(
+        opportunityId,
+        'checklist',
+        `Guided ${v.singular} submitted — ${requests.length} scope request${requests.length === 1 ? '' : 's'}.`,
+      )
+      const opp = oppForLog
       if (
         opp &&
         (opp.stage === 'site_visit_scheduled' ||
@@ -730,13 +914,25 @@ const createState: StateCreator<State> = (set, get) => ({
   ensureEstimate: (opportunityId) => {
     const existing = get().estimates.find((e) => e.opportunityId === opportunityId)
     if (existing) return existing.id
+    const opp = get().opportunities.find((o) => o.id === opportunityId)
+    const pack = estimatePackFor(opp?.category ?? 'commercial')
+    const visit = get().siteVisits.find((v) => v.opportunityId === opportunityId)
+    const suggestion = suggestFloorSystem(opp?.category ?? 'commercial', visit?.requests ?? [], visit?.values ?? {})
     const id = nextId('est')
     const token = id.replace('est_', '').slice(0, 6)
     const estimate: Estimate = {
       id,
       opportunityId,
-      options: [],
-      templateId: 'pt_industrial',
+      options: [
+        {
+          id: nextId('eo'),
+          label: 'Scope 1',
+          kind: 'scope',
+          recommended: true,
+          lineItems: [],
+        },
+      ],
+      templateId: pack.templateId,
       internalNotes: '',
       status: 'draft',
       approvedById: null,
@@ -746,10 +942,17 @@ const createState: StateCreator<State> = (set, get) => ({
       signedAt: null,
       signedBy: null,
       token,
-      depositPct: 40,
+      depositPct: pack.depositPct,
+      estimateRemindersDone: [],
+      suggestedPriceBookId: suggestion.priceBookId,
+      suggestionDecision: 'pending',
     }
     get().upsertEstimate(estimate)
-    get().logActivity(opportunityId, 'system', 'Draft estimate created — open it from Estimates or this opportunity.')
+    get().logActivity(
+      opportunityId,
+      'system',
+      `Draft estimate created with ${pack.label} — price book and floor-system suggestion ready.`,
+    )
     return id
   },
 
@@ -826,7 +1029,7 @@ const createState: StateCreator<State> = (set, get) => ({
     get().logActivity(
       mo.opportunityId,
       'system',
-      `Procurement order ${purchaseOrderId} submitted to purchasing.`,
+      `Material order ${purchaseOrderId} submitted to purchasing.`,
     )
   },
 
@@ -846,7 +1049,7 @@ const createState: StateCreator<State> = (set, get) => ({
         materialOrders: procurementOrders,
       }
     })
-    get().logActivity(mo.opportunityId, 'system', `Procurement order ${mo.purchaseOrderId ?? ''} is now ${next}.`)
+    get().logActivity(mo.opportunityId, 'system', `Material order ${mo.purchaseOrderId ?? ''} is now ${next}.`)
   },
 
   upsertMaterialOrder: (o) => get().upsertProcurementOrder(o),

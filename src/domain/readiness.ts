@@ -1,4 +1,5 @@
-import type { JobRole, JobStatus, StageId } from './types'
+import type { Category, JobRole, JobStatus, StageId } from './types'
+import { visitVocab } from './types'
 import { formForCategory, requiredFields } from '@/data/siteVisitForms'
 import { CHECKLIST_BY_ID } from '@/data/checklists'
 import { estimateTotal } from '@/store/useStore'
@@ -20,14 +21,18 @@ export interface Check {
 export interface ReadinessInput {
   opportunity: {
     id: string
-    category: string
+    category: Category
     estimatedQuantity: number
     stage: StageId
     pmId: string | null
     estimatorId: string | null
     value: number
   }
-  siteVisit?: { values: Record<string, string | number | boolean>; completedAt: string | null }
+  siteVisit?: {
+    values: Record<string, string | number | boolean>
+    requests?: { quantity: number; serviceType: string; areaOrEquipment: string; unit: string; concernOrOutcome: string }[]
+    completedAt: string | null
+  }
   artifacts: { kind: string; photoPhase?: string }[]
   estimate?: {
     id: string
@@ -61,32 +66,70 @@ function siteVisitChecks(input: ReadinessInput): Check[] {
     const v = input.siteVisit?.values[f.id]
     return v !== undefined && v !== '' && v !== null
   })
+  const v = visitVocab(input.opportunity.category)
+  const requests = input.siteVisit?.requests ?? []
+  const completeRequests = requests.filter(
+    (r) =>
+      r.serviceType.trim() &&
+      r.concernOrOutcome.trim() &&
+      r.areaOrEquipment.trim() &&
+      r.unit.trim() &&
+      r.quantity > 0,
+  )
+  const visitChecklist = input.checklists.find((c) =>
+    ['cl_sales_call_residential', 'cl_site_visit_commercial', 'cl_site_visit_industrial'].includes(
+      c.templateId,
+    ),
+  )
+  // Template item counts are fixed in seed; treat instance presence as the checklist track.
+  const checklistDone = visitChecklist?.done.length ?? 0
   return [
     {
+      id: 'checklist',
+      label: `${v.Singular} checklist in progress`,
+      ok: checklistDone > 0 || Boolean(input.siteVisit?.completedAt),
+      detail: visitChecklist ? `${checklistDone} items checked` : 'Open the visit to start the checklist',
+      href: `/opportunities/${input.opportunity.id}/visit`,
+    },
+    {
+      id: 'requests',
+      label: 'At least one complete scope request',
+      ok: completeRequests.length > 0,
+      detail:
+        completeRequests.length > 0
+          ? `${completeRequests.length} request${completeRequests.length === 1 ? '' : 's'}`
+          : 'Add service, area, quantity and unit per request',
+      href: `/opportunities/${input.opportunity.id}/visit`,
+    },
+    {
       id: 'form',
-      label: 'Guided site visit form completed',
+      label: `Guided ${v.singular} form completed`,
       ok: required.length > 0 && answered.length === required.length,
       detail: `${answered.length} of ${required.length} required fields answered`,
       href: `/opportunities/${input.opportunity.id}/visit`,
     },
-    {
-      id: 'photos',
-      label: 'Site photos or architectural plans attached',
-      ok: has(input, 'photo') || has(input, 'plan'),
-      detail: has(input, 'plan')
-        ? 'Architectural plans on file'
-        : has(input, 'photo')
-          ? 'Site photos on file'
-          : 'Nothing attached',
-      href: `/opportunities/${input.opportunity.id}?tab=photos`,
-    },
+    ...(input.opportunity.category === 'residential'
+      ? []
+      : [
+          {
+            id: 'photos',
+            label: 'Site photos or architectural plans attached',
+            ok: has(input, 'photo') || has(input, 'plan'),
+            detail: has(input, 'plan')
+              ? 'Architectural plans on file'
+              : has(input, 'photo')
+                ? 'Site photos on file'
+                : 'Nothing attached',
+            href: `/opportunities/${input.opportunity.id}?tab=photos`,
+          },
+        ]),
     {
       id: 'measure',
       label: 'Measurements recorded',
-      ok: input.opportunity.estimatedQuantity > 0,
+      ok: input.opportunity.estimatedQuantity > 0 || completeRequests.some((r) => r.quantity > 0),
       detail:
         input.opportunity.estimatedQuantity > 0
-          ? `${input.opportunity.estimatedQuantity.toLocaleString()} units`
+          ? `${input.opportunity.estimatedQuantity.toLocaleString()} total units across requests`
           : 'No quantity recorded',
       href: `/opportunities/${input.opportunity.id}/visit`,
     },
@@ -126,7 +169,22 @@ function approvalChecks(input: ReadinessInput): Check[] {
       id: 'estimator',
       label: 'Estimator assigned',
       ok: Boolean(input.opportunity.estimatorId),
-      detail: input.opportunity.estimatorId ? 'Assigned' : 'Nobody owns this estimate',
+      detail: input.opportunity.estimatorId
+        ? 'Assigned'
+        : 'Assignment missing — select an estimator on the estimate',
+      href: `/estimate/${input.opportunity.id}`,
+    },
+    {
+      id: 'estimation_request',
+      label: 'Estimation request sent (approval pending or approved)',
+      ok: Boolean(est && ['pending_approval', 'approved', 'sent', 'signed'].includes(est.status)),
+      detail:
+        est?.status === 'pending_approval'
+          ? 'Approval pending'
+          : est && ['approved', 'sent', 'signed'].includes(est.status)
+            ? `Status: ${est.status.replace(/_/g, ' ')}`
+            : 'Complete the estimate and send the estimation request',
+      href: `/estimate/${input.opportunity.id}`,
     },
   ]
 }
@@ -164,7 +222,7 @@ export function checksForJobStatus(status: JobStatus, input: ReadinessInput): Ch
       return [
         {
           id: 'po',
-          label: 'Procurement order submitted',
+          label: 'Material order submitted',
           ok: Boolean(input.procurementOrder && input.procurementOrder.status !== 'draft'),
           detail: input.procurementOrder
             ? `Order is ${input.procurementOrder.status}`

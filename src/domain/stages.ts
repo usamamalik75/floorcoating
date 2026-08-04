@@ -1,4 +1,4 @@
-import type { Category, JobStatus, Phase, StageDef, StageGroup, StageId } from './types'
+import type { Category, JobStatus, Phase, SalesPipeline, StageDef, StageGroup, StageId } from './types'
 import { JOB_STATUS_LABEL } from './types'
 
 /* ==========================================================================
@@ -260,7 +260,7 @@ export const STAGES: StageDef[] = [
     phase: 'sales',
     probability: 100,
     purpose:
-      'Customer accepted and signed. A Job is created; further progress is tracked on the Job pipeline.',
+      'Proposal accepted and signed. Converts this Contact into a Customer, creates a Job on that customer, and tracks further progress on the Job pipeline.',
     gates: [
       {
         kind: 'readiness',
@@ -343,6 +343,41 @@ export function stageLabel(stage: StageId, category?: Category): string {
   if (!def) return stage
   if (category && def.labelByCategory?.[category]) return def.labelByCategory[category]!
   return def.label
+}
+
+/** Column headers on the Sales board — follows the active pipeline filter. */
+export function stageLabelForPipeline(stage: StageId, pipeline: SalesPipeline | 'all'): string {
+  if (pipeline === 'residential') return stageLabel(stage, 'residential')
+  if (pipeline === 'commercial_industrial') return stageLabel(stage, 'commercial')
+  const def = STAGE_BY_ID[stage]
+  if (!def) return stage
+  if (def.labelByCategory?.residential) {
+    return def.label.replace(/^Site Visit/, 'Visit / Call')
+  }
+  return def.label
+}
+
+/**
+ * Opportunity hub tab that should open for the current sales stage.
+ * Early pipeline → Overview; visit/call → Visits; estimating → Estimates; etc.
+ */
+export function defaultHubTabForStage(stage: StageId): string {
+  switch (stage) {
+    case 'site_visit_required':
+    case 'site_visit_scheduled':
+    case 'site_visit_completed':
+      return 'visits'
+    case 'estimate_in_progress':
+    case 'estimate_ready':
+      return 'estimates'
+    case 'proposal_sent':
+    case 'follow_up':
+      return 'proposals'
+    case 'awarded':
+      return 'job'
+    default:
+      return 'overview'
+  }
 }
 
 export function stageGroup(stage: StageId): StageGroup {

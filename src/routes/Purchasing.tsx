@@ -120,11 +120,11 @@ export function Purchasing() {
           open={creating}
           onClose={() => setCreating(false)}
           title="Prepare order"
-          subtitle="Open a job that needs purchasing and create its procurement order."
+          subtitle="Open a job that needs materials and create its material order."
         >
           <div className="space-y-2">
             {candidates.length === 0 ? (
-              <EmptyState title="No jobs need ordering" description="Jobs move here when the workflow marks procurement as required." />
+              <EmptyState title="No jobs need ordering" description="Jobs move here when the workflow marks material as required." />
             ) : (
               candidates.map((opportunity) => (
                 <Link
@@ -137,7 +137,7 @@ export function Purchasing() {
                     <p className="font-medium text-primary">{opportunity.name}</p>
                     <p className="text-sm text-muted">{LOCATION_BY_ID[opportunity.locationId]?.name}</p>
                   </div>
-                  <Badge tone="warning">Procurement required</Badge>
+                  <Badge tone="warning">Material required</Badge>
                 </Link>
               ))
             )}

@@ -375,7 +375,7 @@ export function Admin() {
                 <option value="estimator">Estimator</option>
                 <option value="pm">Project manager</option>
                 <option value="crew_leader">Crew leader</option>
-                <option value="tech">Technician</option>
+                <option value="tech">Installer</option>
                 <option value="accounting">Accounting</option>
               </Select>
             </Field>
@@ -626,7 +626,15 @@ export function Accounts() {
                   <>
                     <Badge tone="neutral">{a.vertical}</Badge>
                     {a.isNational && <Badge tone="brand">National</Badge>}
-                    <Badge tone={a.anchorStage === 'contact' ? 'info' : 'neutral'}>
+                    <Badge
+                      tone={
+                        a.anchorStage === 'customer'
+                          ? 'success'
+                          : a.anchorStage === 'contact'
+                            ? 'info'
+                            : 'neutral'
+                      }
+                    >
                       {a.anchorStage}
                     </Badge>
                   </>

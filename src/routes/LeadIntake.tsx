@@ -52,8 +52,11 @@ export function LeadIntake() {
   const patch = useStore((s) => s.patchOpportunity)
   const logActivity = useStore((s) => s.logActivity)
   const locations = useStore((s) => s.locations)
+  const accounts = useStore((s) => s.accounts)
   const users = useUsers()
 
+  const [accountMode, setAccountMode] = useState<'new_contact' | 'known_customer'>('new_contact')
+  const [knownAccountId, setKnownAccountId] = useState('')
   const [company, setCompany] = useState('Cascade Provisions')
   const [contactName, setContactName] = useState('Dale Munro')
   const [email, setEmail] = useState('dmunro@cascadeprovisions.com')
@@ -71,11 +74,50 @@ export function LeadIntake() {
   const [created, setCreated] = useState<string | null>(null)
   const [assignee, setAssignee] = useState('')
 
+  const customers = accounts
+    .filter((a) => a.anchorStage === 'customer')
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  const selectKnownCustomer = (accountId: string) => {
+    setKnownAccountId(accountId)
+    const account = accounts.find((a) => a.id === accountId)
+    if (!account) return
+    setCompany(account.name)
+    setContactName(account.contactName)
+    setEmail(account.email)
+    setPhone(account.phone)
+    setCity(account.city)
+    setState(account.state)
+    setZip(account.zip)
+  }
+
+  const setMode = (mode: 'new_contact' | 'known_customer') => {
+    setAccountMode(mode)
+    if (mode === 'new_contact') {
+      setKnownAccountId('')
+      setCompany('Cascade Provisions')
+      setContactName('Dale Munro')
+      setEmail('dmunro@cascadeprovisions.com')
+      setPhone('(815) 555-0143')
+      setZip('60431')
+      setCity('Joliet')
+      setState('IL')
+    } else if (customers[0]) {
+      selectKnownCustomer(customers[0].id)
+    }
+  }
+
   const routed = useRouteZip(zip)
   const reps = users.filter((u) => u.role === 'sales' && u.locationId === routed?.id)
+  const canSubmit =
+    Boolean(routed) &&
+    !created &&
+    (accountMode === 'new_contact' || Boolean(knownAccountId))
 
   const submit = () => {
     if (!routed) return
+    if (accountMode === 'known_customer' && !knownAccountId) return
     const id = createLead({
       company,
       contactName,
@@ -89,8 +131,10 @@ export function LeadIntake() {
       message,
       locationId: routed.id,
       estimatedQuantity,
+      accountMode,
+      accountId: accountMode === 'known_customer' ? knownAccountId : undefined,
     })
-    setCreated(id)
+    if (id) setCreated(id)
   }
 
   const assign = () => {
@@ -126,17 +170,84 @@ export function LeadIntake() {
             </div>
 
             <div className="grid gap-3 p-4 sm:grid-cols-2">
-              <FieldRow label="Company or name" required>
-                <Input value={company} onChange={(e) => setCompany(e.target.value)} />
+              <FieldRow
+                label="Account"
+                className="sm:col-span-2"
+                hint="Open pipeline work lives on a Contact. Awarded work converts them to a Customer."
+              >
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      { id: 'new_contact' as const, label: 'New contact' },
+                      { id: 'known_customer' as const, label: 'Known customer' },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setMode(opt.id)}
+                      className={cn(
+                        'rounded-md border px-3 py-1.5 text-sm font-medium transition-colors',
+                        accountMode === opt.id
+                          ? 'border-brand bg-action-soft text-brand'
+                          : 'border-subtle bg-surface text-secondary hover:bg-surface-inset',
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </FieldRow>
+
+              {accountMode === 'known_customer' ? (
+                <FieldRow
+                  label="Customer"
+                  required
+                  className="sm:col-span-2"
+                  hint={
+                    customers.length === 0
+                      ? 'No customers yet — award a deal first, or create a new contact.'
+                      : 'Opens a new opportunity on this customer without demoting them.'
+                  }
+                >
+                  <Select
+                    value={knownAccountId}
+                    onChange={(e) => selectKnownCustomer(e.target.value)}
+                    disabled={customers.length === 0}
+                  >
+                    <option value="">Select a customer…</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} — {c.city}, {c.state}
+                      </option>
+                    ))}
+                  </Select>
+                </FieldRow>
+              ) : (
+                <FieldRow label="Company or name" required>
+                  <Input value={company} onChange={(e) => setCompany(e.target.value)} />
+                </FieldRow>
+              )}
               <FieldRow label="Contact name" required>
-                <Input value={contactName} onChange={(e) => setContactName(e.target.value)} />
+                <Input
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  disabled={accountMode === 'known_customer'}
+                />
               </FieldRow>
               <FieldRow label="Email" required>
-                <Input value={email} onChange={(e) => setEmail(e.target.value)} />
+                <Input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={accountMode === 'known_customer'}
+                />
               </FieldRow>
               <FieldRow label="Phone" required>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <Input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  disabled={accountMode === 'known_customer'}
+                />
               </FieldRow>
               <FieldRow label="City">
                 <Input value={city} onChange={(e) => setCity(e.target.value)} />
@@ -156,6 +267,10 @@ export function LeadIntake() {
                   <option value="commercial">Commercial</option>
                   <option value="industrial">Industrial</option>
                 </Select>
+                <p className="mt-1 text-2xs text-muted">
+                  Sales uses two pipelines: Residential, and Commercial &amp; Industrial together.
+                  Type still chooses the site-visit form and pricing.
+                </p>
               </FieldRow>
               <FieldRow label="Source" hint="Set automatically in production">
                 <Select value={source} onChange={(e) => setSource(e.target.value as LeadSource)}>
@@ -186,7 +301,7 @@ export function LeadIntake() {
               <Button
                 variant="primary"
                 className="ml-auto"
-                disabled={!routed || Boolean(created)}
+                disabled={!canSubmit}
                 onClick={submit}
               >
                 Submit request
@@ -234,8 +349,21 @@ export function LeadIntake() {
             <CardHeader title="What happens next" icon={<Workflow size={14} />} />
             <ol className="space-y-0 p-1">
               {[
-                { label: 'Unqualified Lead created', detail: 'Account and opportunity in one write.' },
-                { label: 'Category identified', detail: `${category} — decides the checklist and vocabulary.` },
+                {
+                  label: 'Unqualified Lead created',
+                  detail:
+                    accountMode === 'known_customer'
+                      ? 'New opportunity on the existing Customer.'
+                      : 'New Contact and opportunity in one write.',
+                },
+                {
+                  label: 'Category identified',
+                  detail: `${category} — ${
+                    category === 'residential'
+                      ? 'Residential sales pipeline'
+                      : 'Commercial & Industrial sales pipeline'
+                  }; decides the checklist and vocabulary.`,
+                },
                 { label: 'Location resolved by zip', detail: routed ? routed.name : 'No coverage' },
                 { label: 'Assigned to a representative', detail: 'Owner sees it as unassigned until then.' },
                 { label: 'Follow-up workflow starts', detail: 'First contact due within 24 hours.' },

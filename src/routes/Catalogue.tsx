@@ -108,7 +108,7 @@ export function Catalogue() {
                 aria-label='Search products and services'
               />
             </label>
-            <Select value={group} onChange={(event) => setGroup(event.target.value)} aria-label='Catalogue group'>
+            <Select value={group} onChange={(event) => setGroup(event.target.value)} aria-label='Product group'>
               <option value='all'>All categories</option>
               {groups.map((name) => (
                 <option key={name} value={name}>{name}</option>

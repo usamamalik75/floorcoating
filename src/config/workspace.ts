@@ -30,7 +30,7 @@ export const WORKSPACE_TEMPLATE: WorkspaceTemplate = {
     opportunity: 'Opportunity',
     quote: 'Quote',
     job: 'Job',
-    technician: 'Technician',
+    technician: 'Installer',
   },
   opportunityFields: [
     { id: 'service_type', label: 'Requested service', type: 'text' },

@@ -32,11 +32,84 @@ export const ROLE_LABEL: Record<Role, string> = {
   estimator: 'Estimator / Head of Projects',
   pm: 'Project Manager',
   crew_leader: 'Crew Leader',
-  tech: 'Field Technician',
+  tech: 'Installer',
   accounting: 'Accounting',
 }
 
 export type Category = 'residential' | 'commercial' | 'industrial'
+
+/**
+ * Sales is run as two pipelines in practice:
+ * Residential alone, and Commercial + Industrial together.
+ * Category still records the finer project type for forms and pricing.
+ */
+export type SalesPipeline = 'residential' | 'commercial_industrial'
+
+export const SALES_PIPELINE_LABEL: Record<SalesPipeline, string> = {
+  residential: 'Residential',
+  commercial_industrial: 'Commercial & Industrial',
+}
+
+export const CATEGORY_LABEL: Record<Category, string> = {
+  residential: 'Residential',
+  commercial: 'Commercial',
+  industrial: 'Industrial',
+}
+
+export function salesPipelineOf(category: Category): SalesPipeline {
+  return category === 'residential' ? 'residential' : 'commercial_industrial'
+}
+
+export function categoriesInPipeline(pipeline: SalesPipeline): Category[] {
+  return pipeline === 'residential' ? ['residential'] : ['commercial', 'industrial']
+}
+
+/**
+ * Field appointment vocabulary follows the sales pipeline:
+ * Residential → "sales call"; Commercial & Industrial → "site visit".
+ */
+export type VisitKind = 'sales_call' | 'site_visit'
+
+export interface VisitVocab {
+  kind: VisitKind
+  singular: string
+  Singular: string
+  plural: string
+  Plural: string
+}
+
+export function visitVocab(category: Category): VisitVocab {
+  if (category === 'residential') {
+    return {
+      kind: 'sales_call',
+      singular: 'sales call',
+      Singular: 'Sales Call',
+      plural: 'sales calls',
+      Plural: 'Sales Calls',
+    }
+  }
+  return {
+    kind: 'site_visit',
+    singular: 'site visit',
+    Singular: 'Site Visit',
+    plural: 'site visits',
+    Plural: 'Site Visits',
+  }
+}
+
+/** Left-nav / shared module label when both pipelines appear in one list. */
+export const VISIT_MODULE_LABEL = 'Visits & Calls'
+
+/** Rewrite copy that defaults to "site visit" for the opportunity's category. */
+export function withVisitVocab(text: string, category: Category): string {
+  const v = visitVocab(category)
+  if (v.kind === 'site_visit') return text
+  return text
+    .replace(/Site Visits/g, v.Plural)
+    .replace(/site visits/g, v.plural)
+    .replace(/Site Visit/g, v.Singular)
+    .replace(/site visit/g, v.singular)
+}
 
 export type StageGroup =
   | 'pre'
@@ -100,7 +173,7 @@ export type JobStatus =
 export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
   scheduling_required: 'Scheduling Required',
   scheduled: 'Scheduled',
-  procurement_required: 'Procurement Required',
+  procurement_required: 'Material Required',
   procurement_ordered: 'Resources Ordered',
   ready_to_start: 'Ready to Start',
   in_progress: 'In Progress',
@@ -197,16 +270,25 @@ export interface Account {
   source: LeadSource
   createdAt: string
   /**
-   * Accounts live in the board's first two columns. Pulling an Opportunity
-   * out of an Account does NOT remove the Account from its column — it stays
-   * put, exactly as described in discovery.
+   * Relationship to the business:
+   * - prospect: imported / no open opportunity yet
+   * - contact: selling (new lead through proposal)
+   * - customer: won (awarded) — Jobs hang off this account
    */
-  anchorStage: 'prospect' | 'contact'
+  anchorStage: AccountRelationship
   /** Optional batch reference when imported from an external source. */
   importBatchId?: string
   lastActivityAt?: string
   /** Industry-specific data belongs to configuration, not the core schema. */
   customFields?: Record<string, string | number | boolean>
+}
+
+export type AccountRelationship = 'prospect' | 'contact' | 'customer'
+
+export const ACCOUNT_RELATIONSHIP_LABEL: Record<AccountRelationship, string> = {
+  prospect: 'Prospect',
+  contact: 'Contact',
+  customer: 'Customer',
 }
 
 export interface ProspectRequest {
@@ -255,10 +337,27 @@ export interface SiteVisitForm {
   sections: { id: string; title: string; fields: SiteVisitField[] }[]
 }
 
+/** One scoped work request captured on a site visit / sales call. */
+export interface ScopeRequest {
+  id: string
+  serviceType: string
+  /** Customer concern or desired outcome. */
+  concernOrOutcome: string
+  quantity: number
+  unit: string
+  /** Room, zone, asset, or equipment surface. */
+  areaOrEquipment: string
+  notes?: string
+}
+
+export const SCOPE_UNITS = ['sq ft', 'lin ft', 'each', 'rooms', 'hours', 'gallons'] as const
+
 export interface SiteVisitResponse {
   opportunityId: string
   formId: string
   values: Record<string, string | number | boolean>
+  /** Multiple scope lines — separate from the do-this checklist. */
+  requests: ScopeRequest[]
   completedAt: string | null
   completedById: string | null
 }
@@ -307,6 +406,12 @@ export interface ChecklistInstance {
   id: string
   templateId: string
   opportunityId: string
+  /**
+   * Working copy for this opportunity. Starts from the selected template;
+   * the user can add or remove items without changing the company template.
+   * When omitted, UI falls back to the template items (job checklists).
+   */
+  items?: ChecklistItem[]
   done: string[]
   completedAt: string | null
 }
@@ -376,6 +481,11 @@ export interface Estimate {
   /** Public token for the customer-facing proposal link. */
   token: string
   depositPct: number
+  /** Category estimating-pack reminders the estimator has acknowledged. */
+  estimateRemindersDone?: string[]
+  /** AI / rules suggested floor-system price book id. */
+  suggestedPriceBookId?: string | null
+  suggestionDecision?: 'pending' | 'accepted' | 'overridden' | 'dismissed'
 }
 
 export interface ProposalTemplate {
@@ -471,7 +581,7 @@ export const JOB_ROLE_LABEL: Record<JobRole, string> = {
   scheduler: 'Scheduler',
   field_supervisor: 'Field supervisor',
   crew_lead: 'Crew lead',
-  technician: 'Technician',
+  technician: 'Installer',
   quality_reviewer: 'Quality reviewer',
   billing_owner: 'Billing owner',
 }

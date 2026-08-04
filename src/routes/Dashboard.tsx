@@ -428,7 +428,7 @@ function EstimatorHome() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Waiting to be estimated" value={queue.length} sub="Site visit complete" tone={queue.length ? 'warning' : undefined} />
+        <Stat label="Waiting to be estimated" value={queue.length} sub="Visit or call complete" tone={queue.length ? 'warning' : undefined} />
         <Stat label="Estimates in progress" value={inProgress.length} />
         <Stat label="Awaiting my approval" value={forApproval.length} tone={forApproval.length ? 'warning' : undefined} icon={<ClipboardCheck size={12} />} />
         <Stat label="Scope extractions to review" value={scopeExtractions.length} icon={<ScanSearch size={12} />} />

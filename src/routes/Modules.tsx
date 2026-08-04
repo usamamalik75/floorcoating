@@ -9,6 +9,7 @@ import { PRICE_BOOK } from '@/data/priceBook'
 import { CHECKLIST_TEMPLATES } from '@/data/checklists'
 import { PROPOSAL_TEMPLATES } from '@/data/priceBook'
 import { STAGE_BY_ID, stageLabel, JOB_STATUSES, jobStatusLabel } from '@/domain/stages'
+import { VISIT_MODULE_LABEL, visitVocab } from '@/domain/types'
 import { Customers as CustomerWorkspace } from '@/routes/Customers'
 import { Accounting } from '@/routes/Accounting'
 import {
@@ -70,15 +71,15 @@ export function SiteVisits() {
 
   return (
     <ModuleShell
-      title="Assessments"
-      subtitle="Configurable forms, measurements, files, and photos linked to the opportunity."
+      title={VISIT_MODULE_LABEL}
+      subtitle="Site visits for commercial & industrial; sales calls for residential. Forms, measurements, files, and photos stay on the opportunity."
       action={
         <div className="flex flex-wrap gap-2">
           <Link to="/intake">
             <Button size="sm">New lead</Button>
           </Link>
           <Button size="sm" variant="primary" onClick={() => setCreating(true)}>
-            New assessment
+            Schedule visit or call
           </Button>
         </div>
       }
@@ -92,7 +93,11 @@ export function SiteVisits() {
       onFilter={(id) => setFilter(id as VisitFilter)}
     >
       {rows.length === 0 ? (
-        <EmptyState icon={<MapPin size={28} />} title="No site visits" description="Scheduling a visit on the sales pipeline creates a record here." />
+        <EmptyState
+          icon={<MapPin size={28} />}
+          title="No visits or calls"
+          description="Scheduling from the sales pipeline creates a record here."
+        />
       ) : (
         <Table>
           <thead>
@@ -135,12 +140,15 @@ export function SiteVisits() {
       <Modal
         open={creating}
         onClose={() => setCreating(false)}
-        title="Create assessment"
-        subtitle="Start the assessment workflow from an eligible sales opportunity."
+        title="Schedule visit or call"
+        subtitle="Start the site visit or sales call workflow from an eligible sales opportunity."
       >
         <div className="space-y-2">
           {candidates.length === 0 ? (
-            <EmptyState title="No eligible opportunities" description="Qualify or route a lead first, then create the assessment." />
+            <EmptyState
+              title="No eligible opportunities"
+              description="Qualify or route a lead first, then schedule the visit or call."
+            />
           ) : (
             candidates.map((opp) => (
               <button
@@ -155,7 +163,9 @@ export function SiteVisits() {
               >
                 <div className="min-w-0">
                   <p className="font-medium text-primary">{opp.name}</p>
-                  <p className="text-sm text-muted">{ACCOUNT_BY_ID[opp.accountId]?.name}</p>
+                  <p className="text-sm text-muted">
+                    {ACCOUNT_BY_ID[opp.accountId]?.name} · {visitVocab(opp.category).Singular}
+                  </p>
                 </div>
                 <Badge tone="neutral">{stageLabel(opp.stage, opp.category)}</Badge>
               </button>
@@ -195,7 +205,7 @@ export function Estimates() {
 
   return (
     <ModuleShell
-      title="Quotes"
+      title="Estimates"
       subtitle="Versioned pricing and scope live here; the pipeline tracks progress and approval."
       action={
         <Button size="sm" variant="primary" onClick={() => setCreating(true)}>
@@ -263,7 +273,10 @@ export function Estimates() {
       >
         <div className="space-y-2">
           {candidates.length === 0 ? (
-            <EmptyState title="No eligible opportunities" description="Complete a site visit first, then start the estimate." />
+            <EmptyState
+              title="No eligible opportunities"
+              description="Complete a site visit or sales call first, then start the estimate."
+            />
           ) : (
             candidates.map((opp) => (
               <button
@@ -315,7 +328,7 @@ export function Proposals() {
   return (
     <ModuleShell
       title="Proposals"
-      subtitle="Customer-facing documents. Acceptance awards the opportunity and creates a Job."
+      subtitle="Customer-facing documents. Proposal acceptance awards the opportunity and creates a Job."
       action={
         <Button size="sm" variant="primary" onClick={() => setCreating(true)}>
           New proposal
@@ -325,7 +338,7 @@ export function Proposals() {
         { id: 'all', label: 'All' },
         { id: 'draft', label: 'Ready to Send' },
         { id: 'sent', label: 'Sent' },
-        { id: 'accepted', label: 'Accepted' },
+        { id: 'accepted', label: 'Proposal acceptance' },
         { id: 'declined', label: 'Declined' },
       ]}
       active={filter}
@@ -356,7 +369,7 @@ export function Proposals() {
                   </Td>
                   <Td>
                     <Badge tone={e.status === 'signed' ? 'success' : e.status === 'sent' ? 'attention' : 'neutral'}>
-                      {e.status === 'signed' ? 'Accepted' : e.status === 'approved' ? 'Ready' : e.status}
+                      {e.status === 'signed' ? 'Proposal acceptance' : e.status === 'approved' ? 'Ready' : e.status}
                     </Badge>
                   </Td>
                   <Td align="right" mono>
@@ -369,6 +382,11 @@ export function Proposals() {
                     {e.token && (
                       <Link to={`/proposal/${e.token}`} className="text-sm text-muted hover:underline">
                         Customer link
+                      </Link>
+                    )}
+                    {e.status === 'signed' && (
+                      <Link to="/jobs" className="text-sm font-medium text-brand hover:underline">
+                        Open Job
                       </Link>
                     )}
                   </Td>
