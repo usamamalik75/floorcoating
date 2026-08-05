@@ -391,7 +391,7 @@ const initial = () => ({
  * seed invalidates it and "Reset demo" always returns to the story's start.
  */
 const STORAGE_KEY = 'fcg-prototype'
-const STORAGE_VERSION = 21
+const STORAGE_VERSION = 22
 
 const createState: StateCreator<State> = (set, get) => ({
   ...initial(),
@@ -1575,21 +1575,35 @@ export const useStore = create<State>()(
               ?? 'co_fcg',
           }
         }),
-        users: (prev.users ?? defaults.users).map((user) => {
-          const seeded = defaults.users.find((d) => d.id === user.id)
-          const nextUser = user as User & { companyId?: string; partnerId?: string }
-          return {
-            ...nextUser,
-            franchiseId:
-              nextUser.franchiseId
-              ?? nextUser.partnerId
-              ?? nextUser.companyId
-              ?? seeded?.franchiseId
-              ?? 'co_fcg',
-            orgRole: normalizeOrgRole(nextUser.orgRole ?? seeded?.orgRole ?? defaultOrgRoleFromRole(nextUser.role)),
-            branchIds: nextUser.branchIds ?? seeded?.branchIds,
+        users: (() => {
+          const prevUsers = (prev.users ?? []) as Array<User & { companyId?: string; partnerId?: string }>
+          const byId = new Map(prevUsers.map((user) => [user.id, user]))
+          // Keep demo personas present (Regional / Franchise Admin, etc.)
+          for (const seeded of defaults.users) {
+            if (!byId.has(seeded.id)) byId.set(seeded.id, seeded as User & { companyId?: string; partnerId?: string })
           }
-        }),
+          return [...byId.values()].map((user) => {
+            const seeded = defaults.users.find((d) => d.id === user.id)
+            return {
+              ...user,
+              name: seeded?.name ?? user.name,
+              title: seeded?.title ?? user.title,
+              role: seeded?.role ?? user.role,
+              locationId: user.locationId ?? seeded?.locationId ?? null,
+              franchiseId:
+                seeded?.franchiseId
+                ?? user.franchiseId
+                ?? user.partnerId
+                ?? user.companyId
+                ?? 'co_fcg',
+              // Seed orgRole is source of truth for known personas (fixes lost Regional/Franchise Admin).
+              orgRole: seeded
+                ? normalizeOrgRole(seeded.orgRole)
+                : normalizeOrgRole(user.orgRole ?? defaultOrgRoleFromRole(user.role)),
+              branchIds: user.branchIds ?? seeded?.branchIds,
+            }
+          })
+        })(),
         activeFranchiseId: (() => {
           const legacy = prev as Partial<State> & {
             activeCompanyId?: string

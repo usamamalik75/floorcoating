@@ -2,9 +2,23 @@ import { Moon, RotateCcw, Sun } from 'lucide-react'
 import { useMemo } from 'react'
 import { useStore } from '@/store/useStore'
 import { Avatar, Button, Tooltip } from '@/components/ui'
-import { ORG_ROLE_LABEL, ROLE_LABEL } from '@/domain/types'
+import { ORG_ROLE_LABEL, ROLE_LABEL, type User } from '@/domain/types'
 import { canManageFranchises, displayOrgLabel, franchiseHost, visibleFranchises } from '@/domain/org'
 import { useUsers, useViewer } from '@/store/selectors'
+
+function personaLabel(user: User): string {
+  if (user.orgRole) return ORG_ROLE_LABEL[user.orgRole]
+  return ROLE_LABEL[user.role]
+}
+
+/** Always show admin role groups in the header, even if a group is briefly empty. */
+const PERSONA_GROUPS: { label: string; match: (u: User) => boolean }[] = [
+  { label: 'Platform Admin', match: (u) => u.orgRole === 'platform_admin' },
+  { label: 'Regional Admin', match: (u) => u.orgRole === 'regional_admin' },
+  { label: 'Franchise Admin', match: (u) => u.orgRole === 'franchise_admin' },
+  { label: 'Manager', match: (u) => u.orgRole === 'manager' },
+  { label: 'Team Members', match: (u) => !u.orgRole },
+]
 
 /**
  * Admin org bar: persona, franchise switcher, and branch scope.
@@ -41,20 +55,13 @@ export function DemoBar() {
     || viewer?.orgRole === 'franchise_admin'
     || viewer?.role === 'admin'
 
-  const adminUsers = useMemo(
-    () =>
-      [...users].sort((a, b) => {
-        const rank = (u: typeof a) => {
-          if (u.orgRole === 'platform_admin') return 0
-          if (u.orgRole === 'regional_admin') return 1
-          if (u.orgRole === 'franchise_admin') return 2
-          if (u.orgRole === 'manager') return 3
-          return 4
-        }
-        return rank(a) - rank(b) || a.name.localeCompare(b.name)
-      }),
-    [users],
-  )
+  const personaGroups = useMemo(() => {
+    const byName = (a: User, b: User) => a.name.localeCompare(b.name)
+    return PERSONA_GROUPS.map((group) => ({
+      label: group.label,
+      users: users.filter(group.match).sort(byName),
+    })).filter((group) => group.users.length > 0)
+  }, [users])
 
   if (!viewer) return null
 
@@ -70,12 +77,26 @@ export function DemoBar() {
           aria-label="Signed in as"
           value={viewerId}
           onChange={(e) => setViewer(e.target.value)}
-          className="h-7 max-w-[16rem] rounded-md border border-white/25 bg-white/15 px-2 text-base text-white"
+          className="h-7 max-w-[22rem] rounded-md border border-white/25 bg-white/15 px-2 text-base text-white"
         >
-          {adminUsers.map((u) => (
-            <option key={u.id} value={u.id} className="text-primary">
-              {u.name} — {u.orgRole ? ORG_ROLE_LABEL[u.orgRole] : ROLE_LABEL[u.role]}
-            </option>
+          {personaGroups.map((group) => (
+            <optgroup key={group.label} label={group.label} className="text-primary">
+              {group.users.map((u) => {
+                const franchiseName = franchises.find((f) => f.id === u.franchiseId)?.name
+                const showFranchise =
+                  !!franchiseName
+                  && (u.orgRole === 'regional_admin'
+                    || u.orgRole === 'franchise_admin'
+                    || u.orgRole === 'manager'
+                    || !u.orgRole)
+                return (
+                  <option key={u.id} value={u.id} className="text-primary">
+                    {u.name} — {personaLabel(u)}
+                    {showFranchise ? ` · ${franchiseName}` : ''}
+                  </option>
+                )
+              })}
+            </optgroup>
           ))}
         </select>
       </label>

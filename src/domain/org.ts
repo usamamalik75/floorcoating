@@ -16,11 +16,11 @@ export function canManageFranchises(user: User | null | undefined): boolean {
   return !!user && (user.orgRole === 'platform_admin' || user.orgRole === 'regional_admin')
 }
 
+/** Who may create / reassign branches. Franchise Admin only views their own. */
 export function canManageBranches(user: User | null | undefined): boolean {
   return !!user && (
     user.orgRole === 'platform_admin'
     || user.orgRole === 'regional_admin'
-    || user.orgRole === 'franchise_admin'
   )
 }
 

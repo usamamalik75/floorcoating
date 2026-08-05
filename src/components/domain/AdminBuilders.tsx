@@ -9,7 +9,7 @@ import {
 import type { Category, ChecklistTemplate, Location, SiteVisitForm } from '@/domain/types'
 import { CATEGORY_LABEL } from '@/domain/types'
 import type { EstimateCategoryPack } from '@/data/estimating'
-import { franchiseHost, visibleFranchises } from '@/domain/org'
+import { franchiseHost, visibleFranchises, canManageBranches } from '@/domain/org'
 import { useStore } from '@/store/useStore'
 import { useViewer } from '@/store/selectors'
 import { Badge, Button, Card, CardHeader, FieldRow, Input, Modal, Select, Textarea } from '@/components/ui'
@@ -498,6 +498,17 @@ export function LocationsBuilder() {
   const upsertUser = useStore((s) => s.upsertUser)
   const users = useStore((s) => s.users)
   const viewer = useViewer()
+  const mayAddBranches = canManageBranches(viewer)
+
+  // Franchise Admin is locked to their own franchise locations only.
+  const scopedFranchiseId =
+    viewer?.orgRole === 'franchise_admin' ? viewer.franchiseId : activeFranchiseId
+
+  useEffect(() => {
+    if (viewer?.orgRole === 'franchise_admin' && viewer.franchiseId !== activeFranchiseId) {
+      setActiveFranchiseId(viewer.franchiseId)
+    }
+  }, [viewer, activeFranchiseId, setActiveFranchiseId])
 
   const selectableFranchises = useMemo(() => {
     const operating = franchises.filter(
@@ -508,13 +519,13 @@ export function LocationsBuilder() {
   }, [franchises, viewer])
 
   const franchiseBranches = useMemo(
-    () => locations.filter((l) => l.franchiseId === activeFranchiseId),
-    [locations, activeFranchiseId],
+    () => locations.filter((l) => l.franchiseId === scopedFranchiseId),
+    [locations, scopedFranchiseId],
   )
   const [selectedId, setSelectedId] = useState(franchiseBranches[0]?.id ?? '')
   const [branchOpen, setBranchOpen] = useState(false)
   const [branchDraft, setBranchDraft] = useState({
-    franchiseId: activeFranchiseId,
+    franchiseId: scopedFranchiseId,
     name: '',
     city: '',
     state: '',
@@ -532,16 +543,17 @@ export function LocationsBuilder() {
   const location = franchiseBranches.find((candidate) => candidate.id === selectedId) ?? franchiseBranches[0]
   const owners = users.filter(
     (user) =>
-      user.franchiseId === activeFranchiseId
+      user.franchiseId === scopedFranchiseId
       && (user.role === 'owner' || user.role === 'admin' || user.orgRole === 'manager' || user.orgRole === 'franchise_admin'),
   )
-  const activeFranchise = franchises.find((f) => f.id === activeFranchiseId)
+  const activeFranchise = franchises.find((f) => f.id === scopedFranchiseId)
 
   const openAddBranch = () => {
+    if (!mayAddBranches) return
     const defaultFranchiseId =
-      selectableFranchises.some((f) => f.id === activeFranchiseId)
-        ? activeFranchiseId
-        : (selectableFranchises[0]?.id ?? activeFranchiseId)
+      selectableFranchises.some((f) => f.id === scopedFranchiseId)
+        ? scopedFranchiseId
+        : (selectableFranchises[0]?.id ?? scopedFranchiseId)
     setBranchDraft({
       franchiseId: defaultFranchiseId,
       name: '',
@@ -555,6 +567,7 @@ export function LocationsBuilder() {
   }
 
   const createBranch = () => {
+    if (!mayAddBranches) return
     if (!branchDraft.name.trim() || !branchDraft.franchiseId) return
     const franchiseId = branchDraft.franchiseId
     const zips = branchDraft.zips
@@ -695,18 +708,30 @@ export function LocationsBuilder() {
         <Card>
           <CardHeader
             title="Branches"
-            subtitle={`No branches yet for ${activeFranchise?.name ?? 'this franchise'}.`}
+            subtitle={
+              mayAddBranches
+                ? `No branches yet for ${activeFranchise?.name ?? 'this franchise'}.`
+                : `Your franchise branches will appear here${activeFranchise ? ` · ${activeFranchise.name}` : ''}.`
+            }
           />
           <div className="p-4">
-            <Button size="sm" onClick={openAddBranch}>Add branch</Button>
+            {mayAddBranches ? (
+              <Button size="sm" onClick={openAddBranch}>Add branch</Button>
+            ) : (
+              <p className="text-sm text-muted">Branches are assigned by Platform or Regional Admin.</p>
+            )}
           </div>
         </Card>
-        {branchModal}
+        {mayAddBranches && branchModal}
       </>
     )
   }
 
-  const updateLocation = (next: Location) => upsert(next)
+  const updateLocation = (next: Location) => {
+    // Franchise Admin cannot move a branch to another franchise.
+    if (viewer?.orgRole === 'franchise_admin' && next.franchiseId !== viewer.franchiseId) return
+    upsert(next)
+  }
 
   return (
     <>
@@ -714,11 +739,17 @@ export function LocationsBuilder() {
         <Card>
           <CardHeader
             title="Branches"
-            subtitle={`Branches for ${activeFranchise?.name ?? 'franchise'} — ZIP ownership and pricing.`}
+            subtitle={
+              mayAddBranches
+                ? `Branches for ${activeFranchise?.name ?? 'franchise'} — ZIP ownership and pricing.`
+                : `Your locations · ${activeFranchise?.name ?? 'franchise'}`
+            }
             actions={
-              <Button size="sm" onClick={openAddBranch}>
-                Add branch
-              </Button>
+              mayAddBranches ? (
+                <Button size="sm" onClick={openAddBranch}>
+                  Add branch
+                </Button>
+              ) : undefined
             }
           />
           <div className="space-y-2 p-4">
@@ -751,32 +782,51 @@ export function LocationsBuilder() {
 
         <Card>
           <CardHeader
-            title="Branch builder"
-            subtitle="Branch details, ZIP ownership, and commercial defaults."
+            title="Branch details"
+            subtitle={
+              mayAddBranches
+                ? 'Branch details, ZIP ownership, and commercial defaults.'
+                : 'View-only for your franchise locations.'
+            }
           />
           <div className="space-y-4 p-4">
             <div className="grid gap-3 lg:grid-cols-2">
               <FieldRow label="Franchise">
-                <Select
-                  value={location.franchiseId}
-                  onChange={(e) => {
-                    const franchiseId = e.target.value
-                    updateLocation({ ...location, franchiseId })
-                    setActiveFranchiseId(franchiseId)
-                  }}
-                >
-                  {selectableFranchises.map((franchise) => (
-                    <option key={franchise.id} value={franchise.id}>
-                      {franchise.name} · {franchiseHost(franchise.subdomain)}
-                    </option>
-                  ))}
-                </Select>
+                {mayAddBranches ? (
+                  <Select
+                    value={location.franchiseId}
+                    onChange={(e) => {
+                      const franchiseId = e.target.value
+                      updateLocation({ ...location, franchiseId })
+                      setActiveFranchiseId(franchiseId)
+                    }}
+                  >
+                    {selectableFranchises.map((franchise) => (
+                      <option key={franchise.id} value={franchise.id}>
+                        {franchise.name} · {franchiseHost(franchise.subdomain)}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input
+                    value={`${activeFranchise?.name ?? ''} · ${activeFranchise ? franchiseHost(activeFranchise.subdomain) : ''}`}
+                    disabled
+                  />
+                )}
               </FieldRow>
               <FieldRow label="Branch name">
-                <Input value={location.name} onChange={(e) => updateLocation({ ...location, name: e.target.value })} />
+                <Input
+                  value={location.name}
+                  disabled={!mayAddBranches}
+                  onChange={(e) => updateLocation({ ...location, name: e.target.value })}
+                />
               </FieldRow>
               <FieldRow label="Owner">
-                <Select value={location.ownerId} onChange={(e) => updateLocation({ ...location, ownerId: e.target.value })}>
+                <Select
+                  value={location.ownerId}
+                  disabled={!mayAddBranches}
+                  onChange={(e) => updateLocation({ ...location, ownerId: e.target.value })}
+                >
                   {owners.map((owner) => (
                     <option key={owner.id} value={owner.id}>
                       {owner.name} — {owner.title}
@@ -785,19 +835,32 @@ export function LocationsBuilder() {
                 </Select>
               </FieldRow>
               <FieldRow label="City">
-                <Input value={location.city} onChange={(e) => updateLocation({ ...location, city: e.target.value })} />
+                <Input
+                  value={location.city}
+                  disabled={!mayAddBranches}
+                  onChange={(e) => updateLocation({ ...location, city: e.target.value })}
+                />
               </FieldRow>
               <FieldRow label="State">
-                <Input value={location.state} onChange={(e) => updateLocation({ ...location, state: e.target.value })} />
+                <Input
+                  value={location.state}
+                  disabled={!mayAddBranches}
+                  onChange={(e) => updateLocation({ ...location, state: e.target.value })}
+                />
               </FieldRow>
               <FieldRow label="Opened on">
-                <Input value={location.openedAt} onChange={(e) => updateLocation({ ...location, openedAt: e.target.value })} />
+                <Input
+                  value={location.openedAt}
+                  disabled={!mayAddBranches}
+                  onChange={(e) => updateLocation({ ...location, openedAt: e.target.value })}
+                />
               </FieldRow>
               <FieldRow label="Price multiplier">
                 <Input
                   type="number"
                   step="0.01"
                   value={location.priceMultiplier}
+                  disabled={!mayAddBranches}
                   onChange={(e) => updateLocation({ ...location, priceMultiplier: Number(e.target.value) || 1 })}
                 />
               </FieldRow>
@@ -807,6 +870,7 @@ export function LocationsBuilder() {
               <Textarea
                 rows={4}
                 value={location.zips.join('\n')}
+                disabled={!mayAddBranches}
                 onChange={(e) =>
                   updateLocation({
                     ...location,
@@ -819,20 +883,25 @@ export function LocationsBuilder() {
               />
             </FieldRow>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant={location.isCorporate ? 'primary' : 'secondary'}
-                onClick={() => updateLocation({ ...location, isCorporate: !location.isCorporate })}
-              >
-                {location.isCorporate ? 'Corporate territory' : 'Mark as corporate'}
-              </Button>
+            {mayAddBranches && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={location.isCorporate ? 'primary' : 'secondary'}
+                  onClick={() => updateLocation({ ...location, isCorporate: !location.isCorporate })}
+                >
+                  {location.isCorporate ? 'Corporate territory' : 'Mark as corporate'}
+                </Button>
+                <Badge tone="neutral">{location.zips.join(', ') || 'No ZIP prefixes yet'}</Badge>
+              </div>
+            )}
+            {!mayAddBranches && (
               <Badge tone="neutral">{location.zips.join(', ') || 'No ZIP prefixes yet'}</Badge>
-            </div>
+            )}
           </div>
         </Card>
       </div>
-      {branchModal}
+      {mayAddBranches && branchModal}
     </>
   )
 }
