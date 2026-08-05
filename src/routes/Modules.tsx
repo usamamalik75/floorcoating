@@ -5,7 +5,7 @@ import { FileText, MapPin, Ruler } from 'lucide-react'
 import { useStore, money, estimateTotal } from '@/store/useStore'
 import { useScopedOpportunities, useChecklistTemplates, useLocations, usePriceBookItems, useProposalTemplates, useUserDirectory } from '@/store/selectors'
 import { ACCOUNT_BY_ID } from '@/data/seed'
-import { STAGE_BY_ID, stageLabel, JOB_STATUSES, jobStatusLabel } from '@/domain/stages'
+import { STAGE_BY_ID, isVisitFormAvailable, stageLabel, JOB_STATUSES, jobStatusLabel } from '@/domain/stages'
 import { VISIT_MODULE_LABEL, visitVocab } from '@/domain/types'
 import { Customers as CustomerWorkspace } from '@/routes/Customers'
 import { Accounting } from '@/routes/Accounting'
@@ -125,9 +125,15 @@ export function SiteVisits() {
                   </Badge>
                 </Td>
                 <Td>
-                  <Link to={`/opportunities/${opp.id}/visit`} className="text-sm font-medium text-brand hover:underline">
-                    Open form
-                  </Link>
+                  {isVisitFormAvailable(opp.stage) ? (
+                    <Link to={`/opportunities/${opp.id}/visit`} className="text-sm font-medium text-brand hover:underline">
+                      Open form
+                    </Link>
+                  ) : (
+                    <Link to={`/opportunities/${opp.id}?tab=overview`} className="text-sm font-medium text-brand hover:underline">
+                      View
+                    </Link>
+                  )}
                 </Td>
               </Tr>
             ))}
@@ -154,7 +160,7 @@ export function SiteVisits() {
                 onClick={() => {
                   moveStage(opp.id, 'site_visit_required')
                   setCreating(false)
-                  navigate(`/opportunities/${opp.id}?tab=visits`)
+                  navigate(`/opportunities/${opp.id}?tab=overview`)
                 }}
                 className="flex w-full items-start justify-between gap-3 rounded-md border border-subtle bg-surface-raised px-3 py-2.5 text-left hover:border-strong"
               >

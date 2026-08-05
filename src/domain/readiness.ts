@@ -89,12 +89,20 @@ function siteVisitChecks(input: ReadinessInput): Check[] {
       ),
   )
   const checklistDone = visitChecklist?.done.length ?? 0
+  const checklistTotal =
+    input.checklistTemplates?.find((t) => t.id === visitChecklist?.templateId)?.items.length ??
+    (visitChecklist ? visitChecklist.done.length : 0)
+  const checklistComplete =
+    Boolean(input.siteVisit?.completedAt) ||
+    (checklistTotal > 0 && checklistDone >= checklistTotal)
   return [
     {
       id: 'checklist',
-      label: `${v.Singular} checklist in progress`,
-      ok: checklistDone > 0 || Boolean(input.siteVisit?.completedAt),
-      detail: visitChecklist ? `${checklistDone} items checked` : 'Open the visit to start the checklist',
+      label: `${v.Singular} checklist complete`,
+      ok: checklistComplete,
+      detail: visitChecklist
+        ? `${checklistDone} of ${checklistTotal || checklistDone} items checked`
+        : 'Open the visit to start the checklist',
       href: `/opportunities/${input.opportunity.id}/visit`,
     },
     {

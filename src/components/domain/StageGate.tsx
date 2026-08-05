@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowRight,
   BellRing,
+  CalendarClock,
   CheckCircle2,
   ClipboardCheck,
   CircleAlert,
@@ -28,12 +29,21 @@ const GATE_ICON = {
   checklist: ClipboardCheck,
   approval: ShieldCheck,
   reminder: BellRing,
+  appointment: CalendarClock,
   assign: UserPlus,
   attach: Paperclip,
   confirm: CheckCircle2,
   readiness: ScanSearch,
   reason: MessageSquareWarning,
 } as const
+
+function toDatetimeLocalValue(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 const DELAY_REASONS = [
   'Budget cycle — deferred to a future capital plan',
@@ -90,6 +100,7 @@ export function StageGate({
   const [reason, setReason] = useState('')
   const [expectedPeriod, setExpectedPeriod] = useState('')
   const [assignee, setAssignee] = useState('')
+  const [appointmentAt, setAppointmentAt] = useState('')
 
   const def = targetStage ? STAGE_BY_ID[targetStage] : null
   const checks = useChecks(opportunity?.id ?? '', targetStage ?? 'prospect')
@@ -103,7 +114,8 @@ export function StageGate({
     setReason('')
     setExpectedPeriod('')
     setAssignee('')
-  }, [open, opportunity?.id, targetStage])
+    setAppointmentAt(toDatetimeLocalValue(opportunity?.visitAt))
+  }, [open, opportunity?.id, opportunity?.visitAt, targetStage])
 
   const checklistTemplate = useMemo(() => {
     if (!def || !opportunity) return undefined
@@ -130,6 +142,8 @@ export function StageGate({
     switch (gate.kind) {
       case 'reminder':
         return Boolean(reminderDate)
+      case 'appointment':
+        return Boolean(appointmentAt)
       case 'assign':
         return Boolean(assignee)
       case 'reason':
@@ -146,6 +160,8 @@ export function StageGate({
   const blockers = def.gates.filter((g, i) => g.blocking && !isGateMet(g, i))
   const canAdvance = blockers.length === 0
   const hasBlockingReminder = def.gates.some((g) => g.kind === 'reminder' && g.blocking)
+  const hasBlockingAppointment = def.gates.some((g) => g.kind === 'appointment' && g.blocking)
+  const blockingHard = hasBlockingReminder || hasBlockingAppointment
 
   const confirm = () => {
     moveStage(opportunity.id, targetStage, {
@@ -156,6 +172,7 @@ export function StageGate({
       expectedPeriod: expectedPeriod || undefined,
       assigneeId: assignee || undefined,
       reason: reason || undefined,
+      visitAt: appointmentAt ? new Date(appointmentAt).toISOString() : undefined,
     })
     onClose()
   }
@@ -166,7 +183,7 @@ export function StageGate({
     <Modal
       open={open}
       onClose={onClose}
-      blocking={hasBlockingReminder}
+      blocking={blockingHard}
       size="lg"
       icon={<ArrowRight size={17} className="text-attention" />}
       title={<span className="flex items-center gap-2">Moving to {stageLabel(targetStage, opportunity.category)}</span>}
@@ -177,6 +194,11 @@ export function StageGate({
             <span className="mr-auto flex items-center gap-1.5 text-sm text-warning-text">
               <Lock size={12} />
               This stage cannot be entered without a follow-up date.
+            </span>
+          ) : hasBlockingAppointment && !appointmentAt ? (
+            <span className="mr-auto flex items-center gap-1.5 text-sm text-warning-text">
+              <Lock size={12} />
+              Set the appointment date and time to continue.
             </span>
           ) : blockers.length > 0 ? (
             <span className="mr-auto flex items-center gap-1.5 text-sm text-muted">
@@ -190,7 +212,7 @@ export function StageGate({
             </span>
           )}
           <Button variant="ghost" onClick={onClose}>
-            {hasBlockingReminder ? `Keep in ${stageLabel(opportunity.stage, opportunity.category)}` : 'Cancel'}
+            {blockingHard ? `Keep in ${stageLabel(opportunity.stage, opportunity.category)}` : 'Cancel'}
           </Button>
           <Button variant="primary" disabled={!canAdvance} onClick={confirm}>
             Confirm move
@@ -387,6 +409,37 @@ export function StageGate({
                             <option value="email">Email</option>
                             <option value="sms">SMS</option>
                           </Select>
+                        </div>
+                      </div>
+                    )}
+
+                    {gate.kind === 'appointment' && (
+                      <div className="mt-2.5 space-y-2">
+                        <Input
+                          type="datetime-local"
+                          value={appointmentAt}
+                          onChange={(e) => setAppointmentAt(e.target.value)}
+                          className="max-w-xs"
+                        />
+                        <div className="flex flex-wrap gap-1">
+                          {[
+                            { label: 'Tomorrow 9am', offsetDays: 1, hour: 9 },
+                            { label: 'Tomorrow 2pm', offsetDays: 1, hour: 14 },
+                            { label: 'In 3 days 10am', offsetDays: 3, hour: 10 },
+                          ].map((p) => (
+                            <Button
+                              key={p.label}
+                              size="sm"
+                              onClick={() => {
+                                const d = new Date()
+                                d.setDate(d.getDate() + p.offsetDays)
+                                d.setHours(p.hour, 0, 0, 0)
+                                setAppointmentAt(toDatetimeLocalValue(d.toISOString()))
+                              }}
+                            >
+                              {p.label}
+                            </Button>
+                          ))}
                         </div>
                       </div>
                     )}

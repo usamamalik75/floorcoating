@@ -8,10 +8,14 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
+  ClipboardList,
   FileUp,
+  HardHat,
   Plus,
+  Ruler,
   Save,
   Send,
+  ShieldAlert,
   Trash2,
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
@@ -26,6 +30,7 @@ import {
 import { ACCOUNT_BY_ID } from '@/data/seed'
 import type { ScopeRequest, SiteVisitCustomQA, SiteVisitField } from '@/domain/types'
 import { SCOPE_UNITS, visitVocab } from '@/domain/types'
+import { isVisitFormAvailable } from '@/domain/stages'
 import {
   Badge,
   Button,
@@ -151,6 +156,25 @@ export function SiteVisit() {
   }
 
   const vocab = visitVocab(opportunity.category)
+
+  if (!isVisitFormAvailable(opportunity.stage)) {
+    return (
+      <EmptyState
+        className="h-full"
+        title={`No ${vocab.singular} yet.`}
+        description={`Schedule the ${vocab.singular} first. The form opens after the appointment is booked.`}
+        action={
+          <Link to={`/opportunities/${opportunity.id}?tab=overview`}>
+            <Button variant="primary">
+              <ArrowLeft size={14} />
+              Back to opportunity
+            </Button>
+          </Link>
+        }
+      />
+    )
+  }
+
   const account = ACCOUNT_BY_ID[opportunity.accountId]
   const required = requiredFields(form)
   const answered = required.filter((f) => {
@@ -163,7 +187,10 @@ export function SiteVisit() {
   const checklistOk = checklistTotal === 0 || checklistDone === checklistTotal
   const formOk = required.length === 0 || answered.length === required.length
   const requestsOk = completeRequests.length > 0
-  const ready = checklistOk && formOk && requestsOk
+  const photos = artifacts.filter((a) => a.kind === 'photo')
+  const plans = artifacts.filter((a) => a.kind === 'plan')
+  const mediaOk = !allowsPhotos || photos.length > 0 || plans.length > 0
+  const ready = checklistOk && formOk && requestsOk && mediaOk
 
   const panelIndex = panels.findIndex((p) => p.id === panel)
   const set = (fieldId: string, v: string | number | boolean) =>
@@ -201,8 +228,6 @@ export function SiteVisit() {
     setRequests((prev) => prev.map((r) => (r.id === reqId ? { ...r, ...patch } : r)))
   }
 
-  const photos = artifacts.filter((a) => a.kind === 'photo')
-  const plans = artifacts.filter((a) => a.kind === 'plan')
   const sectionMatch = /^section:(\d+)$/.exec(panel)
   const currentSection = sectionMatch ? form.sections[Number(sectionMatch[1])] : null
   const answeredEntries = Object.entries(values).filter(([, v]) => v !== '' && v !== undefined)
@@ -372,18 +397,27 @@ export function SiteVisit() {
 
           {panel === 'requests' && (
             <section className="mb-5">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <h2 className="font-display text-lg text-primary">Scope requests</h2>
+              <div className="mb-3 flex flex-wrap items-end justify-between gap-3 rounded-md border border-strong bg-surface-raised px-3 py-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Ruler size={16} className="shrink-0 text-brand" />
+                    <h2 className="font-display text-lg text-primary">Scope requests</h2>
+                    <Badge tone={completeRequests.length > 0 ? 'success' : 'warning'}>
+                      {completeRequests.length}/{requests.length} ready
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-muted">
+                    One row per surface or area — service, quantity, and unit feed the estimate.
+                  </p>
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
-                  <FieldRow label="Template" className="min-w-64">
+                  <FieldRow label="Service template" className="min-w-56">
                     <Select
                       value={stored?.serviceTemplateId ?? ''}
                       onChange={(e) => applyServiceTemplate(e.target.value)}
                     >
                       <option value="" disabled>
-                        Select service template…
+                        Select template…
                       </option>
                       {serviceVisitTemplates.map((t) => (
                         <option key={t.id} value={t.id}>
@@ -395,6 +429,7 @@ export function SiteVisit() {
                   </FieldRow>
                   <Button
                     size="sm"
+                    variant="primary"
                     onClick={() =>
                       setRequests((prev) => [...prev, emptyScopeRequest(`req_${Date.now()}`)])
                     }
@@ -404,418 +439,698 @@ export function SiteVisit() {
                   </Button>
                 </div>
               </div>
-              <p className="mb-4 text-sm text-muted">
-                Pick a company service template, then edit each surface — area, quantity, and unit.
-              </p>
-              <div className="space-y-4">
-                {requests.map((req, index) => (
-                  <div
-                    key={req.id}
-                    className="rounded-xl border border-subtle/50 bg-surface-sunken p-4"
-                  >
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-primary">Request {index + 1}</p>
-                      <div className="flex items-center gap-2">
-                        {requestIsComplete(req) ? (
-                          <Badge tone="success">Complete</Badge>
-                        ) : (
-                          <Badge tone="warning">Needs detail</Badge>
+
+              <div className="space-y-2.5">
+                {requests.map((req, index) => {
+                  const complete = requestIsComplete(req)
+                  return (
+                    <div
+                      key={req.id}
+                      className={cn(
+                        'overflow-hidden rounded-md border bg-surface-raised',
+                        complete
+                          ? 'border-(--status-success)/40'
+                          : 'border-strong',
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'flex items-center justify-between gap-2 border-b px-3 py-2',
+                          complete
+                            ? 'border-(--status-success)/25 bg-success-soft/40'
+                            : 'border-subtle bg-surface-inset',
                         )}
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span
+                            className={cn(
+                              'flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-xs font-semibold',
+                              complete
+                                ? 'bg-success-soft text-success-text'
+                                : 'bg-action text-action-fg',
+                            )}
+                          >
+                            {index + 1}
+                          </span>
+                          <p className="truncate text-sm font-semibold text-primary">
+                            {req.serviceType.trim() || `Request ${index + 1}`}
+                          </p>
+                          <Badge tone={complete ? 'success' : 'warning'}>
+                            {complete ? 'Complete' : 'Needs detail'}
+                          </Badge>
+                        </div>
                         {requests.length > 1 && (
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setRequests((prev) => prev.filter((r) => r.id !== req.id))}
+                            onClick={() =>
+                              setRequests((prev) => prev.filter((r) => r.id !== req.id))
+                            }
                           >
                             <Trash2 size={12} />
                             Remove
                           </Button>
                         )}
                       </div>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <FieldRow label="Service required" required>
-                        {serviceOptions.length > 0 ? (
-                          <>
-                            <Select
-                              value={
-                                serviceOptions.includes(req.serviceType)
-                                  ? req.serviceType
-                                  : req.serviceType
-                                    ? '__custom__'
-                                    : ''
-                              }
-                              onChange={(e) => {
-                                if (e.target.value === '__custom__') {
-                                  updateRequest(req.id, { serviceType: '' })
-                                  return
-                                }
-                                const line = serviceVisitTemplates
-                                  .find((t) => t.id === stored?.serviceTemplateId)
-                                  ?.lines.find((l) => l.serviceType === e.target.value)
-                                updateRequest(req.id, {
-                                  serviceType: e.target.value,
-                                  ...(line
-                                    ? {
-                                        concernOrOutcome:
-                                          line.concernOrOutcome || req.concernOrOutcome,
-                                        unit: line.unit || req.unit,
-                                        areaOrEquipment:
-                                          line.areaOrEquipment || req.areaOrEquipment,
-                                      }
-                                    : {}),
-                                })
-                              }}
-                            >
-                              <option value="" disabled>
-                                Select service…
-                              </option>
-                              {serviceOptions.map((name) => (
-                                <option key={name} value={name}>
-                                  {name}
-                                </option>
-                              ))}
-                              <option value="__custom__">Other / custom…</option>
-                            </Select>
-                            {!serviceOptions.includes(req.serviceType) && (
+
+                      <div className="space-y-3 p-3">
+                        <div className="grid items-end gap-2.5 sm:grid-cols-[minmax(0,2.2fr)_minmax(0,2fr)_5.75rem_7.5rem]">
+                          <FieldRow label="Service required" required>
+                            {serviceOptions.length > 0 ? (
+                              <>
+                                <Select
+                                  value={
+                                    serviceOptions.includes(req.serviceType)
+                                      ? req.serviceType
+                                      : req.serviceType
+                                        ? '__custom__'
+                                        : ''
+                                  }
+                                  onChange={(e) => {
+                                    if (e.target.value === '__custom__') {
+                                      updateRequest(req.id, { serviceType: '' })
+                                      return
+                                    }
+                                    const line = serviceVisitTemplates
+                                      .find((t) => t.id === stored?.serviceTemplateId)
+                                      ?.lines.find((l) => l.serviceType === e.target.value)
+                                    updateRequest(req.id, {
+                                      serviceType: e.target.value,
+                                      ...(line
+                                        ? {
+                                            concernOrOutcome:
+                                              line.concernOrOutcome || req.concernOrOutcome,
+                                            unit: line.unit || req.unit,
+                                            areaOrEquipment:
+                                              line.areaOrEquipment || req.areaOrEquipment,
+                                          }
+                                        : {}),
+                                    })
+                                  }}
+                                >
+                                  <option value="" disabled>
+                                    Select service…
+                                  </option>
+                                  {serviceOptions.map((name) => (
+                                    <option key={name} value={name}>
+                                      {name}
+                                    </option>
+                                  ))}
+                                  <option value="__custom__">Other / custom…</option>
+                                </Select>
+                                {!serviceOptions.includes(req.serviceType) && (
+                                  <Input
+                                    className="mt-1.5"
+                                    value={req.serviceType}
+                                    onChange={(e) =>
+                                      updateRequest(req.id, { serviceType: e.target.value })
+                                    }
+                                    placeholder="Custom service name"
+                                  />
+                                )}
+                              </>
+                            ) : (
                               <Input
-                                className="mt-2"
                                 value={req.serviceType}
                                 onChange={(e) =>
                                   updateRequest(req.id, { serviceType: e.target.value })
                                 }
-                                placeholder="Custom service name"
+                                placeholder="e.g. Garage floor coating"
                               />
                             )}
-                          </>
-                        ) : (
-                          <Input
-                            value={req.serviceType}
-                            onChange={(e) => updateRequest(req.id, { serviceType: e.target.value })}
-                            placeholder="e.g. Garage floor coating"
-                          />
-                        )}
-                      </FieldRow>
-                      <FieldRow label="Area / equipment / surface" required>
-                        <Input
-                          value={req.areaOrEquipment}
-                          onChange={(e) =>
-                            updateRequest(req.id, { areaOrEquipment: e.target.value })
-                          }
-                          placeholder="e.g. 3-car garage, Wash bay 308"
-                        />
-                      </FieldRow>
-                      <FieldRow
-                        label={
-                          <span className="flex items-center gap-1.5">
-                            Concern or desired outcome
-                            <span className="inline-flex items-center gap-0.5 rounded-xs bg-attention-soft px-1 text-2xs font-medium text-attention-text normal-case">
-                              <Calculator size={8} />
-                              estimate
-                            </span>
-                          </span>
-                        }
-                        required
-                        className="sm:col-span-2"
-                      >
-                        <Textarea
-                          rows={2}
-                          value={req.concernOrOutcome}
-                          onChange={(e) =>
-                            updateRequest(req.id, { concernOrOutcome: e.target.value })
-                          }
-                        />
-                      </FieldRow>
-                      <FieldRow label="Estimated quantity" required>
-                        <Input
-                          type="number"
-                          value={req.quantity || ''}
-                          onChange={(e) =>
-                            updateRequest(req.id, { quantity: Number(e.target.value) || 0 })
-                          }
-                        />
-                      </FieldRow>
-                      <FieldRow label="Unit" required>
-                        <Select
-                          value={req.unit}
-                          onChange={(e) => updateRequest(req.id, { unit: e.target.value })}
-                        >
-                          {SCOPE_UNITS.map((u) => (
-                            <option key={u} value={u}>
-                              {u}
-                            </option>
-                          ))}
-                        </Select>
-                      </FieldRow>
-                      <FieldRow label="Notes" className="sm:col-span-2">
-                        <Input
-                          value={req.notes ?? ''}
-                          onChange={(e) => updateRequest(req.id, { notes: e.target.value })}
-                          placeholder="Optional"
-                        />
-                      </FieldRow>
+                          </FieldRow>
+                          <FieldRow label="Area / surface" required>
+                            <Input
+                              value={req.areaOrEquipment}
+                              onChange={(e) =>
+                                updateRequest(req.id, { areaOrEquipment: e.target.value })
+                              }
+                              placeholder="e.g. 3-car garage"
+                            />
+                          </FieldRow>
+                          <FieldRow label="Qty" required>
+                            <Input
+                              type="number"
+                              value={req.quantity || ''}
+                              onChange={(e) =>
+                                updateRequest(req.id, { quantity: Number(e.target.value) || 0 })
+                              }
+                              className="text-right"
+                            />
+                          </FieldRow>
+                          <FieldRow label="Unit" required>
+                            <Select
+                              value={req.unit}
+                              onChange={(e) => updateRequest(req.id, { unit: e.target.value })}
+                            >
+                              {SCOPE_UNITS.map((u) => (
+                                <option key={u} value={u}>
+                                  {u}
+                                </option>
+                              ))}
+                            </Select>
+                          </FieldRow>
+                        </div>
+
+                        <div className="grid items-start gap-2.5 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                          <FieldRow
+                            label={
+                              <span className="flex items-center gap-1.5">
+                                Concern or desired outcome
+                                <span className="inline-flex items-center gap-0.5 rounded-xs bg-attention-soft px-1 text-2xs font-medium text-attention-text normal-case">
+                                  <Calculator size={8} />
+                                  estimate
+                                </span>
+                              </span>
+                            }
+                            required
+                          >
+                            <Textarea
+                              rows={2}
+                              value={req.concernOrOutcome}
+                              onChange={(e) =>
+                                updateRequest(req.id, { concernOrOutcome: e.target.value })
+                              }
+                              placeholder="What needs fixing or what result they want"
+                            />
+                          </FieldRow>
+                          <FieldRow label="Notes">
+                            <Textarea
+                              rows={2}
+                              value={req.notes ?? ''}
+                              onChange={(e) => updateRequest(req.id, { notes: e.target.value })}
+                              placeholder="Optional"
+                            />
+                          </FieldRow>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </section>
           )}
 
           {currentSection && (
-            <section className="mb-5">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h2 className="font-display text-lg text-primary">{currentSection.title}</h2>
-                {currentSection.allowCustomQuestions && (
-                  <Button size="sm" onClick={() => addCustomQuestion(currentSection.id)}>
-                    <Plus size={12} />
-                    Add question
-                  </Button>
-                )}
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {currentSection.fields.map((f) => (
-                  <Field key={f.id} field={f} value={values[f.id]} onChange={(v) => set(f.id, v)} />
-                ))}
-              </div>
-              {currentSection.allowCustomQuestions && (
-                <div className="mt-4 space-y-3">
-                  {sectionCustomQuestions(currentSection.id).length === 0 ? (
-                    <p className="text-sm text-muted">
-                      Add any extra questions you asked — capture the question and the answer.
-                    </p>
-                  ) : (
-                    sectionCustomQuestions(currentSection.id).map((qa, index) => (
-                      <div
-                        key={qa.id}
-                        className="rounded-xl border border-subtle/50 bg-surface-sunken p-4"
-                      >
-                        <div className="mb-3 flex items-center justify-between gap-2">
-                          <p className="text-sm font-semibold text-primary">
-                            Extra question {index + 1}
-                          </p>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => removeCustomQuestion(qa.id)}
-                          >
-                            <Trash2 size={12} />
-                            Remove
-                          </Button>
-                        </div>
-                        <div className="grid gap-3">
-                          <FieldRow label="Question" required>
-                            <Input
-                              value={qa.question}
-                              onChange={(e) =>
-                                updateCustomQuestion(qa.id, { question: e.target.value })
-                              }
-                              placeholder="What did you ask?"
-                            />
-                          </FieldRow>
-                          <FieldRow label="Answer" required>
-                            <Textarea
-                              rows={2}
-                              value={qa.answer}
-                              onChange={(e) =>
-                                updateCustomQuestion(qa.id, { answer: e.target.value })
-                              }
-                              placeholder="What was the answer?"
-                            />
-                          </FieldRow>
-                        </div>
+            <section className="mb-4 space-y-2">
+              {(() => {
+                const sectionRequired = currentSection.fields.filter((f) => f.required)
+                const sectionAnswered = sectionRequired.filter((f) => {
+                  const v = values[f.id]
+                  return v !== undefined && v !== '' && v !== null
+                })
+                const sectionDone =
+                  sectionRequired.length === 0 || sectionAnswered.length === sectionRequired.length
+                const SectionIcon =
+                  currentSection.id.includes('operations') ||
+                  currentSection.title.toLowerCase().includes('safety')
+                    ? ShieldAlert
+                    : currentSection.id.includes('customer') ||
+                        currentSection.title.toLowerCase().includes('commercial')
+                      ? HardHat
+                      : ClipboardList
+
+                return (
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-strong bg-surface-raised px-3 py-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <SectionIcon size={15} className="shrink-0 text-brand" />
+                        <h2 className="font-display text-lg text-primary">
+                          {currentSection.title}
+                        </h2>
+                        <Badge tone={sectionDone ? 'success' : 'warning'}>
+                          {sectionAnswered.length}/{sectionRequired.length || sectionAnswered.length}{' '}
+                          required
+                        </Badge>
                       </div>
-                    ))
-                  )}
+                      {currentSection.allowCustomQuestions && (
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => addCustomQuestion(currentSection.id)}
+                        >
+                          <Plus size={12} />
+                          Add question
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="overflow-hidden rounded-md border border-strong bg-surface-raised">
+                      <div className="divide-y divide-(--border-subtle)">
+                        {groupSectionFields(currentSection.fields).map((row, rowIndex) => (
+                          <div
+                            key={row.map((f) => f.id).join('-') || rowIndex}
+                            className={cn(
+                              'bg-surface-raised px-3 py-2',
+                              row.length > 1 && 'grid gap-3 sm:grid-cols-2',
+                            )}
+                          >
+                            {row.map((f) => {
+                              const answered =
+                                values[f.id] !== undefined &&
+                                values[f.id] !== '' &&
+                                values[f.id] !== null
+                              return (
+                                <div
+                                  key={f.id}
+                                  className={cn(
+                                    f.type === 'boolean' && 'flex items-center',
+                                    f.id === 'operating_hours' && 'max-w-xs',
+                                  )}
+                                >
+                                  <Field
+                                    field={f}
+                                    value={values[f.id]}
+                                    onChange={(v) => set(f.id, v)}
+                                    compact
+                                    status={
+                                      f.required
+                                        ? answered
+                                          ? 'answered'
+                                          : 'required'
+                                        : undefined
+                                    }
+                                  />
+                                </div>
+                              )
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {currentSection.allowCustomQuestions && (
+                      <div className="space-y-2.5">
+                        <p className="text-xs font-semibold tracking-wider text-muted uppercase">
+                          Extra questions asked on site
+                        </p>
+                        {sectionCustomQuestions(currentSection.id).length === 0 ? (
+                          <div className="rounded-md border border-dashed border-strong bg-surface-inset px-3 py-4 text-center">
+                            <p className="text-sm text-muted">
+                              No extra questions yet. Add any Q&amp;A that is not in the standard form.
+                            </p>
+                          </div>
+                        ) : (
+                          sectionCustomQuestions(currentSection.id).map((qa, index) => (
+                            <div
+                              key={qa.id}
+                              className="overflow-hidden rounded-md border border-strong bg-surface-raised"
+                            >
+                              <div className="flex items-center justify-between gap-2 border-b border-subtle bg-surface-inset px-3 py-2">
+                                <p className="text-sm font-semibold text-primary">
+                                  Extra question {index + 1}
+                                </p>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => removeCustomQuestion(qa.id)}
+                                >
+                                  <Trash2 size={12} />
+                                  Remove
+                                </Button>
+                              </div>
+                              <div className="grid gap-2.5 p-3 sm:grid-cols-2">
+                                <FieldRow label="Question" required>
+                                  <Input
+                                    value={qa.question}
+                                    onChange={(e) =>
+                                      updateCustomQuestion(qa.id, { question: e.target.value })
+                                    }
+                                    placeholder="What did you ask?"
+                                    className="border-strong bg-surface-inset"
+                                  />
+                                </FieldRow>
+                                <FieldRow label="Answer" required>
+                                  <Textarea
+                                    rows={2}
+                                    value={qa.answer}
+                                    onChange={(e) =>
+                                      updateCustomQuestion(qa.id, { answer: e.target.value })
+                                    }
+                                    placeholder="What was the answer?"
+                                    className="border-strong bg-surface-inset"
+                                  />
+                                </FieldRow>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
+            </section>
+          )}
+
+          {panel === 'media' && allowsPhotos && (
+            <section className="mb-5 space-y-3">
+              <div className="flex flex-wrap items-end justify-between gap-3 rounded-md border border-strong bg-surface-raised px-3 py-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Camera size={16} className="shrink-0 text-brand" />
+                    <h2 className="font-display text-lg text-primary">Photos and documents</h2>
+                    <Badge tone={photos.length + plans.length > 0 ? 'success' : 'warning'}>
+                      {photos.length + plans.length} attached
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-muted">
+                    Capture condition photos while you walk each surface. Plans help estimating
+                    when the building is new or unfinished.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() =>
+                      addArtifact({
+                        opportunityId: opportunity.id,
+                        kind: 'photo',
+                        name: `Site photo ${photos.length + 1}`,
+                        stageAdded: opportunity.stage,
+                        addedById: viewerId,
+                        addedAt: new Date().toISOString(),
+                        meta: 'Captured on visit',
+                        photoPhase: 'before',
+                      })
+                    }
+                  >
+                    <Camera size={12} />
+                    Capture photo
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      addArtifact({
+                        opportunityId: opportunity.id,
+                        kind: 'plan',
+                        name: `Architectural set ${plans.length + 1}.pdf`,
+                        stageAdded: opportunity.stage,
+                        addedById: viewerId,
+                        addedAt: new Date().toISOString(),
+                        meta: 'Uploaded from the field',
+                      })
+                    }
+                  >
+                    <FileUp size={12} />
+                    Upload plans
+                  </Button>
+                </div>
+              </div>
+
+              {photos.length + plans.length === 0 ? (
+                <div className="rounded-md border border-dashed border-strong bg-surface-inset px-4 py-10 text-center">
+                  <Camera size={28} className="mx-auto text-muted" />
+                  <p className="mt-3 font-medium text-primary">No photos or plans yet</p>
+                  <p className="mt-1 text-sm text-muted">
+                    Add at least one photo or plan set for commercial and industrial visits.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-md border border-strong bg-surface-raised">
+                  <div className="grid gap-0 sm:grid-cols-2">
+                    <div className="border-b border-subtle sm:border-r sm:border-b-0">
+                      <div className="flex items-center justify-between border-b border-subtle bg-surface-inset px-3 py-2">
+                        <p className="text-sm font-semibold text-primary">Site photos</p>
+                        <Badge tone="neutral">{photos.length}</Badge>
+                      </div>
+                      {photos.length === 0 ? (
+                        <p className="px-3 py-4 text-sm text-muted">No photos captured yet.</p>
+                      ) : (
+                        <ul className="divide-y divide-(--border-subtle)">
+                          {photos.map((a) => (
+                            <li
+                              key={a.id}
+                              className="flex items-center gap-2.5 px-3 py-2.5 text-sm text-primary"
+                            >
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-burgundy-50 text-burgundy-600">
+                                <Camera size={14} />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-medium">{a.name}</p>
+                                <p className="text-2xs text-muted">{a.meta ?? 'Captured on visit'}</p>
+                              </div>
+                              <Badge tone="success">Photo</Badge>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between border-b border-subtle bg-surface-inset px-3 py-2">
+                        <p className="text-sm font-semibold text-primary">Plans &amp; documents</p>
+                        <Badge tone="neutral">{plans.length}</Badge>
+                      </div>
+                      {plans.length === 0 ? (
+                        <p className="px-3 py-4 text-sm text-muted">No plans uploaded yet.</p>
+                      ) : (
+                        <ul className="divide-y divide-(--border-subtle)">
+                          {plans.map((a) => (
+                            <li
+                              key={a.id}
+                              className="flex items-center gap-2.5 px-3 py-2.5 text-sm text-primary"
+                            >
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-burgundy-50 text-burgundy-600">
+                                <FileUp size={14} />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-medium">{a.name}</p>
+                                <p className="text-2xs text-muted">{a.meta ?? 'Uploaded'}</p>
+                              </div>
+                              <Badge tone="info">Plan</Badge>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </section>
           )}
 
-          {panel === 'media' && allowsPhotos && (
-            <div className="mt-1 rounded-xl border border-subtle/50 bg-surface-sunken p-4">
-              <h2 className="mb-1 font-display text-lg text-primary">Photos and documents</h2>
-              <p className="mb-4 text-sm text-muted">
-                Capture condition photos while you walk each request surface. Logged under what you
-                gathered at this site visit.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  onClick={() =>
-                    addArtifact({
-                      opportunityId: opportunity.id,
-                      kind: 'photo',
-                      name: `Site photo ${photos.length + 1}`,
-                      stageAdded: opportunity.stage,
-                      addedById: viewerId,
-                      addedAt: new Date().toISOString(),
-                      meta: 'Captured on visit',
-                      photoPhase: 'before',
-                    })
-                  }
-                >
-                  <Camera size={14} />
-                  Capture photo
-                </Button>
-                <Button
-                  onClick={() =>
-                    addArtifact({
-                      opportunityId: opportunity.id,
-                      kind: 'plan',
-                      name: `Architectural set ${plans.length + 1}.pdf`,
-                      stageAdded: opportunity.stage,
-                      addedById: viewerId,
-                      addedAt: new Date().toISOString(),
-                      meta: 'Uploaded from the field',
-                    })
-                  }
-                >
-                  <FileUp size={14} />
-                  Upload plans
-                </Button>
-              </div>
-              {(photos.length > 0 || plans.length > 0) && (
-                <div className="mt-4 space-y-2">
-                  {[...photos, ...plans].map((a) => (
-                    <div
-                      key={a.id}
-                      className="flex items-center gap-2 rounded border border-subtle bg-surface-base p-2 text-sm font-medium text-secondary"
-                    >
-                      <CheckCircle2 size={14} className="shrink-0 text-success-text" />
-                      <span className="truncate">{a.name}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           {panel === 'gathered' && (
-            <section className="space-y-4">
-              <div>
-                <h2 className="font-display text-lg text-primary">
-                  What we gathered at this {vocab.singular}
-                </h2>
-                <p className="mt-1 text-sm text-muted">
-                  Checklist, scope requests, answers
-                  {allowsPhotos ? ', and photos' : ''} — one log for estimating.
-                </p>
+            <section className="space-y-3">
+              <div className="rounded-md border border-strong bg-surface-raised px-4 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="font-display text-lg text-primary">
+                      What we gathered
+                    </h2>
+                    <p className="mt-0.5 text-sm text-muted">
+                      Review everything captured on this {vocab.singular} before you submit.
+                      Estimating uses this log — nothing is re-keyed.
+                    </p>
+                  </div>
+                  <Badge
+                    tone={ready ? 'success' : 'warning'}
+                    icon={ready ? <CheckCircle2 size={12} /> : undefined}
+                  >
+                    {ready ? 'Ready to submit' : 'Still incomplete'}
+                  </Badge>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <GatheredStat
+                    label="Checklist"
+                    value={`${checklistDone}/${checklistTotal || '—'}`}
+                    ok={checklistOk}
+                  />
+                  <GatheredStat
+                    label="Scope requests"
+                    value={`${completeRequests.length} complete`}
+                    ok={requestsOk}
+                  />
+                  <GatheredStat
+                    label="Required answers"
+                    value={`${answered.length}/${required.length || '—'}`}
+                    ok={formOk}
+                  />
+                </div>
               </div>
 
               <GatheredBlock
                 title="Checklist"
-                empty="No checklist selected yet"
-                count={`${checklistDone}/${checklistTotal} done`}
+                icon={<ClipboardCheck size={14} />}
+                count={`${checklistDone} of ${checklistTotal} done`}
+                empty="No checklist selected yet — go back to Checklist to pick a template."
                 isEmpty={checklistItems.length === 0}
               >
-                <ul className="space-y-1.5">
-                  {checklistItems.map((item) => (
-                    <li key={item.id} className="flex items-start gap-2 text-sm">
-                      <CheckCircle2
-                        size={14}
-                        className={cn(
-                          'mt-0.5 shrink-0',
-                          checklistInstance?.done.includes(item.id)
-                            ? 'text-success-text'
-                            : 'text-muted opacity-40',
-                        )}
-                      />
-                      <span
-                        className={
-                          checklistInstance?.done.includes(item.id)
-                            ? 'text-primary'
-                            : 'text-muted'
-                        }
-                      >
-                        {item.label}
-                      </span>
-                    </li>
-                  ))}
+                <ul className="divide-y divide-(--border-subtle)">
+                  {checklistItems.map((item) => {
+                    const done = checklistInstance?.done.includes(item.id) ?? false
+                    return (
+                      <li key={item.id} className="flex items-start gap-2.5 px-3 py-2">
+                        <CheckCircle2
+                          size={15}
+                          className={cn(
+                            'mt-0.5 shrink-0',
+                            done ? 'text-success-text' : 'text-muted/35',
+                          )}
+                        />
+                        <div className="min-w-0">
+                          <p className={cn('text-sm', done ? 'text-primary' : 'text-muted')}>
+                            {item.label}
+                          </p>
+                          {item.helper && (
+                            <p className="mt-0.5 text-2xs text-muted">{item.helper}</p>
+                          )}
+                        </div>
+                      </li>
+                    )
+                  })}
                 </ul>
               </GatheredBlock>
 
               <GatheredBlock
                 title="Scope requests"
-                empty="No scope requests yet"
-                count={`${completeRequests.length} complete`}
+                icon={<Ruler size={14} />}
+                count={`${completeRequests.length} of ${requests.length} ready for estimate`}
+                empty="No scope requests yet — add at least one complete request."
                 isEmpty={requests.length === 0}
               >
-                <ul className="divide-y divide-subtle">
-                  {requests.map((req, i) => (
-                    <li key={req.id} className="py-2 first:pt-0 last:pb-0">
-                      <p className="text-sm font-medium text-primary">
-                        {i + 1}. {req.serviceType || 'Untitled'}
-                      </p>
-                      <p className="text-sm text-secondary">
-                        {req.areaOrEquipment || '—'} · {req.quantity || 0} {req.unit}
-                      </p>
-                      {req.concernOrOutcome && (
-                        <p className="mt-0.5 text-sm text-muted">{req.concernOrOutcome}</p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                <div className="space-y-2 p-3">
+                  {requests.map((req, i) => {
+                    const complete = requestIsComplete(req)
+                    return (
+                      <div
+                        key={req.id}
+                        className={cn(
+                          'rounded-md border px-3 py-2.5',
+                          complete
+                            ? 'border-(--status-success)/35 bg-success-soft/30'
+                            : 'border-strong bg-surface-inset',
+                        )}
+                      >
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <span
+                            className={cn(
+                              'flex h-5 w-5 items-center justify-center rounded-sm text-2xs font-semibold',
+                              complete
+                                ? 'bg-success-soft text-success-text'
+                                : 'bg-action text-action-fg',
+                            )}
+                          >
+                            {i + 1}
+                          </span>
+                          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-primary">
+                            {req.serviceType.trim() || 'Untitled service'}
+                          </p>
+                          <Badge tone={complete ? 'success' : 'warning'}>
+                            {complete ? 'Complete' : 'Needs detail'}
+                          </Badge>
+                        </div>
+                        <dl className="grid gap-2 sm:grid-cols-3">
+                          <GatheredField label="Area / surface" value={req.areaOrEquipment || '—'} />
+                          <GatheredField
+                            label="Quantity"
+                            value={
+                              req.quantity > 0 ? `${req.quantity} ${req.unit}` : 'Not set'
+                            }
+                          />
+                          <GatheredField
+                            label="Concern / outcome"
+                            value={req.concernOrOutcome || '—'}
+                            className="sm:col-span-3"
+                          />
+                          {req.notes?.trim() ? (
+                            <GatheredField
+                              label="Notes"
+                              value={req.notes}
+                              className="sm:col-span-3"
+                            />
+                          ) : null}
+                        </dl>
+                      </div>
+                    )
+                  })}
+                </div>
               </GatheredBlock>
 
               <GatheredBlock
-                title="Answers & questions"
-                empty="No answers yet"
-                count={`${answeredEntries.length + customQuestions.filter((q) => q.question.trim()).length} fields`}
+                title="Form answers"
+                icon={<ClipboardList size={14} />}
+                count={`${answeredEntries.length + customQuestions.filter((q) => q.question.trim()).length} captured`}
+                empty="No answers yet — complete the form sections first."
                 isEmpty={
                   answeredEntries.length === 0 &&
                   customQuestions.every((q) => !q.question.trim())
                 }
               >
-                <dl className="grid gap-2 sm:grid-cols-2">
-                  {answeredEntries.map(([key, raw]) => {
-                    const field = form.sections.flatMap((s) => s.fields).find((f) => f.id === key)
-                    const value = typeof raw === 'boolean' ? (raw ? 'Yes' : 'No') : String(raw)
+                <div className="space-y-3 p-3">
+                  {form.sections.map((sec) => {
+                    const fields = sec.fields.filter((f) =>
+                      answeredEntries.some(([k]) => k === f.id),
+                    )
+                    const sectionQs = customQuestions.filter(
+                      (q) => q.sectionId === sec.id && q.question.trim(),
+                    )
+                    if (fields.length === 0 && sectionQs.length === 0) return null
                     return (
-                      <div key={key}>
-                        <dt className="text-2xs font-semibold tracking-wider text-muted uppercase">
-                          {field?.label ?? key}
-                        </dt>
-                        <dd className="text-sm text-primary">{value}</dd>
+                      <div key={sec.id}>
+                        <p className="mb-1.5 text-2xs font-semibold tracking-wider text-muted uppercase">
+                          {sec.title}
+                        </p>
+                        <dl className="grid gap-2 rounded-md border border-subtle bg-surface-inset p-2.5 sm:grid-cols-2">
+                          {fields.map((f) => {
+                            const raw = values[f.id]
+                            const value =
+                              typeof raw === 'boolean' ? (raw ? 'Yes' : 'No') : String(raw)
+                            return (
+                              <GatheredField
+                                key={f.id}
+                                label={f.label}
+                                value={`${value}${f.unit ? ` ${f.unit}` : ''}`}
+                                className={f.type === 'longtext' ? 'sm:col-span-2' : undefined}
+                              />
+                            )
+                          })}
+                          {sectionQs.map((qa) => (
+                            <GatheredField
+                              key={qa.id}
+                              label={qa.question}
+                              value={qa.answer || '—'}
+                              className="sm:col-span-2"
+                            />
+                          ))}
+                        </dl>
                       </div>
                     )
                   })}
-                  {customQuestions
-                    .filter((q) => q.question.trim())
-                    .map((qa) => {
-                      const sectionTitle =
-                        form.sections.find((s) => s.id === qa.sectionId)?.title ?? 'Extra'
-                      return (
-                        <div key={qa.id} className="sm:col-span-2">
-                          <dt className="text-2xs font-semibold tracking-wider text-muted uppercase">
-                            {sectionTitle} · {qa.question}
-                          </dt>
-                          <dd className="text-sm text-primary">{qa.answer || '—'}</dd>
-                        </div>
-                      )
-                    })}
-                </dl>
+                </div>
               </GatheredBlock>
 
-              {allowsPhotos && (
+              {allowsPhotos ? (
                 <GatheredBlock
                   title="Photos & documents"
-                  empty="No photos or plans yet"
-                  count={`${photos.length + plans.length}`}
+                  icon={<Camera size={14} />}
+                  count={`${photos.length + plans.length} attached`}
+                  empty="No photos or plans yet — add them on the Photos step."
                   isEmpty={photos.length + plans.length === 0}
                 >
-                  <ul className="space-y-1.5">
+                  <ul className="divide-y divide-(--border-subtle)">
                     {[...photos, ...plans].map((a) => (
-                      <li key={a.id} className="flex items-center gap-2 text-sm text-secondary">
-                        <CheckCircle2 size={14} className="text-success-text" />
-                        {a.name}
+                      <li
+                        key={a.id}
+                        className="flex items-center gap-2.5 px-3 py-2 text-sm text-primary"
+                      >
+                        {a.kind === 'plan' ? (
+                          <FileUp size={14} className="shrink-0 text-muted" />
+                        ) : (
+                          <Camera size={14} className="shrink-0 text-muted" />
+                        )}
+                        <span className="min-w-0 truncate font-medium">{a.name}</span>
+                        <Badge tone="neutral" className="ml-auto shrink-0">
+                          {a.kind === 'plan' ? 'Plan' : 'Photo'}
+                        </Badge>
                       </li>
                     ))}
                   </ul>
                 </GatheredBlock>
-              )}
-
-              {!allowsPhotos && (
-                <p className="rounded-lg border border-subtle bg-surface-sunken px-3 py-2 text-sm text-muted">
-                  Sales calls do not collect photos — answers and scope requests are the record.
+              ) : (
+                <p className="rounded-md border border-subtle bg-surface-inset px-3 py-2.5 text-sm text-muted">
+                  Sales calls do not collect photos. Checklist, scope, and answers are the full
+                  record for estimating.
                 </p>
               )}
             </section>
@@ -857,42 +1172,114 @@ export function SiteVisit() {
   )
 }
 
+function GatheredStat({
+  label,
+  value,
+  ok,
+}: {
+  label: string
+  value: string
+  ok: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-md border px-2.5 py-2',
+        ok ? 'border-(--status-success)/30 bg-success-soft/35' : 'border-subtle bg-surface-inset',
+      )}
+    >
+      <p className="text-2xs font-semibold tracking-wider text-muted uppercase">{label}</p>
+      <p className={cn('mt-0.5 text-sm font-semibold', ok ? 'text-success-text' : 'text-primary')}>
+        {value}
+      </p>
+    </div>
+  )
+}
+
+function GatheredField({
+  label,
+  value,
+  className,
+}: {
+  label: string
+  value: string
+  className?: string
+}) {
+  return (
+    <div className={cn('min-w-0', className)}>
+      <dt className="text-2xs font-semibold tracking-wider text-muted uppercase">{label}</dt>
+      <dd className="mt-0.5 text-sm leading-snug whitespace-normal text-primary">{value}</dd>
+    </div>
+  )
+}
+
 function GatheredBlock({
   title,
+  icon,
   count,
   empty,
   children,
   isEmpty,
 }: {
   title: string
+  icon?: ReactNode
   count: string
   empty: string
   children: ReactNode
   isEmpty?: boolean
 }) {
   return (
-    <div className="rounded-xl border border-subtle/50 bg-surface-sunken p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-primary">{title}</h3>
+    <div className="overflow-hidden rounded-md border border-strong bg-surface-raised">
+      <div className="flex items-center justify-between gap-2 border-b border-subtle bg-surface-inset px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          {icon && <span className="shrink-0 text-brand">{icon}</span>}
+          <h3 className="text-sm font-semibold text-primary">{title}</h3>
+        </div>
         <Badge tone="neutral">{count}</Badge>
       </div>
-      {isEmpty ? <p className="text-sm text-muted">{empty}</p> : children}
+      {isEmpty ? <p className="px-3 py-4 text-sm text-muted">{empty}</p> : children}
     </div>
   )
+}
+
+function groupSectionFields(fields: SiteVisitField[]): SiteVisitField[][] {
+  const rows: SiteVisitField[][] = []
+  let i = 0
+  while (i < fields.length) {
+    const field = fields[i]
+    if (field.type === 'longtext') {
+      rows.push([field])
+      i += 1
+      continue
+    }
+    // Pair short fields (checkbox / text / number / select) on one row.
+    const row = [field]
+    i += 1
+    if (i < fields.length && fields[i].type !== 'longtext') {
+      row.push(fields[i])
+      i += 1
+    }
+    rows.push(row)
+  }
+  return rows
 }
 
 function Field({
   field,
   value,
   onChange,
+  status,
+  compact = false,
 }: {
   field: SiteVisitField
   value: string | number | boolean | undefined
   onChange: (v: string | number | boolean) => void
+  status?: 'required' | 'answered'
+  compact?: boolean
 }) {
   const label = (
-    <span className="flex items-center gap-1.5">
-      {field.label}
+    <span className="flex w-full flex-wrap items-center gap-1.5">
+      <span className="min-w-0">{field.label}</span>
       {field.unit && <span className="text-muted normal-case">({field.unit})</span>}
       {field.feedsEstimate && (
         <span
@@ -903,12 +1290,23 @@ function Field({
           estimate
         </span>
       )}
+      {status && (
+        <Badge tone={status === 'answered' ? 'success' : 'warning'}>
+          {status === 'answered' ? 'Answered' : 'Required'}
+        </Badge>
+      )}
     </span>
   )
 
   if (field.type === 'boolean') {
     return (
-      <div className={cn(field.helper && 'sm:col-span-2')}>
+      <div
+        className={cn(
+          compact
+            ? 'rounded-sm border border-strong bg-surface-inset px-2.5 py-1.5'
+            : 'rounded-md border border-strong bg-surface-inset px-3 py-2.5',
+        )}
+      >
         <Checkbox
           checked={Boolean(value)}
           onChange={onChange}
@@ -922,12 +1320,16 @@ function Field({
   return (
     <FieldRow
       label={label}
-      required={field.required}
-      hint={field.helper}
+      required={field.required && !status}
+      hint={compact ? undefined : field.helper}
       className={field.type === 'longtext' ? 'sm:col-span-2' : undefined}
     >
       {field.type === 'select' ? (
-        <Select value={String(value ?? '')} onChange={(e) => onChange(e.target.value)}>
+        <Select
+          value={String(value ?? '')}
+          onChange={(e) => onChange(e.target.value)}
+          className="border-strong bg-surface-inset"
+        >
           <option value="">Select…</option>
           {field.options?.map((o) => (
             <option key={o} value={o}>
@@ -936,12 +1338,22 @@ function Field({
           ))}
         </Select>
       ) : field.type === 'longtext' ? (
-        <Textarea rows={3} value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} />
+        <Textarea
+          rows={compact ? 2 : 3}
+          value={String(value ?? '')}
+          onChange={(e) => onChange(e.target.value)}
+          className="border-strong bg-surface-inset"
+          placeholder="Enter details…"
+        />
       ) : (
         <Input
           type={field.type === 'number' ? 'number' : 'text'}
           value={String(value ?? '')}
-          onChange={(e) => onChange(field.type === 'number' ? Number(e.target.value) : e.target.value)}
+          onChange={(e) =>
+            onChange(field.type === 'number' ? Number(e.target.value) : e.target.value)
+          }
+          className="border-strong bg-surface-inset"
+          placeholder="Enter answer…"
         />
       )}
     </FieldRow>

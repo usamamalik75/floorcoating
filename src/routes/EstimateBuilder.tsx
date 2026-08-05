@@ -31,7 +31,6 @@ import {
   CardHeader,
   Checkbox,
   EmptyState,
-  FieldRow,
   Input,
   Modal,
   SectionTitle,
@@ -122,7 +121,6 @@ export function EstimateBuilder() {
   /** Approve only needs estimate completeness — visit gaps stay visible as advisory. */
   const requiredApprovalIds = new Set(['estimate', 'margin', 'terms', 'estimator', 'estimation_request'])
   const requiredChecks = checks.filter((c) => requiredApprovalIds.has(c.id))
-  const advisoryChecks = checks.filter((c) => !requiredApprovalIds.has(c.id))
   const readyForApproval = requiredChecks.every((c) => c.ok)
   const approvalBlockers = requiredChecks.filter((c) => !c.ok)
   const canSendEstimationRequest = grand > 0 && !estimatorMissing
@@ -327,113 +325,134 @@ export function EstimateBuilder() {
     : []
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-subtle bg-surface-raised px-4 py-2.5">
-        <Link to={`/opportunities/${opp.id}`} className="text-muted hover:text-primary">
-          <ArrowLeft size={16} />
-        </Link>
-        <div className="min-w-0">
-          <h1 className="truncate font-display text-lg leading-tight text-primary">{opp.name}</h1>
-          <p className="text-sm text-muted">
-            {account?.name} · <span className="font-mono">{opp.code}</span> ·{' '}
-            {opp.estimatedQuantity.toLocaleString()} units
-            {opp.secondaryQuantity > 0 && ` · ${opp.secondaryQuantity} additional units`}
-          </p>
-        </div>
+    <div className="flex h-full flex-col bg-surface-sunken">
+      <header className="shrink-0 border-b border-strong bg-surface-raised px-4 py-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            to={`/opportunities/${opp.id}?tab=estimates`}
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-strong text-secondary hover:bg-surface-inset hover:text-primary"
+            aria-label="Back to opportunity"
+          >
+            <ArrowLeft size={16} />
+          </Link>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="truncate font-display text-xl leading-tight text-primary">{opp.name}</h1>
+              {est && (
+                <Badge
+                  tone={
+                    est.status === 'signed'
+                      ? 'success'
+                      : est.status === 'pending_approval'
+                        ? 'attention'
+                        : est.status === 'approved' || est.status === 'sent'
+                          ? 'info'
+                          : 'neutral'
+                  }
+                >
+                  {est.status.replace(/_/g, ' ')}
+                </Badge>
+              )}
+            </div>
+            <p className="mt-0.5 text-sm text-muted">
+              {account?.name} · <span className="font-mono">{opp.code}</span> · Estimate
+              {opp.estimatedQuantity > 0 && ` · ${opp.estimatedQuantity.toLocaleString()} units`}
+            </p>
+          </div>
 
-        <div className="flex-1" />
-
-        {est && (
-          <>
-            <span className="mr-1 font-mono text-lg font-semibold text-primary tabular">
-              {money(grand)}
-            </span>
-            <Button onClick={() => setPreview(true)}>
-              <FileSignature size={13} />
-              Preview proposal
-            </Button>
-
-            {est.status === 'draft' && (
-              <Button
-                variant="primary"
-                disabled={!canSendEstimationRequest}
-                title={
-                  estimatorMissing
-                    ? 'Assign an estimator before sending the estimation request'
-                    : grand === 0
-                      ? 'Add line items before sending'
-                      : undefined
-                }
-                onClick={sendEstimationRequest}
-              >
-                <Send size={13} />
-                Send estimation request
+          {est && (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="rounded-md border border-strong bg-burgundy-50 px-3 py-1.5 text-right">
+                <p className="text-2xs font-semibold tracking-wider text-burgundy-700 uppercase">
+                  Contract total
+                </p>
+                <p className="font-mono text-lg font-semibold text-burgundy-700 tabular">
+                  {money(grand)}
+                </p>
+              </div>
+              <Button onClick={() => setPreview(true)}>
+                <FileSignature size={13} />
+                Preview
               </Button>
-            )}
 
-            {est.status === 'pending_approval' && (
-              <Badge tone="attention">Approval pending</Badge>
-            )}
-
-            {est.status === 'pending_approval' && canApprove && (
-              <>
-                <Button variant="ghost" onClick={() => setRejecting(true)}>
-                  <XCircle size={13} />
-                  Send back
-                </Button>
+              {est.status === 'draft' && (
                 <Button
                   variant="primary"
-                  disabled={!readyForApproval}
+                  disabled={!canSendEstimationRequest}
                   title={
-                    readyForApproval
-                      ? undefined
-                      : `Complete before approving: ${approvalBlockers.map((c) => c.label).join(', ')}`
+                    estimatorMissing
+                      ? 'Assign an estimator before sending the estimation request'
+                      : grand === 0
+                        ? 'Add line items before sending'
+                        : undefined
                   }
-                  onClick={() => approveEstimate(est.id, viewer!.id)}
+                  onClick={sendEstimationRequest}
                 >
-                  <ShieldCheck size={13} />
-                  Approve estimate
+                  <Send size={13} />
+                  Send for approval
                 </Button>
-              </>
-            )}
+              )}
 
-            {est.status === 'approved' && (
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setSendChannel('email')
-                  setSendSubject('Your proposal is ready')
-                  setSendBody(
-                    `Hi ${account?.contactName ?? 'there'},\n\nYour proposal is ready to review. You can open the secure link, compare options, and sign electronically when you are ready.\n\nThanks,\n${viewer?.name ?? 'Your service team'}`,
-                  )
-                  setSending(true)
-                }}
-              >
-                <Send size={13} />
-                Send to customer
-              </Button>
-            )}
+              {est.status === 'pending_approval' && canApprove && (
+                <>
+                  <Button variant="ghost" onClick={() => setRejecting(true)}>
+                    <XCircle size={13} />
+                    Send back
+                  </Button>
+                  <Button
+                    variant="primary"
+                    disabled={!readyForApproval}
+                    title={
+                      readyForApproval
+                        ? undefined
+                        : `Complete before approving: ${approvalBlockers.map((c) => c.label).join(', ')}`
+                    }
+                    onClick={() => approveEstimate(est.id, viewer!.id)}
+                  >
+                    <ShieldCheck size={13} />
+                    Approve
+                  </Button>
+                </>
+              )}
 
-            {(est.status === 'sent' || est.status === 'signed') && (
-              <Link to={`/proposal/${proposalTokenFor(opp.id)}`} target="_blank">
-                <Button>
-                  <FileText size={13} />
-                  Open customer link
+              {est.status === 'approved' && (
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setSendChannel('email')
+                    setSendSubject('Your proposal is ready')
+                    setSendBody(
+                      `Hi ${account?.contactName ?? 'there'},\n\nYour proposal is ready to review. You can open the secure link, compare options, and sign electronically when you are ready.\n\nThanks,\n${viewer?.name ?? 'Your service team'}`,
+                    )
+                    setSending(true)
+                  }}
+                >
+                  <Send size={13} />
+                  Send to customer
                 </Button>
-              </Link>
-            )}
-          </>
-        )}
+              )}
+
+              {(est.status === 'sent' || est.status === 'signed') && (
+                <Link to={`/proposal/${proposalTokenFor(opp.id)}`} target="_blank">
+                  <Button variant="primary">
+                    <FileText size={13} />
+                    Customer link
+                  </Button>
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-        <div className="w-full space-y-3 p-4">
+        <div className="mx-auto w-full max-w-6xl space-y-4 p-4 md:p-5">
           {!est ? (
-            <Card>
+            <Card className="border-strong">
               <EmptyState
                 icon={<Layers size={28} />}
                 title="No estimate yet"
-                description="Starts with the residential / commercial / industrial estimating pack — reminders, proposal form, price book filter, and a suggested floor system you can accept or override."
+                description="Start from the estimating pack for this opportunity type. Reminders, price book, and a suggested floor system help you build the first draft."
                 action={
                   <Button variant="primary" onClick={createEstimate}>
                     <Plus size={13} />
@@ -451,50 +470,8 @@ export function EstimateBuilder() {
                 </Card>
               )}
 
-              <Card
-                className={cn(
-                  estimatorMissing && 'border-(--status-warning) bg-warning-soft/40',
-                )}
-              >
-                <CardHeader
-                  title="Assigned estimator"
-                  subtitle={
-                    estimatorMissing
-                      ? 'Assignment is missing — select who owns this estimate before you can send the estimation request.'
-                      : 'This person owns the estimate and receives the approval request.'
-                  }
-                  icon={<UserPlus size={14} />}
-                  actions={
-                    estimatorMissing ? (
-                      <Badge tone="warning">Assignment missing</Badge>
-                    ) : (
-                      <Badge tone="success">Assigned</Badge>
-                    )
-                  }
-                />
-                <div className="p-4">
-                  <FieldRow label="Estimator" required>
-                    <Select
-                      value={opp.estimatorId ?? ''}
-                      onChange={(e) => assignEstimator(e.target.value)}
-                    >
-                      <option value="">Select assigned estimator…</option>
-                      {estimators.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name}
-                          {u.role !== 'estimator' ? ` (${u.role})` : ''}
-                        </option>
-                      ))}
-                    </Select>
-                  </FieldRow>
-                  {estimatorMissing && (
-                    <p className="mt-2 text-sm text-warning-text">
-                      Send estimation request stays disabled until an estimator is assigned.
-                    </p>
-                  )}
-                </div>
-              </Card>
-
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+                <div className="min-w-0 space-y-4">
               {est.status === 'pending_approval' && (
                 <Card className="border-(--accent-attention) bg-attention-soft/40 px-4 py-3">
                   <p className="flex items-center gap-2 text-base font-medium text-primary">
@@ -519,64 +496,11 @@ export function EstimateBuilder() {
                 </Card>
               )}
 
-              {pack && (
-                <Card>
-                  <CardHeader
-                    title={pack.label}
-                    subtitle={`${CATEGORY_LABEL[opp.category]} opportunity — reminders, estimating form, and price book are filtered to this type.`}
-                    icon={<FileText size={14} />}
-                    actions={<Badge tone="info">{CATEGORY_LABEL[opp.category]}</Badge>}
-                  />
-                  <div className="grid gap-4 p-4 lg:grid-cols-2">
-                    <div>
-                      <p className="mb-2 text-xs font-semibold tracking-wider text-muted uppercase">
-                        Estimating reminders
-                      </p>
-                      <div className="space-y-2">
-                        {pack.reminders.map((r) => (
-                          <Checkbox
-                            key={r.id}
-                            checked={(est.estimateRemindersDone ?? []).includes(r.id)}
-                            onChange={() => toggleReminder(r.id)}
-                            label={r.label}
-                            description={r.helper}
-                          />
-                        ))}
-                      </div>
-                      <p className="mt-2 text-2xs text-muted">
-                        {(est.estimateRemindersDone ?? []).length}/{pack.reminders.length} acknowledged
-                      </p>
-                    </div>
-                    <div>
-                      <p className="mb-2 text-xs font-semibold tracking-wider text-muted uppercase">
-                        Form & price book
-                      </p>
-                      <ul className="space-y-1.5 text-sm text-secondary">
-                        {pack.formHints.map((hint) => (
-                          <li key={hint} className="flex items-start gap-1.5">
-                            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-(--color-steel-400)" />
-                            {hint}
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="mt-3 text-sm text-muted">
-                        Template:{' '}
-                        <span className="font-medium text-primary">
-                          {templateById[pack.templateId]?.name ?? pack.templateId}
-                        </span>
-                        {' · '}
-                        {categoryPriceBook.length} price-book items for {CATEGORY_LABEL[opp.category].toLowerCase()}
-                      </p>
-                    </div>
-                  </div>
-                </Card>
-              )}
-
               {suggestion && (est.suggestionDecision ?? 'pending') === 'pending' && (
-                <Card className="border-(--accent-attention) bg-attention-soft/30">
+                <Card className="border-(--accent-attention) border-strong bg-attention-soft/30">
                   <CardHeader
                     title="Suggested floor system"
-                    subtitle="Based on opportunity type and what was gathered at the site visit / sales call. Accept to build lines from scope requests, or override and pick manually."
+                    subtitle="Based on opportunity type and what was gathered at the visit / call. Accept to build lines from scope requests, or override."
                     icon={<Sparkles size={14} />}
                     actions={
                       <Badge tone="attention">
@@ -589,9 +513,9 @@ export function EstimateBuilder() {
                       const pb = priceBookById[suggestion.priceBookId]
                       if (!pb) return <p className="text-sm text-muted">Suggested system not in price book.</p>
                       return (
-                        <div className="flex items-start gap-3 rounded-md border border-subtle bg-surface-raised px-3 py-2.5">
+                        <div className="flex items-start gap-3 rounded-md border border-strong bg-surface-raised px-3 py-2.5">
                           <span
-                            className="mt-0.5 h-8 w-8 shrink-0 rounded-sm border border-subtle"
+                            className="mt-0.5 h-8 w-8 shrink-0 rounded-sm border border-strong"
                             style={{ background: pb.swatch }}
                           />
                           <div className="min-w-0">
@@ -686,69 +610,8 @@ export function EstimateBuilder() {
                 ])
               }} />}
 
-              {est.status === 'pending_approval' && (
-                <Card>
-                  <CardHeader
-                    title="Approval readiness"
-                    subtitle="Required items must be complete to approve. Visit gaps are advisory and do not block approval."
-                    icon={<ShieldCheck size={14} />}
-                    actions={
-                      <Badge tone={readyForApproval ? 'success' : 'warning'}>
-                        {requiredChecks.filter((c) => c.ok).length} of {requiredChecks.length} required
-                      </Badge>
-                    }
-                  />
-                  <div className="space-y-3 p-3">
-                    <div>
-                      <p className="mb-1 px-2 text-2xs font-semibold tracking-wider text-muted uppercase">
-                        Required to approve
-                      </p>
-                      <div className="grid gap-1 sm:grid-cols-2">
-                        {requiredChecks.map((c) => (
-                          <div key={c.id} className="flex items-start gap-2 rounded-sm px-2 py-1.5">
-                            {c.ok ? (
-                              <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-success-text" />
-                            ) : (
-                              <XCircle size={13} className="mt-0.5 shrink-0 text-danger-text" />
-                            )}
-                            <div className="min-w-0">
-                              <p className={cn('text-sm', c.ok ? 'text-secondary' : 'font-medium text-primary')}>
-                                {c.label}
-                              </p>
-                              <p className="text-2xs text-muted">{c.detail}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    {advisoryChecks.length > 0 && (
-                      <div>
-                        <p className="mb-1 px-2 text-2xs font-semibold tracking-wider text-muted uppercase">
-                          Advisory from the visit
-                        </p>
-                        <div className="grid gap-1 sm:grid-cols-2">
-                          {advisoryChecks.map((c) => (
-                            <div key={c.id} className="flex items-start gap-2 rounded-sm px-2 py-1.5">
-                              {c.ok ? (
-                                <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-success-text" />
-                              ) : (
-                                <XCircle size={13} className="mt-0.5 shrink-0 text-muted" />
-                              )}
-                              <div className="min-w-0">
-                                <p className="text-sm text-secondary">{c.label}</p>
-                                <p className="text-2xs text-muted">{c.detail}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              )}
-
               {est.options.map((opt) => (
-                <Card key={opt.id}>
+                <Card key={opt.id} className="overflow-hidden border-strong">
                   <CardHeader
                     icon={<Layers size={14} />}
                     title={
@@ -759,13 +622,13 @@ export function EstimateBuilder() {
                             est.options.map((o) => (o.id === opt.id ? { ...o, label: e.target.value } : o)),
                           )
                         }
-                        className="w-full max-w-xs border-b border-transparent bg-transparent text-md font-semibold text-primary hover:border-(--border-strong) focus:border-(--action-primary) focus:outline-none"
+                        className="w-full max-w-md border-b border-transparent bg-transparent font-display text-lg font-semibold text-primary hover:border-strong focus:border-action focus:outline-none"
                       />
                     }
                     subtitle={
                       opt.kind === 'scope'
-                        ? 'A distinct section of work — adds to the contract total'
-                        : 'A price or quality alternative — the customer picks one, so it does not add to the total'
+                        ? 'Distinct section of work — adds to the contract total'
+                        : 'Pricing alternative — customer picks one; does not stack into the total'
                     }
                     actions={
                       <>
@@ -774,7 +637,7 @@ export function EstimateBuilder() {
                         </Badge>
                         <Button
                           size="sm"
-                          variant={opt.recommended ? 'primary' : 'ghost'}
+                          variant={opt.recommended ? 'primary' : 'secondary'}
                           onClick={() =>
                             setOptions(
                               est.options.map((o) =>
@@ -797,103 +660,173 @@ export function EstimateBuilder() {
                     }
                   />
 
-                  <div className="divide-y divide-(--border-subtle)">
-                    {opt.lineItems.map((li) => (
-                      <div key={li.id} className="grid grid-cols-12 items-start gap-2 px-4 py-2.5">
-                        <div className="col-span-12 sm:col-span-5">
-                          <p className="text-base font-medium text-primary">{li.name}</p>
-                          <textarea
-                            value={li.description}
-                            onChange={(e) => patchLine(opt.id, li.id, { description: e.target.value })}
-                            rows={2}
-                            className="mt-1 w-full resize-none rounded-sm border border-transparent bg-transparent text-sm leading-snug text-secondary hover:border-(--border-subtle) focus:border-(--action-primary) focus:outline-none"
-                          />
-                        </div>
-                        <div className="col-span-4 sm:col-span-2">
-                          <label className="mb-0.5 block text-2xs text-muted uppercase">Qty</label>
-                          <Input
-                            type="number"
-                            value={li.qty}
-                            onChange={(e) => patchLine(opt.id, li.id, { qty: Number(e.target.value) })}
-                            className="text-right"
-                          />
-                          <p className="mt-0.5 text-right text-2xs text-muted">{li.unit}</p>
-                        </div>
-                        <div className="col-span-4 sm:col-span-2">
-                          <label className="mb-0.5 block text-2xs text-muted uppercase">Unit</label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={li.unitPrice}
-                            onChange={(e) => patchLine(opt.id, li.id, { unitPrice: Number(e.target.value) })}
-                            className="text-right"
-                          />
-                        </div>
-                        <div className="col-span-3 text-right sm:col-span-2">
-                          <label className="mb-0.5 block text-2xs text-muted uppercase">Total</label>
-                          <p className="pt-1.5 font-mono text-base font-medium text-primary tabular">
-                            {money(li.qty * li.unitPrice)}
-                          </p>
-                        </div>
-                        <div className="col-span-1 flex justify-end pt-5">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => removeLine(opt.id, li.id)}
-                            aria-label="Remove line"
-                          >
-                            <Trash2 size={12} />
-                          </Button>
-                        </div>
+                  {opt.lineItems.length === 0 ? (
+                    <div className="px-4 py-8 text-center">
+                      <p className="text-sm text-muted">No line items yet.</p>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        className="mt-3"
+                        onClick={() => setPickerFor(opt.id)}
+                      >
+                        <Plus size={12} />
+                        Add from price book
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="hidden border-b border-subtle bg-surface-inset px-4 py-2 sm:grid sm:grid-cols-12 sm:gap-2">
+                        <p className="col-span-5 text-2xs font-semibold tracking-wider text-muted uppercase">
+                          Item
+                        </p>
+                        <p className="col-span-2 text-right text-2xs font-semibold tracking-wider text-muted uppercase">
+                          Qty
+                        </p>
+                        <p className="col-span-2 text-right text-2xs font-semibold tracking-wider text-muted uppercase">
+                          Unit price
+                        </p>
+                        <p className="col-span-2 text-right text-2xs font-semibold tracking-wider text-muted uppercase">
+                          Line total
+                        </p>
+                        <p className="col-span-1" />
                       </div>
-                    ))}
-                  </div>
+                      <div className="divide-y divide-(--border-subtle)">
+                        {opt.lineItems.map((li) => (
+                          <div
+                            key={li.id}
+                            className="bg-surface-raised px-4 py-3 hover:bg-burgundy-50/40"
+                          >
+                            <div className="grid grid-cols-12 items-center gap-2">
+                              <div className="col-span-12 min-w-0 sm:col-span-5">
+                                <p className="truncate text-base font-semibold text-primary">
+                                  {li.name}
+                                </p>
+                              </div>
+                              <div className="col-span-4 sm:col-span-2">
+                                <label className="mb-1 block text-2xs font-semibold text-muted uppercase sm:sr-only">
+                                  Qty
+                                </label>
+                                <div className="flex items-center gap-1.5">
+                                  <Input
+                                    type="number"
+                                    value={li.qty}
+                                    onChange={(e) =>
+                                      patchLine(opt.id, li.id, { qty: Number(e.target.value) })
+                                    }
+                                    className="border-strong bg-surface-inset text-right font-medium"
+                                  />
+                                  <span className="shrink-0 text-2xs font-medium text-secondary">
+                                    {li.unit}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="col-span-4 sm:col-span-2">
+                                <label className="mb-1 block text-2xs font-semibold text-muted uppercase sm:sr-only">
+                                  Unit price
+                                </label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={li.unitPrice}
+                                  onChange={(e) =>
+                                    patchLine(opt.id, li.id, {
+                                      unitPrice: Number(e.target.value),
+                                    })
+                                  }
+                                  className="border-strong bg-surface-inset text-right font-medium"
+                                />
+                              </div>
+                              <div className="col-span-3 text-right sm:col-span-2">
+                                <label className="mb-1 block text-2xs font-semibold text-muted uppercase sm:sr-only">
+                                  Total
+                                </label>
+                                <p className="font-mono text-base font-semibold text-primary tabular">
+                                  {money(li.qty * li.unitPrice)}
+                                </p>
+                              </div>
+                              <div className="col-span-1 flex justify-end">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => removeLine(opt.id, li.id)}
+                                  aria-label="Remove line"
+                                >
+                                  <Trash2 size={12} />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="mt-2 grid grid-cols-12 gap-2">
+                              <div className="col-span-12 sm:col-span-5">
+                                <label className="mb-1 block text-2xs font-semibold tracking-wider text-muted uppercase">
+                                  Description
+                                </label>
+                                <textarea
+                                  value={li.description}
+                                  onChange={(e) =>
+                                    patchLine(opt.id, li.id, { description: e.target.value })
+                                  }
+                                  rows={2}
+                                  className="w-full resize-none rounded-md border border-strong bg-surface-inset px-2 py-1.5 text-sm leading-snug text-secondary focus:border-action focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
 
-                  <div className="flex items-center justify-between gap-2 border-t border-subtle bg-surface-inset px-4 py-2">
-                    <Button size="sm" onClick={() => setPickerFor(opt.id)}>
+                  <div className="flex items-center justify-between gap-2 border-t border-strong bg-surface-inset px-4 py-2.5">
+                    <Button size="sm" variant="primary" onClick={() => setPickerFor(opt.id)}>
                       <Plus size={12} />
                       Add from price book
                     </Button>
-                    <span className="font-mono text-base font-semibold text-primary tabular">
-                      {money(optionTotal(opt.lineItems))}
-                    </span>
+                    <div className="text-right">
+                      <p className="text-2xs font-semibold tracking-wider text-muted uppercase">
+                        Section total
+                      </p>
+                      <p className="font-mono text-md font-semibold text-primary tabular">
+                        {money(optionTotal(opt.lineItems))}
+                      </p>
+                    </div>
                   </div>
                 </Card>
               ))}
 
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={() => addOption('scope')}>
+              <div className="flex flex-wrap gap-2 rounded-md border border-dashed border-strong bg-surface-raised px-3 py-3">
+                <Button variant="secondary" onClick={() => addOption('scope')}>
                   <Plus size={13} />
                   Add scope section
                 </Button>
-                <Button onClick={() => addOption('alternative')}>
+                <Button variant="secondary" onClick={() => addOption('alternative')}>
                   <Plus size={13} />
-                  Add a pricing alternative
+                  Add pricing alternative
                 </Button>
               </div>
 
               {/* ---- What the price book brought with it ---- */}
               {selectedCatalogueItems.length > 0 && (
                 <>
-                  <SectionTitle className="mt-5">
+                  <SectionTitle className="mt-2">
                     Automatically attached by the price book
                   </SectionTitle>
                   <div className="grid gap-3 lg:grid-cols-2">
-                    <Card>
+                    <Card className="overflow-hidden border-strong">
                       <CardHeader title="Service documentation" icon={<FileText size={14} />} />
                       <ul className="space-y-1.5 p-4">
                         {selectedCatalogueItems.map((pb) => (
                           <li key={pb.id} className="flex items-start gap-2 text-sm">
                             <span
-                              className="mt-1 h-2.5 w-2.5 shrink-0 rounded-xs"
+                              className="mt-1 h-2.5 w-2.5 shrink-0 rounded-xs border border-strong"
                               style={{ background: pb.swatch }}
                             />
                             <span>
-                              <span className="text-primary">{pb.serviceDocument}</span>
+                              <span className="font-medium text-primary">{pb.serviceDocument}</span>
                               <span className="block text-muted">
-                                {pb.resourceMultiplier} resource factor{pb.resourceMultiplier === 1 ? '' : 's'} · {pb.materialRate}{' '}
-                                {pb.materialUnit}/{pb.unit} · {Math.round(pb.contingencyAllowance * 100)}% waste
-                                allowance
+                                {pb.resourceMultiplier} resource factor
+                                {pb.resourceMultiplier === 1 ? '' : 's'} · {pb.materialRate}{' '}
+                                {pb.materialUnit}/{pb.unit} ·{' '}
+                                {Math.round(pb.contingencyAllowance * 100)}% waste allowance
                               </span>
                             </span>
                           </li>
@@ -901,44 +834,58 @@ export function EstimateBuilder() {
                       </ul>
                     </Card>
 
-                    <Card>
+                    <Card className="overflow-hidden border-strong">
                       <CardHeader title="Required resources" icon={<Truck size={14} />} />
                       <ul className="grid grid-cols-2 gap-x-3 gap-y-1 p-4 text-sm text-secondary">
-                        {[...new Set(selectedCatalogueItems.flatMap((pb) => pb.requiredResources))].map((item) => (
-                          <li key={item} className="flex items-center gap-1.5">
-                            <span className="h-1 w-1 shrink-0 rounded-full bg-(--color-steel-400)" />
-                            {item}
-                          </li>
-                        ))}
+                        {[...new Set(selectedCatalogueItems.flatMap((pb) => pb.requiredResources))].map(
+                          (item) => (
+                            <li key={item} className="flex items-center gap-1.5">
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-burgundy-500" />
+                              {item}
+                            </li>
+                          ),
+                        )}
                       </ul>
                     </Card>
 
-                    <Card>
-                      <CardHeader title="Exclusions carried onto the proposal" icon={<XCircle size={14} />} />
+                    <Card className="overflow-hidden border-strong">
+                      <CardHeader
+                        title="Exclusions carried onto the proposal"
+                        icon={<XCircle size={14} />}
+                      />
                       <ul className="space-y-1 p-4 text-sm text-secondary">
-                        {[...new Set(selectedCatalogueItems.flatMap((pb) => pb.exclusions))].map((e) => (
-                          <li key={e} className="flex items-start gap-1.5">
-                            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-(--color-steel-400)" />
-                            {e}
-                          </li>
-                        ))}
+                        {[...new Set(selectedCatalogueItems.flatMap((pb) => pb.exclusions))].map(
+                          (e) => (
+                            <li key={e} className="flex items-start gap-1.5">
+                              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-burgundy-500" />
+                              {e}
+                            </li>
+                          ),
+                        )}
                       </ul>
                     </Card>
 
-                    <Card>
+                    <Card className="overflow-hidden border-strong">
                       <CardHeader title="Estimated resource requirement" icon={<Package size={14} />} />
                       <ul className="space-y-1 p-4 text-sm">
                         {selectedCatalogueItems
                           .filter((pb) => pb.materialRate > 0)
                           .map((pb) => {
-                            const qty = ['visit', 'unit', 'day', 'each'].includes(pb.unit) ? 1 : pb.id === 'svc_access_equipment' ? opp.secondaryQuantity || 1 : opp.estimatedQuantity
+                            const qty = ['visit', 'unit', 'day', 'each'].includes(pb.unit)
+                              ? 1
+                              : pb.id === 'svc_access_equipment'
+                                ? opp.secondaryQuantity || 1
+                                : opp.estimatedQuantity
                             const total = Math.ceil(
-                              qty * pb.materialRate * Math.max(1, pb.resourceMultiplier) * (1 + pb.contingencyAllowance),
+                              qty *
+                                pb.materialRate *
+                                Math.max(1, pb.resourceMultiplier) *
+                                (1 + pb.contingencyAllowance),
                             )
                             return (
                               <li key={pb.id} className="flex items-center justify-between gap-2">
                                 <span className="truncate text-secondary">{pb.name}</span>
-                                <span className="shrink-0 font-mono text-primary tabular">
+                                <span className="shrink-0 font-mono font-medium text-primary tabular">
                                   {total} {pb.materialUnit}
                                 </span>
                               </li>
@@ -954,9 +901,9 @@ export function EstimateBuilder() {
               )}
 
               {/* ---- Terms and internal notes ---- */}
-              <SectionTitle className="mt-5">Proposal setup</SectionTitle>
+              <SectionTitle className="mt-2">Proposal setup</SectionTitle>
               <div className="grid gap-3 lg:grid-cols-2">
-                <Card className="p-4">
+                <Card className="border-strong p-4">
                   <label className="mb-1 block text-xs font-medium tracking-wide text-secondary uppercase">
                     Proposal template
                   </label>
@@ -974,7 +921,7 @@ export function EstimateBuilder() {
                   </p>
                 </Card>
 
-                <Card className="p-4">
+                <Card className="border-strong p-4">
                   <label className="mb-1 block text-xs font-medium tracking-wide text-secondary uppercase">
                     Internal notes and job requirements
                   </label>
@@ -988,6 +935,127 @@ export function EstimateBuilder() {
                     Never shown to the customer. Carries through to the crew’s job sheet.
                   </p>
                 </Card>
+              </div>
+                </div>
+
+                <aside className="space-y-3 xl:sticky xl:top-4 xl:self-start">
+                  <Card
+                    className={cn(
+                      'overflow-hidden border-strong',
+                      estimatorMissing && 'border-(--status-warning) bg-warning-soft/40',
+                    )}
+                  >
+                    <CardHeader
+                      title="Estimator"
+                      subtitle={
+                        estimatorMissing
+                          ? 'Required before sending for approval'
+                          : 'Owns this estimate'
+                      }
+                      icon={<UserPlus size={14} />}
+                      actions={
+                        estimatorMissing ? (
+                          <Badge tone="warning">Missing</Badge>
+                        ) : (
+                          <Badge tone="success">Assigned</Badge>
+                        )
+                      }
+                    />
+                    <div className="p-3">
+                      <Select
+                        value={opp.estimatorId ?? ''}
+                        onChange={(e) => assignEstimator(e.target.value)}
+                      >
+                        <option value="">Select estimator…</option>
+                        {estimators.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name}
+                            {u.role !== 'estimator' ? ` (${u.role})` : ''}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  </Card>
+
+                  {pack && (
+                    <Card className="overflow-hidden border-strong">
+                      <CardHeader
+                        title={pack.label}
+                        subtitle={CATEGORY_LABEL[opp.category]}
+                        icon={<FileText size={14} />}
+                        actions={<Badge tone="info">{CATEGORY_LABEL[opp.category]}</Badge>}
+                      />
+                      <div className="space-y-3 p-3">
+                        <div>
+                          <p className="mb-2 text-2xs font-semibold tracking-wider text-muted uppercase">
+                            Reminders ({(est.estimateRemindersDone ?? []).length}/
+                            {pack.reminders.length})
+                          </p>
+                          <div className="space-y-2">
+                            {pack.reminders.map((r) => (
+                              <Checkbox
+                                key={r.id}
+                                checked={(est.estimateRemindersDone ?? []).includes(r.id)}
+                                onChange={() => toggleReminder(r.id)}
+                                label={r.label}
+                                description={r.helper}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <div className="rounded-md border border-subtle bg-surface-inset px-2.5 py-2">
+                          <p className="text-2xs font-semibold tracking-wider text-muted uppercase">
+                            Price book
+                          </p>
+                          <p className="mt-1 text-sm text-secondary">
+                            {categoryPriceBook.length} items ·{' '}
+                            {templateById[pack.templateId]?.name ?? pack.templateId}
+                          </p>
+                        </div>
+                      </div>
+                    </Card>
+                  )}
+
+                  {est.status === 'pending_approval' && (
+                    <Card className="overflow-hidden border-strong">
+                      <CardHeader
+                        title="Approval checks"
+                        subtitle="Required items must pass"
+                        icon={<ShieldCheck size={14} />}
+                        actions={
+                          <Badge tone={readyForApproval ? 'success' : 'warning'}>
+                            {requiredChecks.filter((c) => c.ok).length}/{requiredChecks.length}
+                          </Badge>
+                        }
+                      />
+                      <div className="space-y-1 p-2">
+                        {requiredChecks.map((c) => (
+                          <div
+                            key={c.id}
+                            className="flex items-start gap-2 rounded-md px-2 py-1.5"
+                          >
+                            {c.ok ? (
+                              <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-success-text" />
+                            ) : (
+                              <XCircle size={13} className="mt-0.5 shrink-0 text-danger-text" />
+                            )}
+                            <div className="min-w-0">
+                              <p
+                                className={cn(
+                                  'text-sm',
+                                  c.ok ? 'text-secondary' : 'font-medium text-primary',
+                                )}
+                              >
+                                {c.label}
+                              </p>
+                              <p className="text-2xs text-muted">{c.detail}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  )}
+                </aside>
               </div>
             </>
           )}
@@ -1075,7 +1143,7 @@ export function EstimateBuilder() {
         onClose={() => setSending(false)}
         icon={<Send size={17} />}
         title="Send proposal to customer"
-        subtitle="Preview the delivery channel, message, and customer timeline before the proposal moves out."
+        subtitle="Confirm who receives this proposal, then choose the channel and message."
         footer={
           <>
             <Button variant="ghost" onClick={() => setSending(false)}>
@@ -1126,16 +1194,75 @@ export function EstimateBuilder() {
         }
       >
         <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2 overflow-hidden rounded-md border border-strong bg-surface-raised">
+            <div className="border-b border-subtle bg-surface-inset px-3 py-2">
+              <p className="text-2xs font-semibold tracking-wider text-muted uppercase">
+                Sending to
+              </p>
+            </div>
+            <div className="grid gap-3 p-3 sm:grid-cols-2">
+              <div className="min-w-0">
+                <p className="text-2xs font-semibold tracking-wider text-muted uppercase">
+                  Company
+                </p>
+                <p className="mt-0.5 truncate text-base font-semibold text-primary">
+                  {account?.name ?? '—'}
+                </p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-2xs font-semibold tracking-wider text-muted uppercase">
+                  Contact
+                </p>
+                <p className="mt-0.5 truncate text-base font-semibold text-primary">
+                  {account?.contactName ?? '—'}
+                </p>
+                {account?.contactTitle && (
+                  <p className="truncate text-sm text-muted">{account.contactTitle}</p>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-2xs font-semibold tracking-wider text-muted uppercase">
+                  Email
+                </p>
+                <p className="mt-0.5 truncate text-base font-medium text-primary">
+                  {account?.email || 'No email on file'}
+                </p>
+                {sendChannel === 'email' && account?.email && (
+                  <p className="mt-0.5 text-sm text-success-text">
+                    Proposal will be emailed here
+                  </p>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-2xs font-semibold tracking-wider text-muted uppercase">
+                  Phone
+                </p>
+                <p className="mt-0.5 truncate text-base font-medium text-primary">
+                  {account?.phone || 'No phone on file'}
+                </p>
+                {sendChannel === 'sms' && account?.phone && (
+                  <p className="mt-0.5 text-sm text-success-text">
+                    Proposal link will be texted here
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="sm:col-span-2 rounded-md border border-subtle bg-surface-inset px-3 py-2.5 text-sm text-muted">
-            Customer link: <span className="font-mono text-primary">/proposal/{est?.token}</span>
+            Customer link:{' '}
+            <span className="font-mono text-primary">/proposal/{est?.token}</span>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium tracking-wide text-secondary uppercase">
               Delivery channel
             </label>
-            <Select value={sendChannel} onChange={(e) => setSendChannel(e.target.value as 'email' | 'sms')}>
-              <option value="email">Email</option>
-              <option value="sms">SMS</option>
+            <Select
+              value={sendChannel}
+              onChange={(e) => setSendChannel(e.target.value as 'email' | 'sms')}
+            >
+              <option value="email">Email{account?.email ? ` · ${account.email}` : ''}</option>
+              <option value="sms">SMS{account?.phone ? ` · ${account.phone}` : ''}</option>
             </Select>
           </div>
           {sendChannel === 'email' && (

@@ -53,7 +53,12 @@ export function DemoPath() {
 
   return (
     <>
-      <Button size="sm" icon={<Route size={13} />} onClick={() => setOpen(true)}>
+      <Button
+        size="sm"
+        className="border-white/30 bg-white/15 text-white hover:bg-white/25 hover:text-white"
+        icon={<Route size={13} />}
+        onClick={() => setOpen(true)}
+      >
         Demo path
       </Button>
 

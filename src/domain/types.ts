@@ -190,6 +190,8 @@ export type Gate =
   | { kind: 'checklist'; templateId: string; label: string; blocking: boolean }
   | { kind: 'approval'; role: Role; label: string; blocking: boolean }
   | { kind: 'reminder'; label: string; helper: string; blocking: boolean }
+  /** Appointment datetime written to Opportunity.visitAt (site visit / sales call). */
+  | { kind: 'appointment'; label: string; helper: string; blocking: boolean }
   | { kind: 'assign'; role: Role; label: string; blocking: boolean }
   | { kind: 'attach'; label: string; helper: string; blocking: boolean }
   | { kind: 'confirm'; label: string; helper: string; blocking: boolean }

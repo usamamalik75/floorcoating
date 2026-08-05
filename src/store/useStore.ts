@@ -114,6 +114,8 @@ export interface MoveMeta {
   reason?: string
   followUpChannel?: CommunicationChannel
   followUpRecipient?: string
+  /** Appointment datetime for site visit / sales call (ISO). */
+  visitAt?: string
 }
 
 interface State {
@@ -376,7 +378,7 @@ const initial = () => ({
  * seed invalidates it and "Reset demo" always returns to the story's start.
  */
 const STORAGE_KEY = 'fcg-prototype'
-const STORAGE_VERSION = 16
+const STORAGE_VERSION = 17
 
 const createState: StateCreator<State> = (set, get) => ({
   ...initial(),
@@ -424,6 +426,7 @@ const createState: StateCreator<State> = (set, get) => ({
               stage: to,
               stageEnteredAt: new Date().toISOString(),
               reminderAt: meta.reminderAt ?? x.reminderAt,
+              visitAt: meta.visitAt ?? x.visitAt,
               lostReason: to === 'lost' ? (meta.reason ?? x.lostReason) : x.lostReason,
               // Assignment gates write to the right field for the role.
               ownerId: def.gates.some((g) => g.kind === 'assign' && g.role === 'sales') && meta.assigneeId ? meta.assigneeId : x.ownerId,
@@ -479,8 +482,8 @@ const createState: StateCreator<State> = (set, get) => ({
       ),
     )
 
-    // Stage changes create related module records — they do not redirect the user.
-    if (to === 'site_visit_scheduled' || to === 'site_visit_required') {
+    // Guided form + checklist appear when the appointment is scheduled — not on Required.
+    if (to === 'site_visit_scheduled') {
       const form = get().siteVisitForms.find((candidate) => candidate.category === o.category)
       if (form && !get().siteVisits.some((v) => v.opportunityId === opportunityId)) {
         const serviceTpl = preferredServiceTemplate(get().serviceTemplates, o.category)
@@ -505,7 +508,7 @@ const createState: StateCreator<State> = (set, get) => ({
         get().logActivity(
           opportunityId,
           'system',
-          `${v.Singular} record created — open it from Visits & Calls or this opportunity.`,
+          `${v.Singular} record created — open the guided form now or during the visit.`,
         )
       }
       const hasVisitChecklist = get().checklists.some((c) => {
@@ -961,12 +964,7 @@ const createState: StateCreator<State> = (set, get) => ({
         `Guided ${v.singular} submitted — ${requests.length} scope request${requests.length === 1 ? '' : 's'}.`,
       )
       const opp = oppForLog
-      if (
-        opp &&
-        (opp.stage === 'site_visit_scheduled' ||
-          opp.stage === 'site_visit_required' ||
-          opp.stage === 'qualified')
-      ) {
+      if (opp && opp.stage === 'site_visit_scheduled') {
         get().moveStage(opportunityId, 'site_visit_completed')
       }
     }
@@ -1485,6 +1483,18 @@ export const useStore = create<State>()(
         ...estimate,
         token: estimate.token || proposalTokenFor(estimate.opportunityId),
       }))
+      const visitStageIds = new Set([
+        'site_visit_required',
+        'site_visit_scheduled',
+        'site_visit_completed',
+      ])
+      const prevStages = prev.stageDefinitions ?? defaults.stageDefinitions
+      const stageDefinitions = prevStages.map(
+        (stage) =>
+          (visitStageIds.has(stage.id)
+            ? defaults.stageDefinitions.find((d) => d.id === stage.id)
+            : undefined) ?? stage,
+      )
       return {
         ...defaults,
         ...prev,
@@ -1495,6 +1505,7 @@ export const useStore = create<State>()(
         serviceTemplates: prev.serviceTemplates ?? defaults.serviceTemplates,
         users: prev.users ?? defaults.users,
         prospectRequests: prev.prospectRequests ?? defaults.prospectRequests,
+        stageDefinitions,
       }
     },
     // Actions are rebuilt on load; only the data and the demo lenses persist.

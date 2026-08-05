@@ -35,7 +35,7 @@ import {
   salesPipelineOf,
   visitVocab,
 } from '@/domain/types'
-import { STAGE_BY_ID, defaultHubTabForStage, jobStatusIndex, stageLabel } from '@/domain/stages'
+import { STAGE_BY_ID, defaultHubTabForStage, isVisitFormAvailable, jobStatusIndex, stageLabel } from '@/domain/stages'
 import {
   resolveChecklistItems,
   visitChecklistTemplates,
@@ -177,6 +177,7 @@ export function OpportunityRecord() {
   const tab = params.get('tab') ?? defaultHubTabForStage(opp.stage)
   const setTab = (next: string) => setParams({ tab: next })
   const vocab = visitVocab(opp.category)
+  const visitFormOpen = isVisitFormAvailable(opp.stage)
   const visibleTabs = BASE_TABS.filter((t) => !('awardedOnly' in t && t.awardedOnly) || opp.stage === 'awarded').map(
     (t) => (t.id === 'visits' ? { ...t, label: vocab.Plural } : t),
   )
@@ -334,27 +335,102 @@ export function OpportunityRecord() {
                 </div>
               </Card>
             </Section>
+
+            <Section id="overview-visit" title={vocab.Singular}>
+              <Card>
+                {visitFormOpen && visit ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+                    <div>
+                      <p className="text-base font-medium text-primary">
+                        {visit.completedAt ? `${vocab.Singular} completed` : `${vocab.Singular} in progress`}
+                      </p>
+                      <p className="mt-0.5 text-sm text-muted">
+                        {opp.visitAt
+                          ? `Scheduled ${format(new Date(opp.visitAt), 'd MMM yyyy · HH:mm')}`
+                          : 'Open the form to capture checklist and answers.'}
+                      </p>
+                    </div>
+                    <Button size="sm" onClick={() => setTab('visits')}>
+                      View {vocab.singular}
+                    </Button>
+                  </div>
+                ) : (
+                  <EmptyState title={`No ${vocab.singular} yet.`} />
+                )}
+              </Card>
+            </Section>
+
+            <Section id="overview-estimate" title="Estimate">
+              <Card>
+                {est ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+                    <div>
+                      <p className="text-base font-medium text-primary">
+                        Estimate {est.status.replace(/_/g, ' ')}
+                      </p>
+                      <p className="mt-0.5 text-sm text-muted">
+                        {est.options.length} option{est.options.length === 1 ? '' : 's'} · {money(estimateTotal(est))}
+                      </p>
+                    </div>
+                    <Button size="sm" onClick={() => setTab('estimates')}>
+                      View estimate
+                    </Button>
+                  </div>
+                ) : (
+                  <EmptyState title="No estimate yet." />
+                )}
+              </Card>
+            </Section>
+
+            <Section id="overview-proposal" title="Proposal">
+              <Card>
+                {est?.signedAt ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+                    <div>
+                      <p className="text-base font-medium text-primary">Proposal signed</p>
+                      <p className="mt-0.5 text-sm text-muted">
+                        Signed by {est.signedBy ?? 'customer'} on{' '}
+                        {format(new Date(est.signedAt), 'd MMM yyyy')}
+                      </p>
+                    </div>
+                    <Button size="sm" onClick={() => setTab('proposals')}>
+                      View proposal
+                    </Button>
+                  </div>
+                ) : (
+                  <EmptyState title="No proposal signed yet." />
+                )}
+              </Card>
+            </Section>
             </div>
 
             {/* == Site visit / sales call tab == */}
             <div className={tab === 'visits' ? 'space-y-6' : 'hidden'}>
             <Section
               id="sitevisit"
-              title={`What we gathered · ${vocab.Singular}`}
+              title={vocab.Singular}
               action={
-                <Link to={`/opportunities/${opp.id}/visit`}>
-                  <Button size="sm">
-                    <Ruler size={12} />
-                    {!visit
-                      ? 'Start guided form'
-                      : visit.completedAt
-                        ? 'Review / edit form'
-                        : 'Continue guided form'}
-                  </Button>
-                </Link>
+                visitFormOpen ? (
+                  <Link to={`/opportunities/${opp.id}/visit`}>
+                    <Button size="sm">
+                      <Ruler size={12} />
+                      {!visit
+                        ? 'Open form'
+                        : visit.completedAt
+                          ? 'Review / edit form'
+                          : 'Open form'}
+                    </Button>
+                  </Link>
+                ) : undefined
               }
             >
-              <GatheredAtVisit opportunityId={opp.id} />
+              {visitFormOpen ? (
+                <GatheredAtVisit opportunityId={opp.id} />
+              ) : (
+                <Card>
+                  <EmptyState title={`No ${vocab.singular} yet.`} />
+                </Card>
+              )}
             </Section>
             </div>
 
@@ -364,20 +440,19 @@ export function OpportunityRecord() {
               id="estimate"
               title="Estimate"
               action={
-                <Link to={`/estimate/${opp.id}`}>
-                  <Button size="sm">
-                    <FileText size={12} />
-                    {est ? 'Open estimate' : 'Start estimate'}
-                  </Button>
-                </Link>
+                est ? (
+                  <Link to={`/estimate/${opp.id}`}>
+                    <Button size="sm">
+                      <FileText size={12} />
+                      Open estimate
+                    </Button>
+                  </Link>
+                ) : undefined
               }
             >
               {!est ? (
                 <Card>
-                  <EmptyState
-                    title="No estimate yet"
-                    description={`The estimator works from the ${vocab.singular} data above — nothing gets re-keyed.`}
-                  />
+                  <EmptyState title="No estimate yet." />
                 </Card>
               ) : (
                 <Card>
@@ -449,9 +524,9 @@ export function OpportunityRecord() {
             {/* == Proposals tab == */}
             <div className={tab === 'proposals' ? 'space-y-6' : 'hidden'}>
             <Section id="proposal" title="Proposal">
-              {!est || est.status === 'draft' ? (
+              {!est?.signedAt ? (
                 <Card>
-                  <EmptyState title="No proposal sent" description="The estimate must be approved first." />
+                  <EmptyState title="No proposal signed yet." />
                 </Card>
               ) : (
                 <Card className="p-4">
@@ -460,7 +535,7 @@ export function OpportunityRecord() {
                       {est.sentAt ? format(new Date(est.sentAt), 'd MMM yyyy') : '—'}
                     </KeyValue>
                     <KeyValue label="Signed">
-                      {est.signedAt ? format(new Date(est.signedAt), 'd MMM yyyy') : 'Awaiting'}
+                      {format(new Date(est.signedAt), 'd MMM yyyy')}
                     </KeyValue>
                     <KeyValue label="Signed by">{est.signedBy ?? '—'}</KeyValue>
                     <KeyValue label="Deposit">{est.depositPct}%</KeyValue>
@@ -999,13 +1074,12 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
     return (
       <Card>
         <EmptyState
-          title={`${v.Singular} not started`}
-          description={`Capture checklist, scope, and answers on the guided form. Results will show here.`}
+          title={`No ${v.singular} yet.`}
           action={
             <Link to={`/opportunities/${opportunityId}/visit`}>
               <Button size="sm" variant="primary">
                 <Ruler size={12} />
-                Start guided form
+                Open form
               </Button>
             </Link>
           }
@@ -1019,47 +1093,116 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
   const customQuestions = visit.customQuestions ?? []
   const filledCustomQuestions = customQuestions.filter((q) => q.question.trim())
   const photos = artifacts.filter((a) => a.kind === 'photo' || a.kind === 'plan')
+  const completeRequests = requests.filter(
+    (r) =>
+      r.serviceType.trim() &&
+      r.concernOrOutcome.trim() &&
+      r.areaOrEquipment.trim() &&
+      r.unit.trim() &&
+      r.quantity > 0,
+  )
+  const checklistTotal = checklistItems.length
+  const checksOk = checks.filter((c) => c.ok).length
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader
-          title={`${v.Singular} log`}
-          subtitle={
-            visit.completedAt
-              ? `Submitted by ${userById[visit.completedById ?? '']?.name} on ${format(new Date(visit.completedAt), 'd MMM yyyy')}`
-              : 'In progress — edit only on the guided form'
-          }
-          icon={<ClipboardList size={14} />}
-          actions={
-            <Badge tone={visit.completedAt ? 'success' : 'warning'}>
-              {checks.filter((c) => c.ok).length}/{checks.length} checks
+    <div className="space-y-3">
+      <Card className="overflow-hidden">
+        <div className="border-b border-subtle bg-surface-inset px-4 py-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <ClipboardList size={15} className="shrink-0 text-brand" />
+                <p className="font-display text-lg text-primary">What we gathered</p>
+              </div>
+              <p className="mt-0.5 text-sm text-muted">
+                {visit.completedAt
+                  ? `Submitted by ${userById[visit.completedById ?? '']?.name ?? 'rep'} on ${format(new Date(visit.completedAt), 'd MMM yyyy')}`
+                  : `In progress — edit on the guided ${v.singular} form.`}
+              </p>
+            </div>
+            <Badge
+              tone={visit.completedAt ? 'success' : 'warning'}
+              icon={visit.completedAt ? <CheckCircle2 size={12} /> : undefined}
+            >
+              {visit.completedAt
+                ? 'Submitted'
+                : `${checksOk}/${checks.length} checks ready`}
             </Badge>
-          }
-        />
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <div
+              className={cn(
+                'rounded-md border px-2.5 py-2',
+                checklistDone === checklistTotal && checklistTotal > 0
+                  ? 'border-(--status-success)/30 bg-success-soft/35'
+                  : 'border-subtle bg-surface-raised',
+              )}
+            >
+              <p className="text-2xs font-semibold tracking-wider text-muted uppercase">Checklist</p>
+              <p className="mt-0.5 text-sm font-semibold text-primary">
+                {checklistDone}/{checklistTotal || '—'}
+              </p>
+            </div>
+            <div
+              className={cn(
+                'rounded-md border px-2.5 py-2',
+                completeRequests.length > 0
+                  ? 'border-(--status-success)/30 bg-success-soft/35'
+                  : 'border-subtle bg-surface-raised',
+              )}
+            >
+              <p className="text-2xs font-semibold tracking-wider text-muted uppercase">
+                Scope requests
+              </p>
+              <p className="mt-0.5 text-sm font-semibold text-primary">
+                {completeRequests.length} complete
+              </p>
+            </div>
+            <div
+              className={cn(
+                'rounded-md border px-2.5 py-2',
+                answered.length > 0
+                  ? 'border-(--status-success)/30 bg-success-soft/35'
+                  : 'border-subtle bg-surface-raised',
+              )}
+            >
+              <p className="text-2xs font-semibold tracking-wider text-muted uppercase">Answers</p>
+              <p className="mt-0.5 text-sm font-semibold text-primary">
+                {answered.length + filledCustomQuestions.length} captured
+              </p>
+            </div>
+          </div>
+        </div>
       </Card>
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader
           title={checklistTemplate?.name ?? 'Checklist'}
-          subtitle={`${checklistDone} of ${checklistItems.length} items complete`}
+          subtitle={`${checklistDone} of ${checklistTotal} items complete`}
           icon={<ClipboardCheck size={14} />}
         />
         {checklistItems.length === 0 ? (
-          <p className="p-4 text-sm text-muted">No checklist assigned yet. Open the guided form to choose one.</p>
+          <p className="px-4 py-4 text-sm text-muted">
+            No checklist assigned yet. Open the guided form to choose one.
+          </p>
         ) : (
           <ul className="divide-y divide-(--border-subtle)">
             {checklistItems.map((item) => {
               const done = checklistInstance?.done.includes(item.id) ?? false
               return (
-                <li key={item.id} className="flex items-start gap-2 px-4 py-2.5">
+                <li key={item.id} className="flex items-start gap-2.5 px-4 py-2.5">
                   <CheckCircle2
-                    size={14}
-                    className={cn('mt-0.5 shrink-0', done ? 'text-success-text' : 'text-muted opacity-40')}
+                    size={15}
+                    className={cn(
+                      'mt-0.5 shrink-0',
+                      done ? 'text-success-text' : 'text-muted/35',
+                    )}
                   />
                   <div className="min-w-0">
-                    <p className={cn('text-sm', done ? 'text-primary' : 'text-muted')}>{item.label}</p>
-                    {item.helper && <p className="text-2xs text-muted">{item.helper}</p>}
+                    <p className={cn('text-sm', done ? 'text-primary' : 'text-muted')}>
+                      {item.label}
+                    </p>
+                    {item.helper && <p className="mt-0.5 text-2xs text-muted">{item.helper}</p>}
                   </div>
                 </li>
               )
@@ -1068,102 +1211,159 @@ function GatheredAtVisit({ opportunityId }: { opportunityId: string }) {
         )}
       </Card>
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader
           title="Scope requests"
-          subtitle={`${requests.length} request${requests.length === 1 ? '' : 's'} captured`}
+          subtitle={`${completeRequests.length} of ${requests.length} ready for estimate`}
           icon={<Ruler size={14} />}
         />
         {requests.length === 0 ? (
-          <p className="p-4 text-sm text-muted">No scope requests yet.</p>
+          <p className="px-4 py-4 text-sm text-muted">No scope requests yet.</p>
         ) : (
-          <div className="divide-y divide-(--border-subtle)">
-            {requests.map((req, i) => (
-              <div key={req.id} className="px-4 py-2.5">
-                <p className="text-sm font-medium text-primary">
-                  {i + 1}. {req.serviceType || 'Untitled request'}
-                </p>
-                <p className="mt-0.5 text-sm text-muted">
-                  {[req.areaOrEquipment, req.quantity > 0 ? `${req.quantity} ${req.unit}` : null, req.concernOrOutcome]
-                    .filter(Boolean)
-                    .join(' · ') || 'Incomplete'}
-                </p>
-              </div>
-            ))}
+          <div className="space-y-2 p-3">
+            {requests.map((req, i) => {
+              const complete =
+                req.serviceType.trim() &&
+                req.concernOrOutcome.trim() &&
+                req.areaOrEquipment.trim() &&
+                req.unit.trim() &&
+                req.quantity > 0
+              return (
+                <div
+                  key={req.id}
+                  className={cn(
+                    'rounded-md border px-3 py-2.5',
+                    complete
+                      ? 'border-(--status-success)/35 bg-success-soft/30'
+                      : 'border-strong bg-surface-inset',
+                  )}
+                >
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span
+                      className={cn(
+                        'flex h-5 w-5 items-center justify-center rounded-sm text-2xs font-semibold',
+                        complete
+                          ? 'bg-success-soft text-success-text'
+                          : 'bg-action text-action-fg',
+                      )}
+                    >
+                      {i + 1}
+                    </span>
+                    <p className="min-w-0 flex-1 truncate text-sm font-semibold text-primary">
+                      {req.serviceType.trim() || 'Untitled service'}
+                    </p>
+                    <Badge tone={complete ? 'success' : 'warning'}>
+                      {complete ? 'Complete' : 'Needs detail'}
+                    </Badge>
+                  </div>
+                  <dl className="grid gap-2 sm:grid-cols-3">
+                    <div className="min-w-0">
+                      <dt className="text-2xs font-semibold tracking-wider text-muted uppercase">
+                        Area / surface
+                      </dt>
+                      <dd className="mt-0.5 text-sm text-primary">{req.areaOrEquipment || '—'}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-2xs font-semibold tracking-wider text-muted uppercase">
+                        Quantity
+                      </dt>
+                      <dd className="mt-0.5 text-sm text-primary">
+                        {req.quantity > 0 ? `${req.quantity} ${req.unit}` : 'Not set'}
+                      </dd>
+                    </div>
+                    <div className="min-w-0 sm:col-span-3">
+                      <dt className="text-2xs font-semibold tracking-wider text-muted uppercase">
+                        Concern / outcome
+                      </dt>
+                      <dd className="mt-0.5 text-sm leading-snug whitespace-normal text-primary">
+                        {req.concernOrOutcome || '—'}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              )
+            })}
           </div>
         )}
       </Card>
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader
-          title="Answers & questions"
-          subtitle="From the guided form"
+          title="Form answers"
+          subtitle="Grouped by section from the guided form"
           icon={<ClipboardList size={14} />}
         />
         {answered.length === 0 && filledCustomQuestions.length === 0 ? (
-          <p className="p-4 text-sm text-muted">No answers yet.</p>
+          <p className="px-4 py-4 text-sm text-muted">No answers yet.</p>
         ) : (
-          <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 p-4 sm:grid-cols-2">
-            {form.sections.flatMap((sec) =>
-              sec.fields
-                .filter((f) => answered.some(([k]) => k === f.id))
-                .map((f) => {
-                  const raw = visit.values[f.id]
-                  const value = typeof raw === 'boolean' ? (raw ? 'Yes' : 'No') : String(raw)
-                  return (
-                    <KeyValue
-                      key={f.id}
-                      label={f.label}
-                      className={f.type === 'longtext' ? 'sm:col-span-2' : undefined}
-                    >
-                      <span className={cn(f.type === 'longtext' && 'whitespace-normal')}>
-                        {value}
-                        {f.unit && ` ${f.unit}`}
-                      </span>
-                    </KeyValue>
-                  )
-                }),
-            )}
-            {filledCustomQuestions.map((qa) => {
-              const sectionTitle =
-                form.sections.find((s) => s.id === qa.sectionId)?.title ?? 'Extra question'
+          <div className="space-y-3 p-3">
+            {form.sections.map((sec) => {
+              const fields = sec.fields.filter((f) => answered.some(([k]) => k === f.id))
+              const sectionQs = filledCustomQuestions.filter((q) => q.sectionId === sec.id)
+              if (fields.length === 0 && sectionQs.length === 0) return null
               return (
-                <KeyValue
-                  key={qa.id}
-                  label={`${sectionTitle} · ${qa.question}`}
-                  className="sm:col-span-2"
-                >
-                  <span className="whitespace-normal">{qa.answer || '—'}</span>
-                </KeyValue>
+                <div key={sec.id}>
+                  <p className="mb-1.5 text-2xs font-semibold tracking-wider text-muted uppercase">
+                    {sec.title}
+                  </p>
+                  <dl className="grid gap-2 rounded-md border border-subtle bg-surface-inset p-2.5 sm:grid-cols-2">
+                    {fields.map((f) => {
+                      const raw = visit.values[f.id]
+                      const value = typeof raw === 'boolean' ? (raw ? 'Yes' : 'No') : String(raw)
+                      return (
+                        <KeyValue
+                          key={f.id}
+                          label={f.label}
+                          className={f.type === 'longtext' ? 'sm:col-span-2' : undefined}
+                        >
+                          <span className={cn(f.type === 'longtext' && 'whitespace-normal')}>
+                            {value}
+                            {f.unit && ` ${f.unit}`}
+                          </span>
+                        </KeyValue>
+                      )
+                    })}
+                    {sectionQs.map((qa) => (
+                      <KeyValue key={qa.id} label={qa.question} className="sm:col-span-2">
+                        <span className="whitespace-normal">{qa.answer || '—'}</span>
+                      </KeyValue>
+                    ))}
+                  </dl>
+                </div>
               )
             })}
-          </dl>
+          </div>
         )}
       </Card>
 
       {allowsPhotos ? (
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader
             title="Photos & documents"
             subtitle={`${photos.length} attached from the ${v.singular}`}
             icon={<Camera size={14} />}
           />
           {photos.length === 0 ? (
-            <p className="p-4 text-sm text-muted">No photos or plans yet.</p>
+            <p className="px-4 py-4 text-sm text-muted">No photos or plans yet.</p>
           ) : (
-            <ul className="space-y-2 p-4">
+            <ul className="divide-y divide-(--border-subtle)">
               {photos.map((a) => (
-                <li key={a.id} className="flex items-center gap-2 text-sm text-secondary">
-                  <CheckCircle2 size={14} className="text-success-text" />
-                  {a.name}
+                <li key={a.id} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-primary">
+                  {a.kind === 'plan' ? (
+                    <FileText size={14} className="shrink-0 text-muted" />
+                  ) : (
+                    <Camera size={14} className="shrink-0 text-muted" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate font-medium">{a.name}</span>
+                  <Badge tone="neutral">{a.kind === 'plan' ? 'Plan' : 'Photo'}</Badge>
                 </li>
               ))}
             </ul>
           )}
         </Card>
       ) : (
-        <p className="rounded-lg border border-subtle bg-surface-sunken px-3 py-2 text-sm text-muted">
-          Sales calls do not collect photos.
+        <p className="rounded-md border border-subtle bg-surface-inset px-3 py-2.5 text-sm text-muted">
+          Sales calls do not collect photos. Checklist, scope, and answers are the full record.
         </p>
       )}
     </div>

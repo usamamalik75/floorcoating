@@ -95,16 +95,17 @@ export const STAGES: StageDef[] = [
     group: 'sales',
     phase: 'sales',
     probability: 30,
-    purpose: 'A site visit is needed before estimating. Schedule it from the next-action panel.',
+    purpose:
+      'A site visit is needed before estimating. Status only — set the appointment time when you move to Scheduled.',
     gates: [
       {
         kind: 'confirm',
         label: 'Confirm a site visit is required',
-        helper: 'Or skip with a reason if estimating from plans only.',
+        helper: 'No form or date yet. Next: schedule the appointment time.',
         blocking: true,
       },
     ],
-    notify: [{ role: 'sales', message: 'Site visit required — schedule the appointment' }],
+    notify: [{ role: 'sales', message: 'Site visit required — set the appointment time to schedule' }],
   },
   {
     id: 'site_visit_scheduled',
@@ -114,16 +115,16 @@ export const STAGES: StageDef[] = [
     phase: 'sales',
     probability: 35,
     purpose:
-      'The appointment is booked. Creating this stage also creates a Site Visit record in the Site Visits module.',
+      'Set the appointment date and time. The guided form opens here — fill it now or during the visit, then mark completed.',
     gates: [
       {
-        kind: 'confirm',
-        label: 'Book the appointment on the rep calendar',
-        helper: 'Generates the category-specific guided form and sends a reminder the day before.',
+        kind: 'appointment',
+        label: 'Set appointment date & time',
+        helper: 'Required to move into Scheduled. Creates the guided form for this opportunity.',
         blocking: true,
       },
     ],
-    notify: [{ role: 'sales', message: 'Visit booked — your guided form and photo list are ready on mobile' }],
+    notify: [{ role: 'sales', message: 'Visit booked — open the guided form anytime before or during the visit' }],
   },
   {
     id: 'site_visit_completed',
@@ -133,18 +134,12 @@ export const STAGES: StageDef[] = [
     phase: 'sales',
     probability: 45,
     purpose:
-      'Measurements, conditions, testing, photos and plans are captured. Completing the Site Visit record advances the opportunity here.',
+      'The guided form must be fully completed (checklist, scope, and required fields) before this stage.',
     gates: [
       {
         kind: 'readiness',
         label: 'Guided site visit form completed',
-        helper: 'Every required field answered on the mobile form.',
-        blocking: true,
-      },
-      {
-        kind: 'readiness',
-        label: 'Site photos attached',
-        helper: 'Existing building → photos. New build → architectural plans.',
+        helper: 'Checklist, scope requests, and all required fields must be done. Commercial also needs photos or plans.',
         blocking: true,
       },
     ],
@@ -364,6 +359,8 @@ export function stageLabelForPipeline(stage: StageId, pipeline: SalesPipeline | 
 export function defaultHubTabForStage(stage: StageId): string {
   switch (stage) {
     case 'site_visit_required':
+      // Status only — stay on Overview until the appointment is scheduled.
+      return 'overview'
     case 'site_visit_scheduled':
     case 'site_visit_completed':
       return 'visits'
@@ -377,6 +374,24 @@ export function defaultHubTabForStage(stage: StageId): string {
       return 'job'
     default:
       return 'overview'
+  }
+}
+
+/**
+ * Guided sales-call / site-visit form unlocks only after Scheduled.
+ * Required (and earlier) stages are status-only — no form yet.
+ */
+export function isVisitFormAvailable(stage: StageId): boolean {
+  switch (stage) {
+    case 'prospect':
+    case 'contact':
+    case 'new_lead':
+    case 'contacted':
+    case 'qualified':
+    case 'site_visit_required':
+      return false
+    default:
+      return true
   }
 }
 

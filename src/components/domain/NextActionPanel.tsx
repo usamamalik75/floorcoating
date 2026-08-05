@@ -99,20 +99,47 @@ function actionsFor(
 
   switch (opportunity.stage) {
     case 'qualified':
-    case 'site_visit_required':
       return {
         title: 'Lead qualified',
-        body: `A ${v.singular} is usually required before estimating. You stay in control of where you go next.`,
+        body: `Mark a ${v.singular} as required, or set the appointment time to schedule it.`,
+        buttons: [
+          { kind: 'stage', label: `${v.Singular} Required`, toStage: 'site_visit_required', primary: true },
+          { kind: 'stage', label: `Schedule ${v.Singular}`, toStage: 'site_visit_scheduled' },
+          { kind: 'ensureEstimate', label: 'Create Estimate' },
+          { kind: 'link', label: 'Return to Sales', to: '/sales' },
+        ],
+      }
+    case 'site_visit_required':
+      return {
+        title: `${v.Singular} required`,
+        body: `Set the appointment date and time to move into Scheduled. The guided form opens after scheduling.`,
         buttons: [
           { kind: 'stage', label: `Schedule ${v.Singular}`, toStage: 'site_visit_scheduled', primary: true },
           { kind: 'ensureEstimate', label: 'Create Estimate' },
           { kind: 'link', label: 'Return to Sales', to: '/sales' },
         ],
       }
+    case 'site_visit_scheduled':
+      return {
+        title: `${v.Singular} scheduled`,
+        body: opportunity.visitAt
+          ? `Appointment is set. Open the guided form now or during the ${v.singular}, then mark completed when everything is filled.`
+          : `Open the guided form now or during the ${v.singular}. Mark completed only after all required fields are done.`,
+        buttons: [
+          {
+            kind: 'link',
+            label: 'Open form',
+            to: `/opportunities/${opportunity.id}/visit`,
+            primary: true,
+          },
+          { kind: 'stage', label: `Mark ${v.Singular} Completed`, toStage: 'site_visit_completed' },
+          { kind: 'link', label: 'Return to Sales', to: '/sales' },
+        ],
+      }
     case 'site_visit_completed':
       return {
         title: `${v.Singular} completed`,
-        body: 'Measurements and photos are on the record. Create or open the estimate when you are ready.',
+        body: 'Measurements and answers are on the record. Create or open the estimate when you are ready.',
         buttons: [
           ctx.hasEstimate
             ? { kind: 'link', label: 'Open Estimate', to: `/estimate/${ctx.estimateId}`, primary: true }

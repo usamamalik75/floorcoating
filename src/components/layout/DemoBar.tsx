@@ -25,8 +25,8 @@ export function DemoBar() {
   const isAdmin = viewer.role === 'admin'
 
   return (
-    <div className="flex h-11 shrink-0 items-center gap-3 border-b border-subtle bg-surface-raised px-3">
-      <span className="hidden text-2xs font-semibold tracking-[0.14em] text-muted uppercase lg:block">
+    <div className="flex h-12 shrink-0 items-center gap-3 border-b border-burgundy-800 bg-action px-3 text-action-fg">
+      <span className="hidden text-2xs font-semibold tracking-[0.14em] text-white/70 uppercase lg:block">
         Viewing as
       </span>
 
@@ -36,20 +36,20 @@ export function DemoBar() {
           aria-label="Viewing as"
           value={viewerId}
           onChange={(e) => setViewer(e.target.value)}
-          className="h-7 max-w-[15rem] rounded-md border border-strong bg-surface-raised px-2 text-base text-primary"
+          className="h-7 max-w-[15rem] rounded-md border border-white/25 bg-white/15 px-2 text-base text-white"
         >
           {users.map((u) => (
-            <option key={u.id} value={u.id}>
+            <option key={u.id} value={u.id} className="text-primary">
               {u.name} — {ROLE_LABEL[u.role]}
             </option>
           ))}
         </select>
       </label>
 
-      <div className="h-5 w-px bg-(--border-subtle)" />
+      <div className="h-5 w-px bg-white/25" />
 
       <label className="flex items-center gap-2">
-        <span className="hidden text-2xs font-semibold tracking-[0.14em] text-muted uppercase lg:block">
+        <span className="hidden text-2xs font-semibold tracking-[0.14em] text-white/70 uppercase lg:block">
           Location
         </span>
         <select
@@ -62,11 +62,15 @@ export function DemoBar() {
               ? 'Administrators can see every location'
               : 'Team members are scoped to their location'
           }
-          className="h-7 rounded-md border border-strong bg-surface-raised px-2 text-base text-primary disabled:opacity-50"
+          className="h-7 rounded-md border border-white/25 bg-white/15 px-2 text-base text-white disabled:opacity-50"
         >
-          {isAdmin && <option value="all">All locations</option>}
+          {isAdmin && (
+            <option value="all" className="text-primary">
+              All locations
+            </option>
+          )}
           {locations.map((l) => (
-            <option key={l.id} value={l.id}>
+            <option key={l.id} value={l.id} className="text-primary">
               {l.name}
             </option>
           ))}
@@ -83,6 +87,7 @@ export function DemoBar() {
         <Button
           variant="ghost"
           size="sm"
+          className="text-white hover:bg-white/15 hover:text-white"
           onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
           aria-label="Toggle theme"
         >
@@ -91,7 +96,13 @@ export function DemoBar() {
       </Tooltip>
 
       <Tooltip label="Reset demo data">
-        <Button variant="ghost" size="sm" onClick={reset} aria-label="Reset demo">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-white hover:bg-white/15 hover:text-white"
+          onClick={reset}
+          aria-label="Reset demo"
+        >
           <RotateCcw size={13} />
         </Button>
       </Tooltip>
@@ -106,6 +117,7 @@ function DensityToggle() {
     <SegmentedControl
       value={density}
       onChange={setDensity}
+      className="border-white/25 bg-white/10"
       options={[
         { value: 'comfortable', label: 'Desktop' },
         { value: 'field', label: 'Field' },

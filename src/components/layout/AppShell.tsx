@@ -78,18 +78,19 @@ export function AppShell() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <aside className="hidden w-56 shrink-0 flex-col overflow-y-auto bg-surface-glass-chrome backdrop-blur-xl border-r border-glass-border shadow-2xl text-white md:flex scrollbar-thin z-10 transition-colors duration-(--duration-slow)">
-        <div className="px-3 py-4">
-          <Logo size={40} variant="white" />
+      <aside className="hidden w-64 shrink-0 flex-col overflow-y-auto border-r border-subtle bg-white text-primary md:flex scrollbar-thin z-10">
+        <div className="border-b border-subtle px-3 py-4">
+          <Logo size={52} variant="red" />
         </div>
 
-        <NavGroup items={visible(PRIMARY)} pathname={pathname} />
-        <NavGroup title="More" items={visible(SECONDARY)} pathname={pathname} />
+        <div className="flex flex-1 flex-col py-3">
+          <NavGroup items={visible(PRIMARY)} pathname={pathname} />
+          <NavGroup title="More" items={visible(SECONDARY)} pathname={pathname} />
+        </div>
 
-
-        <div className="mt-auto border-t border-white/10 px-2 py-2">
+        <div className="mt-auto border-t border-subtle px-2 py-2">
           <NavGroup items={[{ to: '/styleguide', label: 'Design System', icon: Palette }]} pathname={pathname} />
-          <p className="px-2.5 pt-2 text-2xs leading-relaxed text-white/45">
+          <p className="px-2.5 pt-2 text-2xs leading-relaxed text-muted">
             Prototype · mock data
             <br />
             Not connected to production systems
@@ -118,13 +119,13 @@ function NavGroup({
 }) {
   if (items.length === 0) return null
   return (
-    <div className="mb-4">
+    <div className="mb-3">
       {title && (
-        <p className="px-4 pt-2 pb-2 text-xs font-semibold tracking-widest text-white/40 uppercase">
+        <p className="px-4 pt-1 pb-1.5 text-xs font-semibold tracking-widest text-muted uppercase">
           {title}
         </p>
       )}
-      <nav className="flex flex-col gap-1 px-2">
+      <nav className="flex flex-col gap-0.5 px-2">
         {items.map(({ to, label, icon: Icon }) => {
           const active = to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(to + '/')
           return (
@@ -132,14 +133,20 @@ function NavGroup({
               key={to}
               to={to}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium',
-                'transition-all duration-(--duration-base) ease-out will-change-transform',
-                active 
-                  ? 'bg-white/15 text-white shadow-glow-primary' 
-                  : 'text-white/60 hover:bg-white/10 hover:text-white hover:scale-[1.02]',
+                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium',
+                'transition-colors duration-(--duration-fast)',
+                active
+                  ? 'bg-action text-action-fg shadow-sm'
+                  : 'text-secondary hover:bg-burgundy-50 hover:text-burgundy-700',
               )}
             >
-              <Icon size={16} className={cn('shrink-0 transition-transform duration-(--duration-base)', active ? 'text-burgundy-300' : 'text-white/50')} />
+              <Icon
+                size={16}
+                className={cn(
+                  'shrink-0',
+                  active ? 'text-action-fg' : 'text-muted',
+                )}
+              />
               {label}
             </NavLink>
           )

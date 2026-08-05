@@ -112,9 +112,9 @@
   --radius-full: 999px;
 
   /* ---- Type ---------------------------------------------------------- */
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Montserrat", "Montserrat Fallback", Montserrat, ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', monospace;
-  --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Montserrat", "Montserrat Fallback", Montserrat, ui-sans-serif, system-ui, sans-serif;
 
   --text-2xs: 10px;
   --text-xs: 11px;
