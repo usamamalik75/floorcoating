@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   BellRing,
   Boxes,
+  CalendarDays,
   Camera,
   CheckCircle2,
   ClipboardCheck,
@@ -22,20 +24,31 @@ import {
   PenLine,
   Phone,
   Plus,
+  Receipt,
   Ruler,
+  Sparkles,
   StickyNote,
   User as UserIcon,
+  UserPlus,
   XCircle,
 } from 'lucide-react'
-import type { ArtifactKind, JobStatus, StageId } from '@/domain/types'
+import type { ArtifactKind, Job, JobStatus, StageId } from '@/domain/types'
 import {
   ACCOUNT_RELATIONSHIP_LABEL,
   CATEGORY_LABEL,
+  JOB_STATUS_LABEL,
   SALES_PIPELINE_LABEL,
   salesPipelineOf,
   visitVocab,
 } from '@/domain/types'
-import { STAGE_BY_ID, defaultHubTabForStage, isVisitFormAvailable, jobStatusIndex, stageLabel } from '@/domain/stages'
+import {
+  JOB_STATUSES,
+  STAGE_BY_ID,
+  defaultHubTabForStage,
+  isVisitFormAvailable,
+  jobStatusIndex,
+  stageLabel,
+} from '@/domain/stages'
 import {
   resolveChecklistItems,
   visitChecklistTemplates,
@@ -56,6 +69,9 @@ import {
 import { StageGate } from '@/components/domain/StageGate'
 import { StageStepper } from '@/components/domain/StageStepper'
 import { NextActionPanel } from '@/components/domain/NextActionPanel'
+import { JobTeamPanel, JobTeamSummary } from '@/components/domain/JobTeamPanel'
+import { JobProcurementPanel } from '@/components/domain/JobProcurementPanel'
+import { primaryFieldLead } from '@/domain/jobs'
 import { TEMPERATURE_LABEL } from '@/domain/types'
 import {
   Avatar,
@@ -72,6 +88,7 @@ import {
   Modal,
   SectionTitle,
   Select,
+  Sheet,
   StageChip,
   Textarea,
 } from '@/components/ui'
@@ -115,6 +132,7 @@ export function OpportunityRecord() {
   const [messageChannel, setMessageChannel] = useState<'email' | 'sms'>('email')
   const [messageSubject, setMessageSubject] = useState('')
   const [messageBody, setMessageBody] = useState('')
+  const [teamSheetOpen, setTeamSheetOpen] = useState(false)
 
   const opp = s.opportunities.find((o) => o.id === id)
 
@@ -634,23 +652,37 @@ export function OpportunityRecord() {
 
             {/* == Job tab == */}
             <div className={tab === 'job' ? 'space-y-6' : 'hidden'}>
+            <JobWhatsNext
+              job={job}
+              opportunityId={opp.id}
+              contactName={account?.contactName}
+            />
+
             <Section
               id="job"
-              title="Job and crew"
+              title="Job status"
               action={
-                <Link to="/jobs">
-                  <Button size="sm">
-                    <HardHat size={12} />
-                    Open Jobs board
-                  </Button>
-                </Link>
+                <div className="flex flex-wrap gap-2">
+                  <Link to="/schedule">
+                    <Button size="sm">
+                      <CalendarDays size={12} />
+                      Schedule
+                    </Button>
+                  </Link>
+                  <Link to="/jobs">
+                    <Button size="sm">
+                      <HardHat size={12} />
+                      Jobs board
+                    </Button>
+                  </Link>
+                </div>
               }
             >
               {!job ? (
                 <Card>
                   <EmptyState
-                    title="Not scheduled"
-                    description="Awarded work appears on the Jobs board."
+                    title="No job yet"
+                    description="When this opportunity is awarded, a job is created at Scheduling Required."
                     action={
                       <Link to="/jobs">
                         <Button size="sm" variant="primary">
@@ -661,40 +693,72 @@ export function OpportunityRecord() {
                   />
                 </Card>
               ) : (
-                <Card className="p-4">
-                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                    <KeyValue label="Start">{format(new Date(job.start), 'd MMM')}</KeyValue>
-                    <KeyValue label="Finish">{format(new Date(job.end), 'd MMM')}</KeyValue>
+                <Card className="overflow-hidden border-strong">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-subtle bg-surface-inset px-4 py-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-primary">Job status</p>
+                      <Badge tone="brand">{JOB_STATUS_LABEL[job.status]}</Badge>
+                    </div>
+                    <p className="text-sm text-muted">
+                      Progress <span className="font-mono text-primary">{job.progress}%</span>
+                    </p>
+                  </div>
+
+                  <div className="flex gap-1 overflow-x-auto border-b border-subtle px-3 py-2 scrollbar-thin">
+                    {JOB_STATUSES.filter((status) => status !== 'on_hold').map((status) => {
+                      const idx = jobStatusIndex(status)
+                      const current = jobStatusIndex(job.status)
+                      const done = current > idx
+                      const active =
+                        job.status === status ||
+                        (job.status === 'on_hold' && status === 'in_progress')
+                      return (
+                        <div
+                          key={status}
+                          className={cn(
+                            'shrink-0 rounded-sm px-2 py-1 text-2xs font-medium',
+                            active
+                              ? 'bg-action text-action-fg'
+                              : done
+                                ? 'bg-success-soft text-success-text'
+                                : 'bg-surface-inset text-muted',
+                          )}
+                          title={JOB_STATUS_LABEL[status]}
+                        >
+                          {JOB_STATUS_LABEL[status]}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-4">
+                    <KeyValue label="Start">{format(new Date(job.start), 'd MMM yyyy')}</KeyValue>
+                    <KeyValue label="Finish">{format(new Date(job.end), 'd MMM yyyy')}</KeyValue>
                     <KeyValue label="Project manager">
                       {job.pmId ? userById[job.pmId]?.name : '—'}
                     </KeyValue>
-                    <KeyValue label="Crew leader">
-                      {job.crewLeaderId ? userById[job.crewLeaderId]?.name : '—'}
+                    <KeyValue label="Crew lead">
+                      {(() => {
+                        const leadId = primaryFieldLead(job)
+                        return leadId ? userById[leadId]?.name ?? '—' : 'Not assigned'
+                      })()}
                     </KeyValue>
                   </div>
 
-                  {job.crewIds.length > 0 && (
-                    <div className="mt-3 flex items-center gap-2 border-t border-subtle pt-3">
-                      <span className="text-sm text-muted">Crew</span>
-                      {job.crewIds.map((cid) => (
-                        <span key={cid} className="flex items-center gap-1.5">
-                          <Avatar name={userById[cid]?.name ?? ''} size={20} />
-                          <span className="text-sm text-secondary">{userById[cid]?.name}</span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="mt-3 border-t border-subtle pt-3">
+                  <div className="border-t border-subtle px-4 py-3">
                     <div className="mb-1.5 flex items-center justify-between text-sm">
                       <span className="text-muted">Progress</span>
                       <span className="font-mono text-primary tabular">{job.progress}%</span>
                     </div>
-                    <Meter value={job.progress} max={100} tone={job.progress === 100 ? 'success' : 'action'} />
+                    <Meter
+                      value={job.progress}
+                      max={100}
+                      tone={job.progress === 100 ? 'success' : 'action'}
+                    />
                   </div>
 
                   {job.dailyLogs.length > 0 && (
-                    <div className="mt-3 border-t border-subtle pt-3">
+                    <div className="border-t border-subtle px-4 py-3">
                       <p className="mb-1.5 text-2xs font-semibold tracking-wider text-muted uppercase">
                         Daily log
                       </p>
@@ -715,7 +779,63 @@ export function OpportunityRecord() {
               )}
             </Section>
 
-            <Section id="changes" title="Change orders and issues">
+            {job && (
+              <Section
+                id="team"
+                title="Job team and responsibilities"
+                subtitle="Assigned people only. Use Assign team to add or change responsibilities."
+                action={
+                  <Button size="sm" variant="primary" onClick={() => setTeamSheetOpen(true)}>
+                    <UserPlus size={12} />
+                    Assign team
+                  </Button>
+                }
+              >
+                <Card className="p-4">
+                  <JobTeamSummary
+                    job={job}
+                    onAssign={() => setTeamSheetOpen(true)}
+                  />
+                </Card>
+                <Sheet
+                  open={teamSheetOpen}
+                  onClose={() => setTeamSheetOpen(false)}
+                  title="Job team and responsibilities"
+                  subtitle={`${format(new Date(job.start), 'MMM d')} – ${format(new Date(job.end), 'MMM d, yyyy')}`}
+                  footer={
+                    <Button variant="primary" onClick={() => setTeamSheetOpen(false)}>
+                      Done
+                    </Button>
+                  }
+                >
+                  <JobTeamPanel job={job} locationId={opp.locationId} />
+                </Sheet>
+              </Section>
+            )}
+
+            {job && (
+              <Section
+                id="job-procurement"
+                title="Procurement order"
+                subtitle="Create, submit, and track material fulfilment for this job without leaving the hub."
+                action={
+                  <Link to={`/opportunities/${opp.id}/procurement`}>
+                    <Button size="sm">
+                      <Boxes size={12} />
+                      Full order page
+                    </Button>
+                  </Link>
+                }
+              >
+                <JobProcurementPanel opportunityId={opp.id} />
+              </Section>
+            )}
+
+            <Section
+              id="changes"
+              title="Change orders and issues"
+              subtitle="Raise during install when scope, price, or schedule changes. Approved COs roll into the final invoice."
+            >
               <ChangeOrders opportunityId={opp.id} />
               <div className="mt-3">
                 <Issues opportunityId={opp.id} />
@@ -994,20 +1114,227 @@ export function OpportunityRecord() {
 
 /* ------------------------------------------------------------------------ */
 
+function JobWhatsNext({
+  job,
+  opportunityId,
+  contactName,
+}: {
+  job: Job | undefined
+  opportunityId: string
+  contactName?: string
+}) {
+  const next = jobWhatsNext(job, opportunityId, contactName)
+  if (!next) return null
+
+  return (
+    <Card className="border-(--accent-attention) bg-attention-soft/40 p-4">
+      <div className="flex items-start gap-3">
+        <Sparkles size={16} className="mt-0.5 shrink-0 text-attention-text" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-medium text-primary">What&apos;s next</p>
+            {job && <Badge tone="brand">{JOB_STATUS_LABEL[job.status]}</Badge>}
+          </div>
+          <p className="mt-0.5 text-sm text-secondary">{next.body}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {next.buttons.map((b) => (
+              <Link key={b.label} to={b.to}>
+                <Button size="sm" variant={b.primary ? 'primary' : 'secondary'}>
+                  {b.icon}
+                  {b.label}
+                  <ArrowRight size={12} />
+                </Button>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function jobWhatsNext(
+  job: Job | undefined,
+  opportunityId: string,
+  contactName?: string,
+): {
+  body: string
+  buttons: { label: string; to: string; primary?: boolean; icon?: ReactNode }[]
+} | null {
+  const jobTab = (hash?: string) =>
+    `/opportunities/${opportunityId}?tab=job${hash ? `#${hash}` : ''}`
+
+  if (!job) {
+    return {
+      body: 'Award this opportunity to create a job. Work then starts at Scheduling Required.',
+      buttons: [
+        { label: 'Jobs board', to: '/jobs', primary: true, icon: <HardHat size={12} /> },
+      ],
+    }
+  }
+
+  switch (job.status) {
+    case 'scheduling_required':
+      return {
+        body: 'Pick install dates and assign the crew on Schedule. Crew is set there, not only on this tab.',
+        buttons: [
+          { label: 'Open Schedule', to: '/schedule', primary: true, icon: <CalendarDays size={12} /> },
+          { label: 'Jobs board', to: '/jobs', icon: <HardHat size={12} /> },
+        ],
+      }
+    case 'scheduled':
+      return {
+        body: 'Job is on the calendar. Order materials next so the crew is not waiting on procurement.',
+        buttons: [
+          {
+            label: 'Procurement',
+            to: jobTab('job-procurement'),
+            primary: true,
+            icon: <Boxes size={12} />,
+          },
+          { label: 'Purchasing', to: '/purchasing', icon: <Boxes size={12} /> },
+        ],
+      }
+    case 'procurement_required':
+      return {
+        body: 'Build and send the materials order for this job.',
+        buttons: [
+          {
+            label: 'Build order',
+            to: jobTab('job-procurement'),
+            primary: true,
+            icon: <Boxes size={12} />,
+          },
+          { label: 'Purchasing board', to: '/purchasing' },
+        ],
+      }
+    case 'procurement_ordered':
+      return {
+        body: 'Materials are on order. Track fulfilment here, then complete prep so the job can move to Ready to start.',
+        buttons: [
+          {
+            label: 'Track order',
+            to: jobTab('job-procurement'),
+            primary: true,
+            icon: <Boxes size={12} />,
+          },
+          {
+            label: 'Prep checklist',
+            to: `/opportunities/${opportunityId}?tab=documents`,
+            icon: <ClipboardCheck size={12} />,
+          },
+        ],
+      }
+    case 'ready_to_start':
+      return {
+        body: 'Crew and materials are ready. Open Field when install day arrives.',
+        buttons: [
+          {
+            label: 'Field today',
+            to: `/field/job/${opportunityId}`,
+            primary: true,
+            icon: <HardHat size={12} />,
+          },
+          {
+            label: 'Prep checklist',
+            to: `/opportunities/${opportunityId}?tab=documents`,
+            icon: <ClipboardCheck size={12} />,
+          },
+        ],
+      }
+    case 'in_progress':
+      return {
+        body: 'Install is underway. Log progress in Field; raise change orders here if scope or price shifts.',
+        buttons: [
+          {
+            label: 'Open in Field',
+            to: `/field/job/${opportunityId}`,
+            primary: true,
+            icon: <HardHat size={12} />,
+          },
+          {
+            label: 'Change orders',
+            to: jobTab('changes'),
+            icon: <AlertTriangle size={12} />,
+          },
+        ],
+      }
+    case 'on_hold':
+      return {
+        body: 'Job is on hold. Resolve the blocker, then resume from Field or the Jobs board.',
+        buttons: [
+          { label: 'Jobs board', to: '/jobs', primary: true, icon: <HardHat size={12} /> },
+          { label: 'Open in Field', to: `/field/job/${opportunityId}` },
+        ],
+      }
+    case 'completion_review':
+      return {
+        body: `Finish closeout checklist and send customer sign-off${contactName ? ` to ${contactName}` : ''}.`,
+        buttons: [
+          {
+            label: 'Closeout checklist',
+            to: jobTab('closeout'),
+            primary: true,
+            icon: <ClipboardCheck size={12} />,
+          },
+          {
+            label: 'Sign-off link',
+            to: `/signoff/${opportunityId}`,
+            icon: <PenLine size={12} />,
+          },
+        ],
+      }
+    case 'completed':
+      return {
+        body: 'Work is complete and signed off. Move the job to ready to invoice when finance can bill.',
+        buttons: [
+          { label: 'Finance', to: '/finance', primary: true, icon: <Receipt size={12} /> },
+          { label: 'Jobs board', to: '/jobs', icon: <HardHat size={12} /> },
+        ],
+      }
+    case 'ready_to_invoice':
+      return {
+        body: 'Create and send the invoice from Finance. Approved change orders should already be included.',
+        buttons: [
+          { label: 'Open Finance', to: '/finance', primary: true, icon: <Receipt size={12} /> },
+          { label: 'Invoice section', to: jobTab('invoice') },
+        ],
+      }
+    case 'invoiced':
+      return {
+        body: 'Invoice is out. Track payment from Finance or the payment link below.',
+        buttons: [
+          { label: 'Finance', to: '/finance', primary: true, icon: <Receipt size={12} /> },
+          { label: 'Payment section', to: jobTab('invoice') },
+        ],
+      }
+    case 'paid':
+      return {
+        body: 'Job is paid and closed. No further action on this opportunity.',
+        buttons: [{ label: 'Jobs board', to: '/jobs', icon: <HardHat size={12} /> }],
+      }
+    default:
+      return null
+  }
+}
+
 function Section({
   id,
   title,
+  subtitle,
   action,
   children,
 }: {
   id: string
   title: string
-  action?: React.ReactNode
-  children: React.ReactNode
+  subtitle?: string
+  action?: ReactNode
+  children: ReactNode
 }) {
   return (
     <section id={id} className="scroll-mt-4">
       <SectionTitle actions={action}>{title}</SectionTitle>
+      {subtitle && <p className="mb-3 -mt-1 text-sm text-muted">{subtitle}</p>}
       {children}
     </section>
   )

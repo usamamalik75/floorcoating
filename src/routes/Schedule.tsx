@@ -12,14 +12,13 @@ import { AlertTriangle, BellRing, ChevronLeft, ChevronRight, Clock3, HardHat, Pa
 import { TODAY, iso } from '@/data/seed'
 import { money, useStore } from '@/store/useStore'
 import { STAGE_BY_ID } from '@/domain/stages'
-import { JOB_ROLE_LABEL, type JobRole } from '@/domain/types'
-import { jobTeam, membersWithRole, primaryFieldLead } from '@/domain/jobs'
+import { JobTeamPanel } from '@/components/domain/JobTeamPanel'
 import { Avatar, Badge, Button, Card, CardHeader, EmptyState, Sheet } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useLocations, useUserDirectory, useUsers } from '@/store/selectors'
+import { primaryFieldLead } from '@/domain/jobs'
 
 const WEEKS = 3
-const JOB_ROLES = Object.keys(JOB_ROLE_LABEL) as JobRole[]
 
 /** Small status glyph on the calendar bar, so procurement risk is visible at a glance. */
 function ProcurementGlyph({ opportunityId }: { opportunityId: string }) {
@@ -329,52 +328,7 @@ export function Schedule() {
       >
         {selected && (
           <div className='space-y-4'>
-            <div>
-              <p className='mb-1.5 flex items-center gap-1.5 text-2xs font-semibold tracking-wider text-muted uppercase'>
-                <UserPlus size={11} /> Job team and responsibilities
-              </p>
-              <p className='mb-3 text-sm text-muted'>
-                Assign several people to a responsibility, or give one person several roles.
-              </p>
-              <div className='space-y-3'>
-                {JOB_ROLES.map((role) => {
-                  const assigned = membersWithRole(selected.job, role)
-                  return (
-                    <div key={role} className='rounded-md border border-subtle bg-surface-raised p-2.5'>
-                      <div className='mb-2 flex items-center justify-between gap-2'>
-                        <span className='text-sm font-semibold text-primary'>{JOB_ROLE_LABEL[role]}</span>
-                        <Badge tone={assigned.length ? 'brand' : 'neutral'}>{assigned.length} assigned</Badge>
-                      </div>
-                      <div className='flex flex-wrap gap-1.5'>
-                        {users.filter((u) => !u.locationId || u.locationId === selected.opp!.locationId).map((u) => {
-                          const on = assigned.some((a) => a.userId === u.id)
-                          return (
-                            <button
-                              key={u.id}
-                              type='button'
-                              onClick={() => {
-                                const team = jobTeam(selected.job)
-                                updateJob(selected.job.id, {
-                                  team: on
-                                    ? team.filter((a) => !(a.userId === u.id && a.role === role))
-                                    : [...team, { userId: u.id, role }],
-                                })
-                              }}
-                              className={cn(
-                                'flex items-center gap-1.5 rounded-full border px-2 py-1 text-sm',
-                                on ? 'border-(--action-primary) bg-action-soft text-brand' : 'border-subtle text-secondary',
-                              )}
-                            >
-                              <Avatar name={u.name} size={16} /> {u.name}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
+            <JobTeamPanel job={selected.job} locationId={selected.opp!.locationId} />
             <div className='hidden'>
 
             <div>
