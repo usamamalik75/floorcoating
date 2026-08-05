@@ -244,8 +244,45 @@ export interface Location {
   ownerId: string
   openedAt: string
   isCorporate: boolean
-  /** Location-specific price multiplier applied over company administrator base pricing. */
+  /** Location-specific price multiplier applied over franchise base pricing. */
   priceMultiplier: number
+  /** Franchise that owns this branch. */
+  franchiseId: string
+}
+
+/**
+ * Org access (who can switch franchises / manage branches) — separate from
+ * operational Role (sales, pm, etc.). Null = team member (ops role only).
+ *
+ * Franchises are white-label workspaces under Floorcoating
+ * (e.g. abc.floorcoating.com).
+ */
+export type OrgRole =
+  | 'platform_admin'
+  | 'regional_admin'
+  | 'franchise_admin'
+  | 'manager'
+
+export const ORG_ROLE_LABEL: Record<OrgRole, string> = {
+  platform_admin: 'Platform Admin',
+  regional_admin: 'Regional Admin',
+  franchise_admin: 'Franchise Admin',
+  manager: 'Manager',
+}
+
+/** White-label franchise workspace under Floorcoating (subdomain.floorcoating.com). */
+export interface Franchise {
+  id: string
+  name: string
+  /** Subdomain prefix, e.g. "abc" → abc.floorcoating.com */
+  subdomain: string
+  status: 'active' | 'suspended'
+  /** Floorcoating platform — can open any franchise. */
+  isPlatformOwner: boolean
+  /** Regional parent — can open self + child franchises. */
+  isMasterRegion: boolean
+  /** Child franchise under a regional parent. */
+  parentFranchiseId: string | null
 }
 
 export interface User {
@@ -253,7 +290,14 @@ export interface User {
   name: string
   role: Role
   title: string
+  /** Primary branch (legacy single assignment). */
   locationId: string | null
+  /** Home franchise for this user. */
+  franchiseId: string
+  /** Hierarchy access role. Null = ops-only team member. */
+  orgRole: OrgRole | null
+  /** Extra branches for managers (defaults to [locationId] when set). */
+  branchIds?: string[]
 }
 
 export interface Account {

@@ -4,6 +4,7 @@ import type {
   Artifact,
   ChangeOrder,
   ChecklistInstance,
+  Franchise,
   Estimate,
   Invoice,
   Issue,
@@ -34,7 +35,50 @@ export const iso = (offsetDays: number, hour = 9): string => {
 }
 
 /* ========================================================================== */
-/* Locations — three operating locations                        */
+/* Franchises — platform → region → white-label (subdomain.floorcoating.com)   */
+/* ========================================================================== */
+
+export const FRANCHISES: Franchise[] = [
+  {
+    id: 'co_platform',
+    name: 'Floorcoating',
+    subdomain: 'platform',
+    status: 'active',
+    isPlatformOwner: true,
+    isMasterRegion: false,
+    parentFranchiseId: null,
+  },
+  {
+    id: 'co_se',
+    name: 'Southeast Region',
+    subdomain: 'southeast',
+    status: 'active',
+    isPlatformOwner: false,
+    isMasterRegion: true,
+    parentFranchiseId: null,
+  },
+  {
+    id: 'co_fcg',
+    name: 'Floor Coatings Group',
+    subdomain: 'fcg',
+    status: 'active',
+    isPlatformOwner: false,
+    isMasterRegion: false,
+    parentFranchiseId: null,
+  },
+  {
+    id: 'co_atl',
+    name: 'ABC Coatings',
+    subdomain: 'abc',
+    status: 'active',
+    isPlatformOwner: false,
+    isMasterRegion: false,
+    parentFranchiseId: 'co_se',
+  },
+]
+
+/* ========================================================================== */
+/* Branches (locations) — owned by a franchise                                 */
 /* ========================================================================== */
 
 export const LOCATIONS: Location[] = [
@@ -48,6 +92,7 @@ export const LOCATIONS: Location[] = [
     openedAt: '2004-03-01',
     isCorporate: true,
     priceMultiplier: 1.0,
+    franchiseId: 'co_fcg',
   },
   {
     id: 'loc_atl',
@@ -59,6 +104,7 @@ export const LOCATIONS: Location[] = [
     openedAt: '2025-09-15',
     isCorporate: false,
     priceMultiplier: 1.06,
+    franchiseId: 'co_atl',
   },
   {
     id: 'loc_den',
@@ -70,41 +116,95 @@ export const LOCATIONS: Location[] = [
     openedAt: '2026-02-02',
     isCorporate: false,
     priceMultiplier: 1.12,
+    franchiseId: 'co_fcg',
   },
 ]
 
 export const LOCATION_BY_ID = Object.fromEntries(LOCATIONS.map((l) => [l.id, l]))
 
 /* ========================================================================== */
-/* People — all seven user types from the brief                               */
+/* People — org roles + operational roles                                     */
 /* ========================================================================== */
 
 export const USERS: User[] = [
-  { id: 'u_nic', name: 'Nic Ugolini', role: 'admin', title: 'Platform Administrator', locationId: null },
+  {
+    id: 'u_nic',
+    name: 'Nic Ugolini',
+    role: 'admin',
+    title: 'Platform Administrator',
+    locationId: null,
+    franchiseId: 'co_platform',
+    orgRole: 'platform_admin',
+  },
+  {
+    id: 'u_maria',
+    name: 'Maria Chen',
+    role: 'admin',
+    title: 'Regional Administrator — Southeast',
+    locationId: null,
+    franchiseId: 'co_se',
+    orgRole: 'regional_admin',
+  },
+  {
+    id: 'u_jordan',
+    name: 'Jordan Blake',
+    role: 'owner',
+    title: 'Franchise Admin — Floor Coatings Group',
+    locationId: null,
+    franchiseId: 'co_fcg',
+    orgRole: 'franchise_admin',
+  },
 
-  { id: 'u_dennis', name: 'Dennis Frost', role: 'owner', title: 'Owner — Chicago', locationId: 'loc_chi' },
-  { id: 'u_marcus', name: 'Marcus Webb', role: 'estimator', title: 'Head of Projects', locationId: 'loc_chi' },
-  { id: 'u_bj', name: 'BJ Marsh', role: 'sales', title: 'Sales Representative', locationId: 'loc_chi' },
-  { id: 'u_carla', name: 'Carla Nyx', role: 'sales', title: 'Sales Representative', locationId: 'loc_chi' },
-  { id: 'u_dana', name: 'Dana Cole', role: 'pm', title: 'Project Manager', locationId: 'loc_chi' },
-  { id: 'u_keith', name: 'Keith Alvarez', role: 'crew_leader', title: 'Crew Leader', locationId: 'loc_chi' },
-  { id: 'u_luis', name: 'Luis Ortega', role: 'tech', title: 'Installer', locationId: 'loc_chi' },
-  { id: 'u_ray', name: 'Ray Bunting', role: 'tech', title: 'Installer', locationId: 'loc_chi' },
-  { id: 'u_gina', name: 'Gina Petrov', role: 'accounting', title: 'Accounting Manager', locationId: 'loc_chi' },
+  {
+    id: 'u_dennis',
+    name: 'Dennis Frost',
+    role: 'owner',
+    title: 'Manager — Chicago',
+    locationId: 'loc_chi',
+    franchiseId: 'co_fcg',
+    orgRole: 'manager',
+    branchIds: ['loc_chi'],
+  },
+  { id: 'u_marcus', name: 'Marcus Webb', role: 'estimator', title: 'Head of Projects', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
+  { id: 'u_bj', name: 'BJ Marsh', role: 'sales', title: 'Sales Representative', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
+  { id: 'u_carla', name: 'Carla Nyx', role: 'sales', title: 'Sales Representative', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
+  { id: 'u_dana', name: 'Dana Cole', role: 'pm', title: 'Project Manager', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
+  { id: 'u_keith', name: 'Keith Alvarez', role: 'crew_leader', title: 'Crew Leader', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
+  { id: 'u_luis', name: 'Luis Ortega', role: 'tech', title: 'Installer', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
+  { id: 'u_ray', name: 'Ray Bunting', role: 'tech', title: 'Installer', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
+  { id: 'u_gina', name: 'Gina Petrov', role: 'accounting', title: 'Accounting Manager', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
 
-  { id: 'u_tanya', name: 'Tanya Brooks', role: 'owner', title: 'Owner — Atlanta', locationId: 'loc_atl' },
-  { id: 'u_priya', name: 'Priya Raman', role: 'estimator', title: 'Head of Projects', locationId: 'loc_atl' },
-  { id: 'u_devin', name: 'Devin Hall', role: 'sales', title: 'Sales Representative', locationId: 'loc_atl' },
-  { id: 'u_omar', name: 'Omar Reyes', role: 'pm', title: 'Project Manager', locationId: 'loc_atl' },
-  { id: 'u_terrell', name: 'Terrell Woods', role: 'crew_leader', title: 'Crew Leader', locationId: 'loc_atl' },
-  { id: 'u_ana', name: 'Ana Duarte', role: 'tech', title: 'Installer', locationId: 'loc_atl' },
-  { id: 'u_bea', name: 'Bea Lomax', role: 'accounting', title: 'Accounting', locationId: 'loc_atl' },
+  {
+    id: 'u_tanya',
+    name: 'Tanya Brooks',
+    role: 'owner',
+    title: 'Manager — Atlanta',
+    locationId: 'loc_atl',
+    franchiseId: 'co_atl',
+    orgRole: 'manager',
+    branchIds: ['loc_atl'],
+  },
+  { id: 'u_priya', name: 'Priya Raman', role: 'estimator', title: 'Head of Projects', locationId: 'loc_atl', franchiseId: 'co_atl', orgRole: null },
+  { id: 'u_devin', name: 'Devin Hall', role: 'sales', title: 'Sales Representative', locationId: 'loc_atl', franchiseId: 'co_atl', orgRole: null },
+  { id: 'u_omar', name: 'Omar Reyes', role: 'pm', title: 'Project Manager', locationId: 'loc_atl', franchiseId: 'co_atl', orgRole: null },
+  { id: 'u_terrell', name: 'Terrell Woods', role: 'crew_leader', title: 'Crew Leader', locationId: 'loc_atl', franchiseId: 'co_atl', orgRole: null },
+  { id: 'u_ana', name: 'Ana Duarte', role: 'tech', title: 'Installer', locationId: 'loc_atl', franchiseId: 'co_atl', orgRole: null },
+  { id: 'u_bea', name: 'Bea Lomax', role: 'accounting', title: 'Accounting', locationId: 'loc_atl', franchiseId: 'co_atl', orgRole: null },
 
-  { id: 'u_sam', name: 'Sam Kessler', role: 'owner', title: 'Owner — Denver', locationId: 'loc_den' },
-  { id: 'u_grant', name: 'Grant Whitfield', role: 'estimator', title: 'Head of Projects', locationId: 'loc_den' },
-  { id: 'u_nina', name: 'Nina Alvarez', role: 'sales', title: 'Sales Representative', locationId: 'loc_den' },
-  { id: 'u_hector', name: 'Hector Nunez', role: 'crew_leader', title: 'Crew Leader', locationId: 'loc_den' },
-  { id: 'u_pat', name: 'Pat Osei', role: 'pm', title: 'Project Manager', locationId: 'loc_den' },
+  {
+    id: 'u_sam',
+    name: 'Sam Kessler',
+    role: 'owner',
+    title: 'Manager — Denver',
+    locationId: 'loc_den',
+    franchiseId: 'co_fcg',
+    orgRole: 'manager',
+    branchIds: ['loc_den'],
+  },
+  { id: 'u_grant', name: 'Grant Whitfield', role: 'estimator', title: 'Head of Projects', locationId: 'loc_den', franchiseId: 'co_fcg', orgRole: null },
+  { id: 'u_nina', name: 'Nina Alvarez', role: 'sales', title: 'Sales Representative', locationId: 'loc_den', franchiseId: 'co_fcg', orgRole: null },
+  { id: 'u_hector', name: 'Hector Nunez', role: 'crew_leader', title: 'Crew Leader', locationId: 'loc_den', franchiseId: 'co_fcg', orgRole: null },
+  { id: 'u_pat', name: 'Pat Osei', role: 'pm', title: 'Project Manager', locationId: 'loc_den', franchiseId: 'co_fcg', orgRole: null },
 ]
 
 export const USER_BY_ID = Object.fromEntries(USERS.map((u) => [u.id, u]))

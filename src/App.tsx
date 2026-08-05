@@ -21,12 +21,23 @@ import { LeadIntake } from '@/routes/LeadIntake'
 import { FieldJob, FieldToday, FieldVisit } from '@/routes/Field'
 import { CustomerProposal, CustomerSignoff } from '@/routes/CustomerProposal'
 import { CustomerPayment } from '@/routes/CustomerPayment'
-import { StyleGuide } from '@/routes/StyleGuide'
 import { Catalogue } from '@/routes/Catalogue'
 import { Purchasing } from '@/routes/Purchasing'
 import { Communications } from '@/routes/Communications'
 import { Admin } from '@/routes/Admin'
 import { Prospecting } from '@/routes/Prospecting'
+import { canAccessAdmin } from '@/domain/org'
+import { homePathForUser } from '@/domain/navAccess'
+import { useViewer } from '@/store/selectors'
+
+function Home() {
+  const viewer = useViewer()
+  if (!viewer) return <Dashboard />
+  if (canAccessAdmin(viewer)) return <Navigate to="/admin" replace />
+  const home = homePathForUser(viewer)
+  if (home !== '/') return <Navigate to={home} replace />
+  return <Dashboard />
+}
 
 export function App() {
   return (
@@ -37,7 +48,7 @@ export function App() {
         <Route path="/pay/:token" element={<CustomerPayment />} />
 
         <Route element={<AppShell />}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<Home />} />
           <Route path="/sales" element={<Sales />} />
           <Route path="/site-visits" element={<SiteVisits />} />
           <Route path="/estimates" element={<Estimates />} />
@@ -68,11 +79,9 @@ export function App() {
           <Route path="/field" element={<FieldToday />} />
           <Route path="/field/visit/:id" element={<FieldVisit />} />
           <Route path="/field/job/:id" element={<FieldJob />} />
-          <Route path="/styleguide" element={<StyleGuide />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </Router>
   )
 }
-

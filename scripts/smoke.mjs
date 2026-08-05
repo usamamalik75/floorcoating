@@ -18,7 +18,6 @@ const ROUTES = [
   '/settings',
   '/intake',
   '/schedule',
-  '/styleguide',
   '/field',
   // legacy redirects
   '/pipeline',

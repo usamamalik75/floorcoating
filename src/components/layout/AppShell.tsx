@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
 import {
   BookOpen,
   Building2,
@@ -10,7 +10,6 @@ import {
   KanbanSquare,
   LayoutDashboard,
   MapPin,
-  Palette,
   Receipt,
   Ruler,
   Settings2,
@@ -26,55 +25,63 @@ import { useStore } from '@/store/useStore'
 import { useViewer } from '@/store/selectors'
 import { DemoBar } from './DemoBar'
 import { Logo } from './Logo'
-import type { Role } from '@/domain/types'
+import { canAccessAdmin } from '@/domain/org'
+import { canAccessNavKey, canAccessPath, homePathForUser, type NavKey } from '@/domain/navAccess'
 
 interface NavItem {
   to: string
   label: string
   icon: LucideIcon
-  roles?: Role[]
+  key: NavKey
 }
 
-const OFFICE: Role[] = ['admin', 'owner', 'sales', 'estimator', 'pm', 'accounting']
-
-/** Core journey — top of the left menu, in process order. */
-const PRIMARY: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/prospecting', label: 'Prospecting', icon: Search, roles: ['admin', 'owner', 'sales'] },
-  { to: '/sales', label: 'Sales', icon: KanbanSquare, roles: OFFICE },
-  { to: '/site-visits', label: 'Visits & Calls', icon: MapPin, roles: [...OFFICE, 'crew_leader'] },
-  { to: '/estimates', label: 'Estimates', icon: Ruler, roles: ['admin', 'owner', 'sales', 'estimator', 'pm'] },
-  { to: '/proposals', label: 'Proposals', icon: FileText, roles: ['admin', 'owner', 'sales', 'estimator'] },
-  { to: '/jobs', label: 'Jobs', icon: ClipboardList, roles: ['admin', 'owner', 'pm', 'estimator', 'crew_leader', 'accounting'] },
-  { to: '/schedule', label: 'Schedule', icon: CalendarDays, roles: [...OFFICE, 'crew_leader'] },
-  { to: '/purchasing', label: 'Purchasing', icon: ShoppingCart, roles: ['admin', 'owner', 'pm', 'accounting'] },
-  { to: '/catalog', label: 'Products & Services', icon: BookOpen, roles: OFFICE },
-  { to: '/customers', label: 'Customers', icon: Building2, roles: OFFICE },
+const ADMIN: NavItem[] = [
+  { to: '/admin', label: 'Admin', icon: ShieldCheck, key: 'admin' },
+  { to: '/settings', label: 'Settings', icon: Settings2, key: 'settings' },
 ]
 
-/** Supporting modules — shown below the core journey. */
+const PRIMARY: NavItem[] = [
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard, key: 'dashboard' },
+  { to: '/prospecting', label: 'Prospecting', icon: Search, key: 'prospecting' },
+  { to: '/sales', label: 'Sales', icon: KanbanSquare, key: 'sales' },
+  { to: '/site-visits', label: 'Visits & Calls', icon: MapPin, key: 'site_visits' },
+  { to: '/estimates', label: 'Estimates', icon: Ruler, key: 'estimates' },
+  { to: '/proposals', label: 'Proposals', icon: FileText, key: 'proposals' },
+  { to: '/jobs', label: 'Jobs', icon: ClipboardList, key: 'jobs' },
+  { to: '/schedule', label: 'Schedule', icon: CalendarDays, key: 'schedule' },
+  { to: '/purchasing', label: 'Purchasing', icon: ShoppingCart, key: 'purchasing' },
+  { to: '/catalog', label: 'Products & Services', icon: BookOpen, key: 'catalog' },
+  { to: '/customers', label: 'Customers', icon: Building2, key: 'customers' },
+]
+
 const SECONDARY: NavItem[] = [
-  { to: '/field', label: 'Field execution', icon: HardHat },
-  { to: '/communications', label: 'Communications', icon: MessagesSquare, roles: OFFICE },
-  { to: '/finance', label: 'Finance', icon: Receipt, roles: ['admin', 'owner', 'accounting', 'pm'] },
-  { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['admin', 'owner'] },
-  { to: '/admin', label: 'Admin', icon: ShieldCheck, roles: ['admin', 'owner'] },
-  { to: '/settings', label: 'Settings', icon: Settings2, roles: ['admin', 'owner'] },
+  { to: '/field', label: 'Field execution', icon: HardHat, key: 'field' },
+  { to: '/communications', label: 'Communications', icon: MessagesSquare, key: 'communications' },
+  { to: '/finance', label: 'Finance', icon: Receipt, key: 'finance' },
+  { to: '/reports', label: 'Reports', icon: BarChart3, key: 'reports' },
 ]
 
 export function AppShell() {
   const theme = useStore((s) => s.theme)
-  const density = useStore((s) => s.density)
   const viewer = useViewer()
   const { pathname } = useLocation()
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
-    document.documentElement.dataset.density = density
-  }, [theme, density])
+    document.documentElement.dataset.density = 'comfortable'
+  }, [theme])
 
   const visible = (items: NavItem[]) =>
-    items.filter((i) => !i.roles || (viewer && i.roles.includes(viewer.role)))
+    items.filter((i) => canAccessNavKey(viewer, i.key))
+
+  const showAdminNav = canAccessAdmin(viewer)
+  const primary = visible(PRIMARY)
+  const secondary = visible(SECONDARY)
+  const adminItems = visible(ADMIN)
+
+  if (viewer && !canAccessPath(viewer, pathname)) {
+    return <Navigate to={homePathForUser(viewer)} replace />
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -84,17 +91,15 @@ export function AppShell() {
         </div>
 
         <div className="flex flex-1 flex-col py-3">
-          <NavGroup items={visible(PRIMARY)} pathname={pathname} />
-          <NavGroup title="More" items={visible(SECONDARY)} pathname={pathname} />
-        </div>
-
-        <div className="mt-auto border-t border-subtle px-2 py-2">
-          <NavGroup items={[{ to: '/styleguide', label: 'Design System', icon: Palette }]} pathname={pathname} />
-          <p className="px-2.5 pt-2 text-2xs leading-relaxed text-muted">
-            Prototype · mock data
-            <br />
-            Not connected to production systems
-          </p>
+          {showAdminNav && adminItems.length > 0 && (
+            <NavGroup title="Administration" items={adminItems} pathname={pathname} />
+          )}
+          <NavGroup
+            title={showAdminNav ? 'Operations' : undefined}
+            items={primary}
+            pathname={pathname}
+          />
+          <NavGroup title="More" items={secondary} pathname={pathname} />
         </div>
       </aside>
 

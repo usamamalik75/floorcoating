@@ -85,22 +85,33 @@ export function useUserDirectory() {
 export function useScopedOpportunities() {
   const opportunities = useStore((s) => s.opportunities)
   const locationFilter = useStore((s) => s.locationFilter)
+  const activeFranchiseId = useStore((s) => s.activeFranchiseId)
+  const locations = useStore((s) => s.locations)
   const viewer = useViewer()
   return useMemo(() => {
-    let list = opportunities
+    const branchIds = new Set(
+      locations.filter((l) => l.franchiseId === activeFranchiseId).map((l) => l.id),
+    )
+    let list = opportunities.filter((o) => branchIds.has(o.locationId))
     if (locationFilter !== 'all') list = list.filter((o) => o.locationId === locationFilter)
     if (viewer?.role === 'sales') list = list.filter((o) => o.ownerId === viewer.id || o.stage === 'new_lead')
     return list
-  }, [opportunities, locationFilter, viewer])
+  }, [opportunities, locationFilter, viewer, activeFranchiseId, locations])
 }
 
 export function useScopedAccounts() {
   const accounts = useStore((s) => s.accounts)
   const locationFilter = useStore((s) => s.locationFilter)
-  return useMemo(
-    () => (locationFilter === 'all' ? accounts : accounts.filter((a) => a.locationId === locationFilter)),
-    [accounts, locationFilter],
-  )
+  const activeFranchiseId = useStore((s) => s.activeFranchiseId)
+  const locations = useStore((s) => s.locations)
+  return useMemo(() => {
+    const branchIds = new Set(
+      locations.filter((l) => l.franchiseId === activeFranchiseId).map((l) => l.id),
+    )
+    let list = accounts.filter((a) => branchIds.has(a.locationId))
+    if (locationFilter !== 'all') list = list.filter((a) => a.locationId === locationFilter)
+    return list
+  }, [accounts, locationFilter, activeFranchiseId, locations])
 }
 
 /** Inbound routing: match the lead's zip prefix to a territory. */

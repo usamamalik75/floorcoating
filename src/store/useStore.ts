@@ -10,6 +10,7 @@ import type {
   CommunicationChannel,
   CommunicationTemplate,
   CommunicationThread,
+  Franchise,
   Estimate,
   Invoice,
   Issue,
@@ -35,6 +36,7 @@ import type {
   ScopeExtraction,
 } from '@/domain/types'
 import { ROLE_LABEL, visitVocab, withVisitVocab } from '@/domain/types'
+import { defaultOrgRoleFromRole, normalizeOrgRole } from '@/domain/org'
 import { WORKSPACE_TEMPLATE, type WorkspaceTemplate } from '@/config/workspace'
 import { CHECKLIST_TEMPLATES, templateForStage } from '@/data/checklists'
 import { PRICE_BOOK, PROPOSAL_TEMPLATES } from '@/data/priceBook'
@@ -56,6 +58,7 @@ import {
   ARTIFACTS,
   CHANGE_ORDERS,
   CHECKLIST_INSTANCES,
+  FRANCHISES,
   ESTIMATES,
   INVOICES,
   ISSUES,
@@ -137,6 +140,7 @@ interface State {
   issues: Issue[]
   users: User[]
   locations: Location[]
+  franchises: Franchise[]
   workspaceTemplate: WorkspaceTemplate
   siteVisitForms: SiteVisitForm[]
   checklistTemplates: ChecklistTemplate[]
@@ -151,15 +155,18 @@ interface State {
   prospectRequests: ProspectRequest[]
 
   viewerId: string
+  activeFranchiseId: string
   locationFilter: string | 'all'
   density: 'comfortable' | 'field'
   theme: 'light' | 'dark'
 
   setViewer: (id: string) => void
+  setActiveFranchiseId: (id: string) => void
   setLocationFilter: (id: string | 'all') => void
   setDensity: (d: 'comfortable' | 'field') => void
   setTheme: (t: 'light' | 'dark') => void
   upsertUser: (user: User) => void
+  upsertFranchise: (franchise: Franchise) => void
 
   moveStage: (opportunityId: string, to: StageId, meta?: MoveMeta) => void
   setJobStatus: (opportunityId: string, status: JobStatus) => void
@@ -358,6 +365,7 @@ const initial = () => ({
   issues: structuredClone(ISSUES),
   users: structuredClone(USERS),
   locations: structuredClone(LOCATIONS),
+  franchises: structuredClone(FRANCHISES),
   workspaceTemplate: structuredClone(WORKSPACE_TEMPLATE),
   siteVisitForms: structuredClone(SITE_VISIT_FORMS),
   checklistTemplates: structuredClone(CHECKLIST_TEMPLATES),
@@ -370,6 +378,11 @@ const initial = () => ({
   communicationTemplates: createCommunicationTemplates(),
   paymentRequests: [],
   prospectRequests: createProspectRequests(),
+  viewerId: 'u_nic',
+  activeFranchiseId: 'co_fcg',
+  locationFilter: 'all' as const,
+  density: 'comfortable' as const,
+  theme: 'light' as const,
 })
 
 /**
@@ -378,24 +391,40 @@ const initial = () => ({
  * seed invalidates it and "Reset demo" always returns to the story's start.
  */
 const STORAGE_KEY = 'fcg-prototype'
-const STORAGE_VERSION = 17
+const STORAGE_VERSION = 21
 
 const createState: StateCreator<State> = (set, get) => ({
   ...initial(),
 
-  viewerId: 'u_nic',
-  locationFilter: 'all',
-  density: 'comfortable',
-  theme: 'light',
-
   setViewer: (id) => {
     const user = get().users.find((u) => u.id === id)
+    if (!user) {
+      set({ viewerId: id })
+      return
+    }
+    const canSeeAllBranches =
+      user.orgRole === 'platform_admin'
+      || user.orgRole === 'regional_admin'
+      || user.orgRole === 'franchise_admin'
+      || user.role === 'admin'
     set({
       viewerId: id,
-      // Team members are scoped to their location; administrators can view all locations.
-      locationFilter: user?.locationId ?? 'all',
-      // Field roles land in the field-density experience automatically.
-      density: user?.role === 'tech' || user?.role === 'crew_leader' ? 'field' : 'comfortable',
+      activeFranchiseId: user.franchiseId,
+      locationFilter: canSeeAllBranches ? 'all' : (user.locationId ?? 'all'),
+      density: 'comfortable',
+    })
+  },
+  setActiveFranchiseId: (id) => {
+    const branches = get().locations.filter((l) => l.franchiseId === id)
+    const user = get().users.find((u) => u.id === get().viewerId)
+    const canSeeAll =
+      user?.orgRole === 'platform_admin'
+      || user?.orgRole === 'regional_admin'
+      || user?.orgRole === 'franchise_admin'
+      || user?.role === 'admin'
+    set({
+      activeFranchiseId: id,
+      locationFilter: canSeeAll ? 'all' : (user?.locationId && branches.some((b) => b.id === user.locationId) ? user.locationId : (branches[0]?.id ?? 'all')),
     })
   },
   setLocationFilter: (id) => set({ locationFilter: id }),
@@ -406,6 +435,12 @@ const createState: StateCreator<State> = (set, get) => ({
       users: s.users.some((existing) => existing.id === user.id)
         ? s.users.map((existing) => (existing.id === user.id ? user : existing))
         : [...s.users, user],
+    })),
+  upsertFranchise: (franchise) =>
+    set((s) => ({
+      franchises: s.franchises.some((existing) => existing.id === franchise.id)
+        ? s.franchises.map((existing) => (existing.id === franchise.id ? franchise : existing))
+        : [...s.franchises, franchise],
     })),
 
   /* ---- Pipeline ------------------------------------------------------- */
@@ -1503,7 +1538,69 @@ export const useStore = create<State>()(
         materialOrders: procurementOrders,
         estimatePacks: prev.estimatePacks ?? defaults.estimatePacks,
         serviceTemplates: prev.serviceTemplates ?? defaults.serviceTemplates,
-        users: prev.users ?? defaults.users,
+        franchises: (() => {
+          const legacy = prev as Partial<State> & {
+            companies?: Franchise[]
+            partners?: Franchise[]
+            franchises?: Franchise[]
+          }
+          const raw = legacy.franchises?.length
+            ? legacy.franchises
+            : legacy.partners?.length
+              ? legacy.partners
+              : legacy.companies?.length
+                ? legacy.companies
+                : defaults.franchises
+          return raw.map((f) => {
+            const anyF = f as Franchise & { parentCompanyId?: string | null; parentPartnerId?: string | null }
+            return {
+              ...f,
+              parentFranchiseId:
+                anyF.parentFranchiseId
+                ?? anyF.parentPartnerId
+                ?? anyF.parentCompanyId
+                ?? null,
+            }
+          })
+        })(),
+        locations: (prev.locations ?? defaults.locations).map((loc) => {
+          const anyLoc = loc as Location & { companyId?: string; partnerId?: string }
+          return {
+            ...loc,
+            franchiseId:
+              anyLoc.franchiseId
+              ?? anyLoc.partnerId
+              ?? anyLoc.companyId
+              ?? defaults.locations.find((d) => d.id === loc.id)?.franchiseId
+              ?? 'co_fcg',
+          }
+        }),
+        users: (prev.users ?? defaults.users).map((user) => {
+          const seeded = defaults.users.find((d) => d.id === user.id)
+          const nextUser = user as User & { companyId?: string; partnerId?: string }
+          return {
+            ...nextUser,
+            franchiseId:
+              nextUser.franchiseId
+              ?? nextUser.partnerId
+              ?? nextUser.companyId
+              ?? seeded?.franchiseId
+              ?? 'co_fcg',
+            orgRole: normalizeOrgRole(nextUser.orgRole ?? seeded?.orgRole ?? defaultOrgRoleFromRole(nextUser.role)),
+            branchIds: nextUser.branchIds ?? seeded?.branchIds,
+          }
+        }),
+        activeFranchiseId: (() => {
+          const legacy = prev as Partial<State> & {
+            activeCompanyId?: string
+            activePartnerId?: string
+            activeFranchiseId?: string
+          }
+          return legacy.activeFranchiseId
+            ?? legacy.activePartnerId
+            ?? legacy.activeCompanyId
+            ?? defaults.activeFranchiseId
+        })(),
         prospectRequests: prev.prospectRequests ?? defaults.prospectRequests,
         stageDefinitions,
       }
@@ -1527,6 +1624,7 @@ export const useStore = create<State>()(
       issues: s.issues,
       users: s.users,
       locations: s.locations,
+      franchises: s.franchises,
       workspaceTemplate: s.workspaceTemplate,
       siteVisitForms: s.siteVisitForms,
       checklistTemplates: s.checklistTemplates,
@@ -1540,6 +1638,7 @@ export const useStore = create<State>()(
       paymentRequests: s.paymentRequests,
       prospectRequests: s.prospectRequests,
       viewerId: s.viewerId,
+      activeFranchiseId: s.activeFranchiseId,
       locationFilter: s.locationFilter,
       density: s.density,
       theme: s.theme,

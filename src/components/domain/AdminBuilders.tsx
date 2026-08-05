@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   ArrowLeft,
   ClipboardCheck,
@@ -9,8 +9,10 @@ import {
 import type { Category, ChecklistTemplate, Location, SiteVisitForm } from '@/domain/types'
 import { CATEGORY_LABEL } from '@/domain/types'
 import type { EstimateCategoryPack } from '@/data/estimating'
+import { franchiseHost, visibleFranchises } from '@/domain/org'
 import { useStore } from '@/store/useStore'
-import { Badge, Button, Card, CardHeader, FieldRow, Input, Select, Textarea } from '@/components/ui'
+import { useViewer } from '@/store/selectors'
+import { Badge, Button, Card, CardHeader, FieldRow, Input, Modal, Select, Textarea } from '@/components/ui'
 import { cn } from '@/lib/cn'
 
 const uid = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
@@ -57,7 +59,7 @@ export function AdminBuilders() {
     return (
       <div className="space-y-3">
         <div>
-          <h2 className="font-display text-lg text-primary">Company setup</h2>
+          <h2 className="font-display text-lg text-primary">Franchise setup</h2>
           <p className="mt-0.5 text-sm text-muted">Choose one area to configure. Keep changes simple and focused.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -486,140 +488,360 @@ function ChecklistBuilder() {
   )
 }
 
+
 export function LocationsBuilder() {
   const locations = useStore((s) => s.locations)
+  const franchises = useStore((s) => s.franchises)
+  const activeFranchiseId = useStore((s) => s.activeFranchiseId)
+  const setActiveFranchiseId = useStore((s) => s.setActiveFranchiseId)
   const upsert = useStore((s) => s.upsertLocation)
+  const upsertUser = useStore((s) => s.upsertUser)
   const users = useStore((s) => s.users)
-  const [selectedId, setSelectedId] = useState(locations[0]?.id ?? '')
-  const location = locations.find((candidate) => candidate.id === selectedId) ?? locations[0]
-  const owners = users.filter((user) => user.role === 'owner' || user.role === 'admin')
+  const viewer = useViewer()
 
-  const addLocation = () => {
-    const created: Location = {
-      id: uid('loc'),
-      name: 'New territory',
-      city: 'New city',
-      state: 'ST',
-      zips: ['000'],
-      ownerId: owners[0]?.id ?? 'u_nic',
-      openedAt: new Date().toISOString().slice(0, 10),
-      isCorporate: false,
-      priceMultiplier: 1,
+  const selectableFranchises = useMemo(() => {
+    const operating = franchises.filter(
+      (f) => f.status === 'active' && !f.isPlatformOwner && !f.isMasterRegion,
+    )
+    if (!viewer) return operating
+    return visibleFranchises(viewer, operating)
+  }, [franchises, viewer])
+
+  const franchiseBranches = useMemo(
+    () => locations.filter((l) => l.franchiseId === activeFranchiseId),
+    [locations, activeFranchiseId],
+  )
+  const [selectedId, setSelectedId] = useState(franchiseBranches[0]?.id ?? '')
+  const [branchOpen, setBranchOpen] = useState(false)
+  const [branchDraft, setBranchDraft] = useState({
+    franchiseId: activeFranchiseId,
+    name: '',
+    city: '',
+    state: '',
+    zips: '',
+    managerName: '',
+    isCorporate: false,
+  })
+
+  useEffect(() => {
+    if (!franchiseBranches.some((b) => b.id === selectedId)) {
+      setSelectedId(franchiseBranches[0]?.id ?? '')
     }
-    upsert(created)
-    setSelectedId(created.id)
+  }, [franchiseBranches, selectedId])
+
+  const location = franchiseBranches.find((candidate) => candidate.id === selectedId) ?? franchiseBranches[0]
+  const owners = users.filter(
+    (user) =>
+      user.franchiseId === activeFranchiseId
+      && (user.role === 'owner' || user.role === 'admin' || user.orgRole === 'manager' || user.orgRole === 'franchise_admin'),
+  )
+  const activeFranchise = franchises.find((f) => f.id === activeFranchiseId)
+
+  const openAddBranch = () => {
+    const defaultFranchiseId =
+      selectableFranchises.some((f) => f.id === activeFranchiseId)
+        ? activeFranchiseId
+        : (selectableFranchises[0]?.id ?? activeFranchiseId)
+    setBranchDraft({
+      franchiseId: defaultFranchiseId,
+      name: '',
+      city: '',
+      state: '',
+      zips: '',
+      managerName: '',
+      isCorporate: false,
+    })
+    setBranchOpen(true)
   }
 
-  if (!location) return null
+  const createBranch = () => {
+    if (!branchDraft.name.trim() || !branchDraft.franchiseId) return
+    const franchiseId = branchDraft.franchiseId
+    const zips = branchDraft.zips
+      .split(/[\n,]+/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+    const created: Location = {
+      id: uid('loc'),
+      name: branchDraft.name.trim(),
+      city: branchDraft.city.trim() || 'City',
+      state: branchDraft.state.trim().toUpperCase().slice(0, 2) || 'ST',
+      zips: zips.length > 0 ? zips : ['000'],
+      ownerId: 'u_nic',
+      openedAt: new Date().toISOString().slice(0, 10),
+      isCorporate: branchDraft.isCorporate,
+      priceMultiplier: 1,
+      franchiseId,
+    }
+
+    if (branchDraft.managerName.trim()) {
+      const managerId = uid('u')
+      upsertUser({
+        id: managerId,
+        name: branchDraft.managerName.trim(),
+        title: `Manager — ${created.name}`,
+        role: 'owner',
+        orgRole: 'manager',
+        franchiseId,
+        locationId: created.id,
+        branchIds: [created.id],
+      })
+      created.ownerId = managerId
+    } else {
+      const fallback = users.find(
+        (u) => u.franchiseId === franchiseId && (u.orgRole === 'franchise_admin' || u.orgRole === 'manager'),
+      )
+      created.ownerId = fallback?.id ?? viewer?.id ?? 'u_nic'
+    }
+
+    upsert(created)
+    setActiveFranchiseId(franchiseId)
+    setSelectedId(created.id)
+    setBranchOpen(false)
+  }
+
+  const branchModal = (
+    <Modal
+      open={branchOpen}
+      onClose={() => setBranchOpen(false)}
+      size="lg"
+      title="New branch"
+      subtitle="Choose the franchise, then enter branch details."
+    >
+      <div className="grid gap-4">
+        <Field label="Franchise">
+          <Select
+            value={branchDraft.franchiseId}
+            onChange={(e) => setBranchDraft({ ...branchDraft, franchiseId: e.target.value })}
+          >
+            {selectableFranchises.length === 0 && <option value="">No franchises available</option>}
+            {selectableFranchises.map((franchise) => (
+              <option key={franchise.id} value={franchise.id}>
+                {franchise.name} · {franchiseHost(franchise.subdomain)}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Branch name">
+            <Input
+              value={branchDraft.name}
+              onChange={(e) => setBranchDraft({ ...branchDraft, name: e.target.value })}
+              placeholder="Chicago — Corporate"
+            />
+          </Field>
+          <Field label="City">
+            <Input
+              value={branchDraft.city}
+              onChange={(e) => setBranchDraft({ ...branchDraft, city: e.target.value })}
+              placeholder="Chicago"
+            />
+          </Field>
+          <Field label="State">
+            <Input
+              value={branchDraft.state}
+              onChange={(e) => setBranchDraft({ ...branchDraft, state: e.target.value })}
+              placeholder="IL"
+              maxLength={2}
+            />
+          </Field>
+          <Field label="Branch manager (optional)">
+            <Input
+              value={branchDraft.managerName}
+              onChange={(e) => setBranchDraft({ ...branchDraft, managerName: e.target.value })}
+              placeholder="Dennis Frost"
+            />
+          </Field>
+        </div>
+
+        <Field label="ZIP prefixes">
+          <Textarea
+            rows={3}
+            value={branchDraft.zips}
+            onChange={(e) => setBranchDraft({ ...branchDraft, zips: e.target.value })}
+            placeholder={'604\n605\n606'}
+          />
+          <p className="text-sm text-muted">One per line or comma-separated. Used for lead routing.</p>
+        </Field>
+
+        <label className="flex items-center gap-2 text-sm text-primary">
+          <input
+            type="checkbox"
+            checked={branchDraft.isCorporate}
+            onChange={(e) => setBranchDraft({ ...branchDraft, isCorporate: e.target.checked })}
+          />
+          Corporate / headquarters branch
+        </label>
+
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="ghost" onClick={() => setBranchOpen(false)}>Cancel</Button>
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={!branchDraft.name.trim() || !branchDraft.franchiseId}
+            onClick={createBranch}
+          >
+            Create branch
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+
+  if (!location) {
+    return (
+      <>
+        <Card>
+          <CardHeader
+            title="Branches"
+            subtitle={`No branches yet for ${activeFranchise?.name ?? 'this franchise'}.`}
+          />
+          <div className="p-4">
+            <Button size="sm" onClick={openAddBranch}>Add branch</Button>
+          </div>
+        </Card>
+        {branchModal}
+      </>
+    )
+  }
 
   const updateLocation = (next: Location) => upsert(next)
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
-      <Card>
-        <CardHeader
-          title="Territories"
-          subtitle="Add branches, ZIP ownership, and pricing."
-          actions={
-            <Button size="sm" onClick={addLocation}>
-              Add location
-            </Button>
-          }
-        />
-        <div className="space-y-2 p-4">
-          {locations.map((candidate) => (
-            <button
-              key={candidate.id}
-              type="button"
-              onClick={() => setSelectedId(candidate.id)}
-              className={cn(
-                'w-full rounded-md border px-3 py-2 text-left',
-                candidate.id === location.id
-                  ? 'border-action bg-action-soft'
-                  : 'border-subtle bg-surface-raised hover:border-strong',
-              )}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <p className="font-medium text-primary">{candidate.name}</p>
-                {candidate.isCorporate && <Badge tone="brand">Corporate</Badge>}
-              </div>
-              <p className="text-sm text-muted">
-                {candidate.city}, {candidate.state}
-              </p>
-              <p className="mt-1 text-2xs uppercase tracking-wide text-muted">
-                {candidate.zips.length} ZIP ranges
-              </p>
-            </button>
-          ))}
-        </div>
-      </Card>
+    <>
+      <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
+        <Card>
+          <CardHeader
+            title="Branches"
+            subtitle={`Branches for ${activeFranchise?.name ?? 'franchise'} — ZIP ownership and pricing.`}
+            actions={
+              <Button size="sm" onClick={openAddBranch}>
+                Add branch
+              </Button>
+            }
+          />
+          <div className="space-y-2 p-4">
+            {franchiseBranches.map((candidate) => (
+              <button
+                key={candidate.id}
+                type="button"
+                onClick={() => setSelectedId(candidate.id)}
+                className={cn(
+                  'w-full rounded-md border px-3 py-2 text-left',
+                  candidate.id === location.id
+                    ? 'border-action bg-action-soft'
+                    : 'border-subtle bg-surface-raised hover:border-strong',
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-medium text-primary">{candidate.name}</p>
+                  {candidate.isCorporate && <Badge tone="brand">Corporate</Badge>}
+                </div>
+                <p className="text-sm text-muted">
+                  {candidate.city}, {candidate.state}
+                </p>
+                <p className="mt-1 text-2xs uppercase tracking-wide text-muted">
+                  {candidate.zips.length} ZIP ranges
+                </p>
+              </button>
+            ))}
+          </div>
+        </Card>
 
-      <Card>
-        <CardHeader
-          title="Location builder"
-          subtitle="Territory details, ZIP ownership, and commercial defaults."
-        />
-        <div className="space-y-4 p-4">
-          <div className="grid gap-3 lg:grid-cols-2">
-            <FieldRow label="Location name">
-              <Input value={location.name} onChange={(e) => updateLocation({ ...location, name: e.target.value })} />
-            </FieldRow>
-            <FieldRow label="Owner">
-              <Select value={location.ownerId} onChange={(e) => updateLocation({ ...location, ownerId: e.target.value })}>
-                {owners.map((owner) => (
-                  <option key={owner.id} value={owner.id}>
-                    {owner.name} — {owner.title}
-                  </option>
-                ))}
-              </Select>
-            </FieldRow>
-            <FieldRow label="City">
-              <Input value={location.city} onChange={(e) => updateLocation({ ...location, city: e.target.value })} />
-            </FieldRow>
-            <FieldRow label="State">
-              <Input value={location.state} onChange={(e) => updateLocation({ ...location, state: e.target.value })} />
-            </FieldRow>
-            <FieldRow label="Opened on">
-              <Input value={location.openedAt} onChange={(e) => updateLocation({ ...location, openedAt: e.target.value })} />
-            </FieldRow>
-            <FieldRow label="Price multiplier">
-              <Input
-                type="number"
-                step="0.01"
-                value={location.priceMultiplier}
-                onChange={(e) => updateLocation({ ...location, priceMultiplier: Number(e.target.value) || 1 })}
+        <Card>
+          <CardHeader
+            title="Branch builder"
+            subtitle="Branch details, ZIP ownership, and commercial defaults."
+          />
+          <div className="space-y-4 p-4">
+            <div className="grid gap-3 lg:grid-cols-2">
+              <FieldRow label="Franchise">
+                <Select
+                  value={location.franchiseId}
+                  onChange={(e) => {
+                    const franchiseId = e.target.value
+                    updateLocation({ ...location, franchiseId })
+                    setActiveFranchiseId(franchiseId)
+                  }}
+                >
+                  {selectableFranchises.map((franchise) => (
+                    <option key={franchise.id} value={franchise.id}>
+                      {franchise.name} · {franchiseHost(franchise.subdomain)}
+                    </option>
+                  ))}
+                </Select>
+              </FieldRow>
+              <FieldRow label="Branch name">
+                <Input value={location.name} onChange={(e) => updateLocation({ ...location, name: e.target.value })} />
+              </FieldRow>
+              <FieldRow label="Owner">
+                <Select value={location.ownerId} onChange={(e) => updateLocation({ ...location, ownerId: e.target.value })}>
+                  {owners.map((owner) => (
+                    <option key={owner.id} value={owner.id}>
+                      {owner.name} — {owner.title}
+                    </option>
+                  ))}
+                </Select>
+              </FieldRow>
+              <FieldRow label="City">
+                <Input value={location.city} onChange={(e) => updateLocation({ ...location, city: e.target.value })} />
+              </FieldRow>
+              <FieldRow label="State">
+                <Input value={location.state} onChange={(e) => updateLocation({ ...location, state: e.target.value })} />
+              </FieldRow>
+              <FieldRow label="Opened on">
+                <Input value={location.openedAt} onChange={(e) => updateLocation({ ...location, openedAt: e.target.value })} />
+              </FieldRow>
+              <FieldRow label="Price multiplier">
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={location.priceMultiplier}
+                  onChange={(e) => updateLocation({ ...location, priceMultiplier: Number(e.target.value) || 1 })}
+                />
+              </FieldRow>
+            </div>
+
+            <FieldRow label="ZIP prefixes" hint="One per line. These drive the territory routing preview.">
+              <Textarea
+                rows={4}
+                value={location.zips.join('\n')}
+                onChange={(e) =>
+                  updateLocation({
+                    ...location,
+                    zips: e.target.value
+                      .split('\n')
+                      .map((line) => line.trim())
+                      .filter(Boolean),
+                  })
+                }
               />
             </FieldRow>
-          </div>
 
-          <FieldRow label="ZIP prefixes" hint="One per line. These drive the territory routing preview.">
-            <Textarea
-              rows={4}
-              value={location.zips.join('\n')}
-              onChange={(e) =>
-                updateLocation({
-                  ...location,
-                  zips: e.target.value
-                    .split('\n')
-                    .map((line) => line.trim())
-                    .filter(Boolean),
-                })
-              }
-            />
-          </FieldRow>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              variant={location.isCorporate ? 'primary' : 'secondary'}
-              onClick={() => updateLocation({ ...location, isCorporate: !location.isCorporate })}
-            >
-              {location.isCorporate ? 'Corporate territory' : 'Mark as corporate'}
-            </Button>
-            <Badge tone="neutral">{location.zips.join(', ') || 'No ZIP prefixes yet'}</Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant={location.isCorporate ? 'primary' : 'secondary'}
+                onClick={() => updateLocation({ ...location, isCorporate: !location.isCorporate })}
+              >
+                {location.isCorporate ? 'Corporate territory' : 'Mark as corporate'}
+              </Button>
+              <Badge tone="neutral">{location.zips.join(', ') || 'No ZIP prefixes yet'}</Badge>
+            </div>
           </div>
-        </div>
-      </Card>
-    </div>
+        </Card>
+      </div>
+      {branchModal}
+    </>
+  )
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-sm font-medium text-primary">{label}</span>
+      {children}
+    </label>
   )
 }
