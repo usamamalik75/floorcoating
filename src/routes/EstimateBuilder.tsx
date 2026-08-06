@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
   CheckCircle2,
@@ -57,6 +57,7 @@ const uid = (p: string) => `${p}_${Date.now()}_${++n}`
 
 export function EstimateBuilder() {
   const { id = '' } = useParams<{ id: string }>()
+  const [searchParams, setSearchParams] = useSearchParams()
   const viewer = useViewer()
   const userById = useUserDirectory()
   const users = useUsers()
@@ -110,6 +111,22 @@ export function EstimateBuilder() {
     () => (opp ? priceBookItems.filter((pb) => pb.categories.includes(opp.category)) : []),
     [priceBookItems, opp],
   )
+
+  const openSendComposer = () => {
+    setSendChannel('email')
+    setSendSubject('Your proposal is ready')
+    setSendBody(
+      `Hi ${account?.contactName ?? 'there'},\n\nYour proposal is ready to review. You can open the secure link, compare options, and sign electronically when you are ready.\n\nThanks,\n${viewer?.name ?? 'Your service team'}`,
+    )
+    setSending(true)
+  }
+
+  useEffect(() => {
+    if (searchParams.get('sendProposal') !== '1') return
+    if (!est || est.status !== 'approved') return
+    openSendComposer()
+    setSearchParams({}, { replace: true })
+  }, [est?.id, est?.status, searchParams, setSearchParams])
 
   if (!opp) return <EmptyState title="Opportunity not found" className="h-full" />
 
@@ -416,14 +433,7 @@ export function EstimateBuilder() {
               {est.status === 'approved' && (
                 <Button
                   variant="primary"
-                  onClick={() => {
-                    setSendChannel('email')
-                    setSendSubject('Your proposal is ready')
-                    setSendBody(
-                      `Hi ${account?.contactName ?? 'there'},\n\nYour proposal is ready to review. You can open the secure link, compare options, and sign electronically when you are ready.\n\nThanks,\n${viewer?.name ?? 'Your service team'}`,
-                    )
-                    setSending(true)
-                  }}
+                  onClick={openSendComposer}
                 >
                   <Send size={13} />
                   Send to customer

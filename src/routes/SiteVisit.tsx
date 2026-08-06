@@ -99,29 +99,9 @@ export function SiteVisit() {
 
   useEffect(() => {
     setValues(stored?.values ?? {})
-    setRequests(stored?.requests?.length ? stored.requests : [emptyScopeRequest(`req_${Date.now()}`)])
+    setRequests(stored?.requests ?? [])
     setCustomQuestions(stored?.customQuestions ?? [])
   }, [stored?.opportunityId])
-
-  useEffect(() => {
-    if (!opportunity || checklistInstance || visitTemplates.length === 0) return
-    const preferred =
-      visitTemplates.find((t) => t.category === opportunity.category) ?? visitTemplates[0]
-    assignVisitChecklist(opportunity.id, preferred.id)
-    // Only auto-assign once when this visit has no checklist yet.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot bootstrap
-  }, [opportunity?.id])
-
-  useEffect(() => {
-    if (!opportunity || stored?.serviceTemplateId || serviceVisitTemplates.length === 0) return
-    if (stored?.requests?.some((r) => r.serviceType.trim())) return
-    const preferred = preferredServiceTemplate(serviceVisitTemplates, opportunity.category)
-    if (!preferred) return
-    assignVisitServiceTemplate(opportunity.id, preferred.id)
-    const next = useStore.getState().siteVisits.find((v) => v.opportunityId === opportunity.id)
-    if (next?.requests.length) setRequests(next.requests)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot bootstrap
-  }, [opportunity?.id])
 
   const applyServiceTemplate = (templateId: string) => {
     if (!opportunity) return

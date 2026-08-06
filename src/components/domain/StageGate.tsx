@@ -162,6 +162,10 @@ export function StageGate({
   const hasBlockingReminder = def.gates.some((g) => g.kind === 'reminder' && g.blocking)
   const hasBlockingAppointment = def.gates.some((g) => g.kind === 'appointment' && g.blocking)
   const blockingHard = hasBlockingReminder || hasBlockingAppointment
+  const combinedVisitOwnerGate =
+    targetStage === 'site_visit_scheduled'
+      ? def.gates.find((g): g is Extract<Gate, { kind: 'assign' }> => g.kind === 'assign')
+      : undefined
 
   const confirm = () => {
     moveStage(opportunity.id, targetStage, {
@@ -187,7 +191,7 @@ export function StageGate({
       size="lg"
       icon={<ArrowRight size={17} className="text-attention" />}
       title={<span className="flex items-center gap-2">Moving to {stageLabel(targetStage, opportunity.category)}</span>}
-      subtitle={withVisitVocab(def.purpose, opportunity.category)}
+      subtitle={targetStage === 'site_visit_scheduled' ? undefined : withVisitVocab(def.purpose, opportunity.category)}
       footer={
         <>
           {hasBlockingReminder ? (
@@ -415,12 +419,26 @@ export function StageGate({
 
                     {gate.kind === 'appointment' && (
                       <div className="mt-2.5 space-y-2">
-                        <Input
-                          type="datetime-local"
-                          value={appointmentAt}
-                          onChange={(e) => setAppointmentAt(e.target.value)}
-                          className="max-w-xs"
-                        />
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <Input
+                            type="datetime-local"
+                            value={appointmentAt}
+                            onChange={(e) => setAppointmentAt(e.target.value)}
+                            className="max-w-xs md:max-w-none"
+                          />
+                          {combinedVisitOwnerGate && (
+                            <Select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+                              <option value="">Select visit owner…</option>
+                              {users.filter(
+                                (u) => u.locationId === opportunity.locationId && u.role === combinedVisitOwnerGate.role,
+                              ).map((u) => (
+                                <option key={u.id} value={u.id}>
+                                  {u.name} — {u.title}
+                                </option>
+                              ))}
+                            </Select>
+                          )}
+                        </div>
                         <div className="flex flex-wrap gap-1">
                           {[
                             { label: 'Tomorrow 9am', offsetDays: 1, hour: 9 },
@@ -444,7 +462,7 @@ export function StageGate({
                       </div>
                     )}
 
-                    {gate.kind === 'assign' && (
+                    {gate.kind === 'assign' && targetStage !== 'site_visit_scheduled' && (
                       <Select
                         value={assignee}
                         onChange={(e) => setAssignee(e.target.value)}

@@ -123,6 +123,12 @@ export const STAGES: StageDef[] = [
         helper: 'Required to move into Scheduled. Creates the guided form for this opportunity.',
         blocking: true,
       },
+      {
+        kind: 'assign',
+        role: 'sales',
+        label: 'Assign the visit owner',
+        blocking: true,
+      },
     ],
     notify: [{ role: 'sales', message: 'Visit booked — open the guided form anytime before or during the visit' }],
   },

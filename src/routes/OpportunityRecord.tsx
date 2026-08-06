@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import {
   AlertTriangle,
@@ -125,6 +125,7 @@ const ARTIFACT_ICON: Record<ArtifactKind, typeof FileText> = {
  */
 export function OpportunityRecord() {
   const { id = '' } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const s = useStore()
   const setJobStatus = useStore((state) => state.setJobStatus)
@@ -212,6 +213,17 @@ export function OpportunityRecord() {
   const thread = threads[0]
   const jobReached = (status: JobStatus) =>
     Boolean(job && jobStatusIndex(job.status) >= jobStatusIndex(status))
+  const handleStagePick = (stage: StageId) => {
+    if (stage === 'estimate_ready') {
+      navigate(`/estimate/${opp.id}`)
+      return
+    }
+    if (stage === 'proposal_sent') {
+      navigate(`/estimate/${opp.id}?sendProposal=1`)
+      return
+    }
+    setGateTo(stage)
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -279,7 +291,7 @@ export function OpportunityRecord() {
             <p className="mb-3 text-sm text-secondary">
               Move left to right through the full sales process.
             </p>
-            <StageStepper opportunity={opp} onPick={setGateTo} orientation="vertical" />
+            <StageStepper opportunity={opp} onPick={handleStagePick} orientation="vertical" />
           </div>
         </aside>
 

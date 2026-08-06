@@ -519,10 +519,6 @@ const createState: StateCreator<State> = (set, get) => ({
     if (to === 'site_visit_scheduled') {
       const form = get().siteVisitForms.find((candidate) => candidate.category === o.category)
       if (form && !get().siteVisits.some((v) => v.opportunityId === opportunityId)) {
-        const serviceTpl = preferredServiceTemplate(get().serviceTemplates, o.category)
-        const seededRequests = serviceTpl
-          ? requestsFromServiceTemplate(serviceTpl, () => nextId('req'))
-          : []
         set((s) => ({
           siteVisits: [
             ...s.siteVisits,
@@ -530,8 +526,8 @@ const createState: StateCreator<State> = (set, get) => ({
               opportunityId,
               formId: form.id,
               values: {},
-              requests: seededRequests,
-              serviceTemplateId: serviceTpl?.id ?? null,
+              requests: [],
+              serviceTemplateId: null,
               completedAt: null,
               completedById: null,
             },
@@ -543,31 +539,6 @@ const createState: StateCreator<State> = (set, get) => ({
           'system',
           `${v.Singular} record created — open the guided form now or during the visit.`,
         )
-      }
-      const hasVisitChecklist = get().checklists.some((c) => {
-        const tpl = get().checklistTemplates.find((t) => t.id === c.templateId)
-        return c.opportunityId === opportunityId && tpl?.stage === 'site_visit_scheduled'
-      })
-      if (!hasVisitChecklist) {
-        const visitChecklist =
-          get().checklistTemplates.find(
-            (t) => t.stage === 'site_visit_scheduled' && t.category === o.category,
-          ) ?? templateForStage('site_visit_scheduled', o.category, get().checklistTemplates)
-        if (visitChecklist) {
-          set((s) => ({
-            checklists: [
-              ...s.checklists,
-              {
-                id: nextId('ci'),
-                templateId: visitChecklist.id,
-                opportunityId,
-                items: structuredClone(visitChecklist.items),
-                done: [],
-                completedAt: null,
-              },
-            ],
-          }))
-        }
       }
     }
 
