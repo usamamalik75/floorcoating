@@ -313,7 +313,7 @@ function SalesHome() {
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Stat label="Appointments today" value={todayVisits.length} icon={<CalendarClock size={12} />} tone={todayVisits.length ? 'success' : undefined} to="/field" />
-        <Stat label="My open pipeline" value={money(mine.filter((o) => isOpenOpportunity(o, s.jobs)).reduce((a, o) => a + o.value, 0), true)} sub={`${mine.length} records`} to="/sales" />
+        <Stat label="My open pipeline" value={money(mine.filter((o) => isOpenOpportunity(o, s.jobs, s.invoices)).reduce((a, o) => a + o.value, 0), true)} sub={`${mine.length} records`} to="/sales" />
         <Stat label="Proposals out" value={openProposals.length} sub={money(openProposals.reduce((a, o) => a + o.value, 0), true)} to="/sales" />
         <Stat label="Follow-ups due" value={dueReminders.length} tone={dueReminders.length ? 'warning' : undefined} sub="Next 7 days" icon={<BellRing size={12} />} />
         <Stat label="Drafts waiting" value={drafts.length} sub="Saved in communications" to="/communications" />

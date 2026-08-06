@@ -250,10 +250,6 @@ export function OpportunityRecord() {
           </div>
         </div>
 
-        <div className="mb-3">
-          <StageStepper opportunity={opp} onPick={setGateTo} />
-        </div>
-
         <div className="flex flex-wrap gap-0.5 border-t border-white/10">
           {visibleTabs.map((t) => (
             <button
@@ -274,8 +270,21 @@ export function OpportunityRecord() {
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin bg-surface-sunken">
-        <div className="space-y-5 p-5">
+      <div className="flex min-h-0 flex-1 flex-col bg-surface-sunken lg:flex-row">
+        <aside className="hidden w-72 shrink-0 border-r border-subtle bg-surface-raised lg:block">
+          <div className="h-full overflow-y-auto p-4 scrollbar-thin">
+            <p className="mb-1 text-2xs font-semibold tracking-wider text-muted uppercase">
+              Sales pipeline
+            </p>
+            <p className="mb-3 text-sm text-secondary">
+              Move left to right through the full sales process.
+            </p>
+            <StageStepper opportunity={opp} onPick={setGateTo} orientation="vertical" />
+          </div>
+        </aside>
+
+        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+        <div className="mx-auto w-full max-w-5xl space-y-5 p-5">
           {showNext && (
             <NextActionPanel
               opportunity={opp}
@@ -717,34 +726,76 @@ export function OpportunityRecord() {
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap gap-1 border-b border-subtle px-3 py-2">
-                    {JOB_STATUSES.filter((status) => status !== 'on_hold').map((status) => {
-                      const idx = jobStatusIndex(status)
-                      const current = jobStatusIndex(job.status)
-                      const done = current > idx
-                      const active =
-                        normalizeJobStatus(job.status) === status ||
-                        (job.status === 'on_hold' && status === 'in_progress')
-                      return (
-                        <div
-                          key={status}
-                          className={cn(
-                            'shrink-0 rounded-sm px-2 py-1 text-2xs font-medium',
-                            active
-                              ? 'bg-action text-action-fg'
-                              : done
-                                ? 'bg-success-soft text-success-text'
-                                : 'bg-surface-inset text-muted',
-                          )}
-                          title={jobStatusLabel(status)}
-                        >
-                          {jobStatusLabel(status)}
+                  <div className="grid gap-0 border-b border-subtle lg:grid-cols-[15rem_minmax(0,1fr)]">
+                    <div className="border-b border-subtle bg-surface-raised px-4 py-3 lg:border-r lg:border-b-0">
+                      <p className="mb-2 text-2xs font-semibold tracking-wider text-muted uppercase">
+                        Job workflow
+                      </p>
+                      <ol className="space-y-1.5">
+                        {JOB_STATUSES.filter((status) => status !== 'on_hold').map((status, index, all) => {
+                          const idx = jobStatusIndex(status)
+                          const current = jobStatusIndex(normalizeJobStatus(job.status))
+                          const done = current > idx
+                          const active = normalizeJobStatus(job.status) === status
+                          const next = current + 1 === idx
+                          const last = index === all.length - 1
+                          return (
+                            <li key={status} className="flex gap-2">
+                              <div className="flex w-5 shrink-0 flex-col items-center">
+                                <span
+                                  className={cn(
+                                    'flex h-5 w-5 items-center justify-center rounded-full text-2xs font-bold',
+                                    active && 'bg-action text-action-fg',
+                                    done && 'bg-success-soft text-success-text',
+                                    next && 'border border-(--accent-attention) bg-attention-soft text-attention-text',
+                                    !active && !done && !next && 'bg-surface-inset text-muted',
+                                  )}
+                                >
+                                  {index + 1}
+                                </span>
+                                {!last && (
+                                  <span
+                                    className={cn(
+                                      'mt-1 h-4 w-px',
+                                      done ? 'bg-success-soft' : 'bg-(--border-subtle)',
+                                    )}
+                                  />
+                                )}
+                              </div>
+                              <div className="min-w-0 pb-1.5">
+                                <p
+                                  className={cn(
+                                    'text-sm leading-snug',
+                                    active && 'font-semibold text-primary',
+                                    done && 'text-secondary',
+                                    next && 'text-attention-text',
+                                    !active && !done && !next && 'text-muted',
+                                  )}
+                                >
+                                  {jobStatusLabel(status)}
+                                </p>
+                                {active && (
+                                  <p className="text-2xs text-muted">Current step</p>
+                                )}
+                                {next && (
+                                  <p className="text-2xs text-attention-text">Up next</p>
+                                )}
+                              </div>
+                            </li>
+                          )
+                        })}
+                      </ol>
+                      {job.status === 'on_hold' && (
+                        <div className="mt-2 rounded-md border border-warning bg-warning-soft px-2.5 py-2">
+                          <p className="text-sm font-medium text-warning-text">On hold</p>
+                          <p className="text-2xs text-warning-text/90">
+                            Work is paused and will resume from In progress.
+                          </p>
                         </div>
-                      )
-                    })}
-                  </div>
+                      )}
+                    </div>
 
-                  <div className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-4">
                     <KeyValue label="Start">{format(new Date(job.start), 'd MMM yyyy')}</KeyValue>
                     <KeyValue label="Finish">{format(new Date(job.end), 'd MMM yyyy')}</KeyValue>
                     <KeyValue label="Project manager">
@@ -756,6 +807,7 @@ export function OpportunityRecord() {
                         return leadId ? userById[leadId]?.name ?? '—' : 'Not assigned'
                       })()}
                     </KeyValue>
+                    </div>
                   </div>
 
                   <div className="border-t border-subtle px-4 py-3">
@@ -1110,6 +1162,7 @@ export function OpportunityRecord() {
             </Section>
             </div>
           </div>
+        </div>
       </div>
 
       <StageGate
