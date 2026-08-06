@@ -38,13 +38,9 @@ import type {
 import { normalizeRole, ROLE_LABEL, visitVocab, withVisitVocab } from '@/domain/types'
 import { defaultOrgRoleFromRole, normalizeOrgRole } from '@/domain/org'
 import { WORKSPACE_TEMPLATE, type WorkspaceTemplate } from '@/config/workspace'
-import { CHECKLIST_TEMPLATES, templateForStage } from '@/data/checklists'
+import { CHECKLIST_TEMPLATES } from '@/data/checklists'
 import { PRICE_BOOK, PROPOSAL_TEMPLATES } from '@/data/priceBook'
-import {
-  preferredServiceTemplate,
-  requestsFromServiceTemplate,
-  SERVICE_TEMPLATES,
-} from '@/data/serviceTemplates'
+import { requestsFromServiceTemplate, SERVICE_TEMPLATES } from '@/data/serviceTemplates'
 import { SITE_VISIT_FORMS } from '@/data/siteVisitForms'
 import {
   ESTIMATE_PACK_LIST,

@@ -22,11 +22,7 @@ import { useStore } from '@/store/useStore'
 import { useArtifactsFor, useFormForCategory } from '@/store/selectors'
 import { emptyScopeRequest, requestIsComplete, requiredFields } from '@/data/siteVisitForms'
 import { resolveChecklistItems, visitChecklistTemplates } from '@/data/checklists'
-import {
-  preferredServiceTemplate,
-  requestsFromServiceTemplate,
-  visitServiceTemplates,
-} from '@/data/serviceTemplates'
+import { requestsFromServiceTemplate, visitServiceTemplates } from '@/data/serviceTemplates'
 import { ACCOUNT_BY_ID } from '@/data/seed'
 import type { ScopeRequest, SiteVisitCustomQA, SiteVisitField } from '@/domain/types'
 import { SCOPE_UNITS, visitVocab } from '@/domain/types'
