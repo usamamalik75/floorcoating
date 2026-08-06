@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import {
   AlertTriangle,
@@ -73,7 +73,7 @@ import { StageStepper } from '@/components/domain/StageStepper'
 import { NextActionPanel } from '@/components/domain/NextActionPanel'
 import { JobTeamPanel, JobTeamSummary } from '@/components/domain/JobTeamPanel'
 import { JobProcurementPanel } from '@/components/domain/JobProcurementPanel'
-import { primaryFieldLead } from '@/domain/jobs'
+import { deriveJobProgress, primaryFieldLead } from '@/domain/jobs'
 import { TEMPERATURE_LABEL } from '@/domain/types'
 import {
   Avatar,
@@ -126,6 +126,7 @@ const ARTIFACT_ICON: Record<ArtifactKind, typeof FileText> = {
 export function OpportunityRecord() {
   const { id = '' } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const routeLocation = useLocation()
   const [params, setParams] = useSearchParams()
   const s = useStore()
   const setJobStatus = useStore((state) => state.setJobStatus)
@@ -155,9 +156,24 @@ export function OpportunityRecord() {
   const mine = s.artifacts.filter((a) => a.opportunityId === id)
   const visit = s.siteVisits.find((v) => v.opportunityId === id)
   const log = s.activity.filter((a) => a.opportunityId === id).slice().reverse()
+  const derivedJobProgress = job
+    ? deriveJobProgress(job, s.artifacts, s.checklists, s.checklistTemplates)
+    : 0
 
   const prevOppIdRef = useRef<string | null>(null)
   const prevStageRef = useRef<StageId | null>(null)
+
+  // Nested overflow panels break native hash scrolling — scroll the target ourselves.
+  useEffect(() => {
+    const hash = routeLocation.hash.replace(/^#/, '')
+    if (!hash || !opp) return
+    const activeTab = params.get('tab') ?? defaultHubTabForStage(opp.stage)
+    if (activeTab !== 'job') return
+    const timer = window.setTimeout(() => {
+      document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 80)
+    return () => window.clearTimeout(timer)
+  }, [opp, params, routeLocation.hash])
 
   useEffect(() => {
     if (!opp) return
@@ -211,8 +227,69 @@ export function OpportunityRecord() {
     relationship === 'customer' ? 'success' : relationship === 'contact' ? 'info' : 'neutral'
   const def = STAGE_BY_ID[opp.stage]
   const thread = threads[0]
+  const depositInvoices = invoices.filter((inv) => inv.kind === 'deposit')
+  const billingInvoices = invoices.filter((inv) => inv.kind !== 'deposit')
   const jobReached = (status: JobStatus) =>
     Boolean(job && jobStatusIndex(job.status) >= jobStatusIndex(status))
+  const renderInvoiceRows = (rows: typeof invoices) =>
+    rows.map((inv) => {
+      const paidAmt = inv.payments.reduce((a, p) => a + p.amount, 0)
+      const paymentLink = paymentRequests.find((request) => request.invoiceId === inv.id)
+      return (
+        <div key={inv.id} className="border-b border-subtle p-4 last:border-0">
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="font-mono text-base text-primary">{inv.number}</p>
+              <p className="text-sm text-muted capitalize">
+                {inv.kind} · QuickBooks {inv.quickbooksId ?? 'not synced'}
+              </p>
+            </div>
+            <Badge
+              tone={
+                inv.status === 'paid'
+                  ? 'success'
+                  : inv.status === 'partial'
+                    ? 'warning'
+                    : 'neutral'
+              }
+            >
+              {inv.status}
+            </Badge>
+            <span className="font-mono text-base text-primary tabular">
+              {money(inv.amount)}
+            </span>
+          </div>
+          {paidAmt > 0 && paidAmt < inv.amount && (
+            <p className="mt-1.5 text-sm text-muted">
+              {money(paidAmt)} received · {money(inv.amount - paidAmt)} outstanding
+            </p>
+          )}
+          {paymentLink && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
+              <Badge
+                tone={
+                  paymentLink.status === 'paid'
+                    ? 'success'
+                    : paymentLink.status === 'failed'
+                      ? 'danger'
+                      : 'warning'
+                }
+              >
+                {paymentLink.status}
+              </Badge>
+              <span>Hosted payment link ready</span>
+              <Link
+                to={`/pay/${paymentLink.token}`}
+                target="_blank"
+                className="font-medium text-brand hover:underline"
+              >
+                Open customer page
+              </Link>
+            </div>
+          )}
+        </div>
+      )
+    })
   const handleStagePick = (stage: StageId) => {
     if (stage === 'estimate_ready') {
       navigate(`/estimate/${opp.id}`)
@@ -698,7 +775,10 @@ export function OpportunityRecord() {
                     <Button
                       size="sm"
                       variant="primary"
-                      onClick={() => setJobStatus(opp.id, 'in_progress')}
+                      onClick={() => {
+                        setJobStatus(opp.id, 'in_progress')
+                        navigate(`/field/job/${opp.id}`)
+                      }}
                     >
                       <ArrowRight size={12} />
                       Start job
@@ -741,7 +821,7 @@ export function OpportunityRecord() {
                       <Badge tone="brand">{jobStatusLabel(job.status)}</Badge>
                     </div>
                     <p className="text-sm text-muted">
-                      Progress <span className="font-mono text-primary">{job.progress}%</span>
+                      Progress <span className="font-mono text-primary">{derivedJobProgress}%</span>
                     </p>
                   </div>
 
@@ -832,12 +912,12 @@ export function OpportunityRecord() {
                   <div className="border-t border-subtle px-4 py-3">
                     <div className="mb-1.5 flex items-center justify-between text-sm">
                       <span className="text-muted">Progress</span>
-                      <span className="font-mono text-primary tabular">{job.progress}%</span>
+                      <span className="font-mono text-primary tabular">{derivedJobProgress}%</span>
                     </div>
                     <Meter
-                      value={job.progress}
+                      value={derivedJobProgress}
                       max={100}
-                      tone={job.progress === 100 ? 'success' : 'action'}
+                      tone={derivedJobProgress === 100 ? 'success' : 'action'}
                     />
                   </div>
 
@@ -946,71 +1026,37 @@ export function OpportunityRecord() {
               )}
             </Section>
             <Section id="invoice" title="Invoice and payment">
-              {invoices.length === 0 ? (
+              {billingInvoices.length === 0 && depositInvoices.length === 0 ? (
                 <Card>
                   <EmptyState title="Not invoiced" description="Raised after closeout is confirmed." />
                 </Card>
               ) : (
-                <Card>
-                  {invoices.map((inv) => {
-                    const paidAmt = inv.payments.reduce((a, p) => a + p.amount, 0)
-                    const paymentLink = paymentRequests.find((request) => request.invoiceId === inv.id)
-                    return (
-                      <div key={inv.id} className="border-b border-subtle p-4 last:border-0">
-                        <div className="flex items-center gap-3">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-mono text-base text-primary">{inv.number}</p>
-                            <p className="text-sm text-muted capitalize">
-                              {inv.kind} · QuickBooks {inv.quickbooksId ?? 'not synced'}
-                            </p>
-                          </div>
-                          <Badge
-                            tone={
-                              inv.status === 'paid'
-                                ? 'success'
-                                : inv.status === 'partial'
-                                  ? 'warning'
-                                  : 'neutral'
-                            }
-                          >
-                            {inv.status}
-                          </Badge>
-                          <span className="font-mono text-base text-primary tabular">
-                            {money(inv.amount)}
-                          </span>
-                        </div>
-                        {paidAmt > 0 && paidAmt < inv.amount && (
-                          <p className="mt-1.5 text-sm text-muted">
-                            {money(paidAmt)} received · {money(inv.amount - paidAmt)} outstanding
-                          </p>
-                        )}
-                        {paymentLink && (
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
-                            <Badge
-                              tone={
-                                paymentLink.status === 'paid'
-                                  ? 'success'
-                                  : paymentLink.status === 'failed'
-                                    ? 'danger'
-                                    : 'warning'
-                              }
-                            >
-                              {paymentLink.status}
-                            </Badge>
-                            <span>Hosted payment link ready</span>
-                            <Link
-                              to={`/pay/${paymentLink.token}`}
-                              target="_blank"
-                              className="font-medium text-brand hover:underline"
-                            >
-                              Open customer page
-                            </Link>
-                          </div>
-                        )}
+                <div className="space-y-3">
+                  {billingInvoices.length === 0 ? (
+                    <Card>
+                      <EmptyState
+                        title="Final invoice not raised yet"
+                        description="Billing has not started yet for this job. Deposit activity, if any, is shown separately below."
+                      />
+                    </Card>
+                  ) : (
+                    <Card>
+                      <div className="border-b border-subtle bg-surface-inset px-4 py-2.5">
+                        <p className="text-sm font-semibold text-primary">Billing invoices</p>
                       </div>
-                    )
-                  })}
-                </Card>
+                      {renderInvoiceRows(billingInvoices)}
+                    </Card>
+                  )}
+
+                  {depositInvoices.length > 0 && (
+                    <Card>
+                      <div className="border-b border-subtle bg-surface-inset px-4 py-2.5">
+                        <p className="text-sm font-semibold text-primary">Deposits and earlier payments</p>
+                      </div>
+                      {renderInvoiceRows(depositInvoices)}
+                    </Card>
+                  )}
+                </div>
               )}
             </Section>
             </div>
@@ -1208,6 +1254,8 @@ function JobWhatsNext({
   opportunityId: string
   contactName?: string
 }) {
+  const navigate = useNavigate()
+  const setJobStatus = useStore((s) => s.setJobStatus)
   const next = jobWhatsNext(job, opportunityId, contactName)
   if (!next) return null
 
@@ -1222,15 +1270,52 @@ function JobWhatsNext({
           </div>
           <p className="mt-0.5 text-sm text-secondary">{next.body}</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            {next.buttons.map((b) => (
-              <Link key={b.label} to={b.to}>
-                <Button size="sm" variant={b.primary ? 'primary' : 'secondary'}>
+            {next.buttons.map((b) =>
+              b.startJob ? (
+                <Button
+                  key={b.label}
+                  size="sm"
+                  variant={b.primary ? 'primary' : 'secondary'}
+                  onClick={() => {
+                    setJobStatus(opportunityId, 'in_progress')
+                    navigate(b.to)
+                  }}
+                >
                   {b.icon}
                   {b.label}
                   <ArrowRight size={12} />
                 </Button>
-              </Link>
-            ))}
+              ) : b.to.includes('#') ? (
+                <Button
+                  key={b.label}
+                  size="sm"
+                  variant={b.primary ? 'primary' : 'secondary'}
+                  onClick={() => {
+                    const hash = b.to.split('#')[1]
+                    navigate(b.to)
+                    // Same-route hash clicks may not remount; scroll after tab paint.
+                    window.setTimeout(() => {
+                      document.getElementById(hash)?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start',
+                      })
+                    }, 80)
+                  }}
+                >
+                  {b.icon}
+                  {b.label}
+                  <ArrowRight size={12} />
+                </Button>
+              ) : (
+                <Link key={b.label} to={b.to}>
+                  <Button size="sm" variant={b.primary ? 'primary' : 'secondary'}>
+                    {b.icon}
+                    {b.label}
+                    <ArrowRight size={12} />
+                  </Button>
+                </Link>
+              ),
+            )}
           </div>
         </div>
       </div>
@@ -1244,10 +1329,11 @@ function jobWhatsNext(
   contactName?: string,
 ): {
   body: string
-  buttons: { label: string; to: string; primary?: boolean; icon?: ReactNode }[]
+  buttons: { label: string; to: string; primary?: boolean; icon?: ReactNode; startJob?: boolean }[]
 } | null {
   const jobTab = (hash?: string) =>
     `/opportunities/${opportunityId}?tab=job${hash ? `#${hash}` : ''}`
+  const procurementPage = `/opportunities/${opportunityId}/procurement`
 
   if (!job) {
     return {
@@ -1272,12 +1358,12 @@ function jobWhatsNext(
         body: 'Job is on the calendar. Order materials next so the crew is not waiting on procurement.',
         buttons: [
           {
-            label: 'Procurement',
-            to: jobTab('job-procurement'),
+            label: 'Open order builder',
+            to: procurementPage,
             primary: true,
             icon: <Boxes size={12} />,
           },
-          { label: 'Purchasing', to: '/purchasing', icon: <Boxes size={12} /> },
+          { label: 'Purchasing board', to: '/purchasing', icon: <Boxes size={12} /> },
         ],
       }
     case 'procurement_required':
@@ -1285,8 +1371,8 @@ function jobWhatsNext(
         body: 'Build and send the materials order for this job.',
         buttons: [
           {
-            label: 'Build order',
-            to: jobTab('job-procurement'),
+            label: 'Open order builder',
+            to: procurementPage,
             primary: true,
             icon: <Boxes size={12} />,
           },
@@ -1299,7 +1385,7 @@ function jobWhatsNext(
         buttons: [
           {
             label: 'Track order',
-            to: jobTab('job-procurement'),
+            to: procurementPage,
             primary: true,
             icon: <Boxes size={12} />,
           },
@@ -1312,18 +1398,14 @@ function jobWhatsNext(
       }
     case 'ready_to_start':
       return {
-        body: 'Crew and materials are ready. Open Field when install day arrives.',
+        body: 'Crew and materials are ready. Start the job in Field when install day arrives.',
         buttons: [
           {
-            label: 'Field today',
+            label: 'Start job',
             to: `/field/job/${opportunityId}`,
             primary: true,
             icon: <HardHat size={12} />,
-          },
-          {
-            label: 'Prep checklist',
-            to: `/opportunities/${opportunityId}?tab=documents`,
-            icon: <ClipboardCheck size={12} />,
+            startJob: true,
           },
         ],
       }
@@ -1371,7 +1453,31 @@ function jobWhatsNext(
       }
     case 'completed':
       return {
-        body: 'Work is complete and signed off. This is the end of the job workflow. Finance can now handle invoicing and collection separately.',
+        body: 'Work is complete and signed off. Move this into the invoice cycle next so billing can take over.',
+        buttons: [
+          { label: 'Finance', to: '/finance', primary: true, icon: <Receipt size={12} /> },
+          { label: 'Jobs board', to: '/jobs', icon: <HardHat size={12} /> },
+        ],
+      }
+    case 'ready_to_invoice':
+      return {
+        body: 'Closeout is done. Raise the final invoice or hand off to Finance to sync it.',
+        buttons: [
+          { label: 'Finance', to: '/finance', primary: true, icon: <Receipt size={12} /> },
+          { label: 'Invoice section', to: jobTab('invoice'), icon: <Receipt size={12} /> },
+        ],
+      }
+    case 'invoiced':
+      return {
+        body: 'The final invoice has been raised. Track collection and payment status from Finance.',
+        buttons: [
+          { label: 'Finance', to: '/finance', primary: true, icon: <Receipt size={12} /> },
+          { label: 'Invoice section', to: jobTab('invoice'), icon: <Receipt size={12} /> },
+        ],
+      }
+    case 'paid':
+      return {
+        body: 'The job is fully paid. Delivery and billing are complete.',
         buttons: [
           { label: 'Finance', to: '/finance', primary: true, icon: <Receipt size={12} /> },
           { label: 'Jobs board', to: '/jobs', icon: <HardHat size={12} /> },

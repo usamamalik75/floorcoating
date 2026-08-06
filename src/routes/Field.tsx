@@ -21,10 +21,10 @@ import {
   WifiOff,
 } from 'lucide-react'
 import { ACCOUNT_BY_ID, TODAY } from '@/data/seed'
-import { STAGE_BY_ID, stageLabel } from '@/domain/stages'
+import { STAGE_BY_ID, jobStatusIndex, jobStatusLabel, normalizeJobStatus, stageLabel } from '@/domain/stages'
 import type { ChecklistInstance, ChecklistTemplate } from '@/domain/types'
 import { money, useStore } from '@/store/useStore'
-import { assignedTo } from '@/domain/jobs'
+import { assignedTo, deriveJobProgress } from '@/domain/jobs'
 import { useArtifactsFor, useIssuesFor, useViewer } from '@/store/selectors'
 import {
   Badge,
@@ -85,10 +85,19 @@ export function FieldToday() {
   const jobs = useStore((s) => s.jobs)
   const opportunities = useStore((s) => s.opportunities)
   const procurementOrders = useStore((s) => s.procurementOrders)
+  const artifacts = useStore((s) => s.artifacts)
+  const checklists = useStore((s) => s.checklists)
+  const checklistTemplates = useStore((s) => s.checklistTemplates)
   const viewer = useViewer()
 
   const isField = viewer?.role === 'installer' || viewer?.role === 'crew_leader'
   const myJobs = jobs.filter((j) => (isField ? assignedTo(j, viewerId) : true))
+  const activeJobs = myJobs.filter(
+    (j) => jobStatusIndex(normalizeJobStatus(j.status)) >= jobStatusIndex('in_progress'),
+  )
+  const notStartedJobs = myJobs.filter(
+    (j) => jobStatusIndex(normalizeJobStatus(j.status)) < jobStatusIndex('in_progress'),
+  )
 
   // A rep's day is appointments; a crew's day is jobs. Both land here.
   const visits = opportunities.filter(
@@ -143,14 +152,22 @@ export function FieldToday() {
 
         <section>
           <h2 className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">Jobs</h2>
-          {myJobs.length === 0 ? (
-            <EmptyState title="No jobs assigned" />
+          {activeJobs.length === 0 ? (
+            <EmptyState
+              title={notStartedJobs.length > 0 ? 'No active field jobs yet' : 'No jobs assigned'}
+              description={
+                notStartedJobs.length > 0
+                  ? 'Assigned jobs appear here after the crew starts work.'
+                  : undefined
+              }
+            />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              {myJobs.map((j) => {
+              {activeJobs.map((j) => {
                 const opp = opportunities.find((o) => o.id === j.opportunityId)
                 if (!opp) return null
                 const mo = procurementOrders.find((m) => m.opportunityId === opp.id)
+                const progress = deriveJobProgress(j, artifacts, checklists, checklistTemplates)
                 return (
                   <Link key={j.id} to={`/field/job/${opp.id}`}>
                     <Card className="p-4 transition-colors hover:border-strong hover:shadow-sm">
@@ -183,7 +200,7 @@ export function FieldToday() {
                         )}
                         {j.syncStatus === 'pending' && <Badge tone="warning">Pending sync</Badge>}
                       </div>
-                      <Meter value={j.progress} tone="attention" className="mt-3" />
+                      <Meter value={progress} tone="attention" className="mt-3" />
                     </Card>
                   </Link>
                 )
@@ -191,6 +208,47 @@ export function FieldToday() {
             </div>
           )}
         </section>
+
+        {notStartedJobs.length > 0 && (
+          <section>
+            <h2 className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">
+              Start job
+            </h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {notStartedJobs.map((j) => {
+                const opp = opportunities.find((o) => o.id === j.opportunityId)
+                if (!opp) return null
+                const status = normalizeJobStatus(j.status)
+                const fieldReady = jobStatusIndex(status) >= jobStatusIndex('ready_to_start')
+                return (
+                  <Card key={j.id} className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-base font-semibold text-primary">{opp.name}</p>
+                      <Badge tone={fieldReady ? 'attention' : 'neutral'}>
+                        {jobStatusLabel(status)}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 flex items-center gap-1.5 text-sm text-muted">
+                      <MapPin size={13} /> {opp.address}
+                    </p>
+                    <p className="mt-2 text-sm text-muted">
+                      {fieldReady
+                        ? 'This job is ready to begin in the field.'
+                        : 'This job is assigned, but field execution has not started yet.'}
+                    </p>
+                    <Link
+                      to={fieldReady ? `/field/job/${opp.id}` : `/opportunities/${opp.id}?tab=job`}
+                    >
+                      <Button className="mt-3 w-full" variant="primary">
+                        {fieldReady ? 'Start job' : 'Open job status'}
+                      </Button>
+                    </Link>
+                  </Card>
+                )
+              })}
+            </div>
+          </section>
+        )}
       </div>
     </FieldFrame>
   )
@@ -200,6 +258,7 @@ export function FieldVisit() {
   const { id } = useParams<{ id: string }>()
   const opp = useStore((s) => s.opportunities.find((o) => o.id === id))
   const visit = useStore((s) => s.siteVisits.find((v) => v.opportunityId === id))
+  const accounts = useStore((s) => s.accounts)
   const artifacts = useArtifactsFor(id ?? '')
   const addArtifact = useStore((s) => s.addArtifact)
   const viewerId = useStore((s) => s.viewerId)
@@ -211,7 +270,7 @@ export function FieldVisit() {
       </FieldFrame>
     )
 
-  const account = ACCOUNT_BY_ID[opp.accountId]
+  const account = accounts.find((a) => a.id === opp.accountId) ?? ACCOUNT_BY_ID[opp.accountId]
   const photos = artifacts.filter((a) => a.kind === 'photo')
 
   return (
@@ -292,6 +351,7 @@ export function FieldJob() {
   const { id } = useParams<{ id: string }>()
   const opp = useStore((s) => s.opportunities.find((o) => o.id === id))
   const job = useStore((s) => s.jobs.find((j) => j.opportunityId === id))
+  const accounts = useStore((s) => s.accounts)
   const est = useStore((s) => s.estimates.find((e) => e.opportunityId === id))
   const artifacts = useArtifactsFor(id ?? '')
   const issues = useIssuesFor(id ?? '')
@@ -302,8 +362,10 @@ export function FieldJob() {
   const addArtifact = useStore((s) => s.addArtifact)
   const updateJob = useStore((s) => s.updateJob)
   const addDailyLog = useStore((s) => s.addDailyLog)
+  const setJobStatus = useStore((s) => s.setJobStatus)
   const viewerId = useStore((s) => s.viewerId)
   const procurementOrder = useStore((s) => s.procurementOrders.find((m) => m.opportunityId === id))
+  const viewer = useViewer()
 
   const [reporting, setReporting] = useState<'issue' | 'change' | null>(null)
   const [logNote, setLogNote] = useState('')
@@ -317,10 +379,36 @@ export function FieldJob() {
 
   const template = checklistTemplates.find((t) => t.id === 'cl_install')
   const instance = checklists.find((c) => c.opportunityId === opp.id && c.templateId === 'cl_install')
+  const closeoutTemplate = checklistTemplates.find((t) => t.id === 'cl_closeout')
+  const closeoutInstance = checklists.find((c) => c.opportunityId === opp.id && c.templateId === 'cl_closeout')
   const notes = artifacts.filter((a) => a.kind === 'note')
   const plans = artifacts.filter((a) => a.kind === 'plan' || a.kind === 'map')
   const photos = artifacts.filter((a) => a.kind === 'photo')
-  const account = ACCOUNT_BY_ID[opp.accountId]
+  const afterPhotos = photos.filter((a) => a.photoPhase === 'after')
+  const account = accounts.find((a) => a.id === opp.accountId) ?? ACCOUNT_BY_ID[opp.accountId]
+  const normalizedStatus = normalizeJobStatus(job.status)
+  const canStartFieldWork = jobStatusIndex(normalizedStatus) >= jobStatusIndex('ready_to_start')
+  const canLogExecution = jobStatusIndex(normalizedStatus) >= jobStatusIndex('in_progress')
+  const blockedFieldMessage =
+    normalizedStatus === 'scheduling_required' || normalizedStatus === 'scheduled'
+      ? 'This job is not released to the field yet. Confirm dates, crew, and dispatch readiness first.'
+      : normalizedStatus === 'procurement_required' || normalizedStatus === 'procurement_ordered'
+        ? 'This job is still waiting on procurement. Field execution opens after equipment and materials are ready.'
+        : null
+  const installDoneCount = instance?.done.length ?? 0
+  const installItemCount = template?.items.length ?? 0
+  const installChecklistComplete = Boolean(template) && installDoneCount >= installItemCount
+  const closeoutDoneCount = closeoutInstance?.done.length ?? 0
+  const closeoutItemCount = closeoutTemplate?.items.length ?? 0
+  const closeoutChecklistComplete = Boolean(closeoutTemplate) && closeoutDoneCount >= closeoutItemCount
+  const canSendToCloseout =
+    normalizedStatus === 'in_progress'
+    && job.clockStatus === 'wrapped'
+    && installChecklistComplete
+    && afterPhotos.length > 0
+  const canMarkCompleted = normalizedStatus === 'completion_review' && closeoutChecklistComplete
+  const canCompleteJob = viewer?.role === 'crew_leader' || viewer?.role === 'pm'
+  const derivedProgress = deriveJobProgress(job, artifacts, checklists, checklistTemplates)
 
   const scope = est?.options
     .filter((o) => o.kind === 'scope' || o.selectedByCustomer || o.recommended)
@@ -344,6 +432,7 @@ export function FieldJob() {
             {opp.estimatedQuantity.toLocaleString()} units
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
+            <Badge tone="brand">{jobStatusLabel(normalizedStatus)}</Badge>
             <Badge tone={job.dispatchState === 'ready' ? 'success' : job.dispatchState === 'at_risk' ? 'warning' : 'neutral'}>
               {job.dispatchState ?? 'unassigned'}
             </Badge>
@@ -357,13 +446,25 @@ export function FieldJob() {
             Navigate
           </Button>
           <div className="mt-2 grid grid-cols-2 gap-2">
-            <Button size="sm" onClick={() => updateJob(job.id, { clockStatus: 'traveling', syncStatus: 'pending' })}>
+            <Button
+              size="sm"
+              disabled={!canStartFieldWork}
+              onClick={() => updateJob(job.id, { clockStatus: 'traveling', syncStatus: 'pending' })}
+            >
               Start travel
             </Button>
-            <Button size="sm" onClick={() => updateJob(job.id, { clockStatus: 'on_site', checkInAt: new Date().toISOString(), syncStatus: 'pending' })}>
+            <Button
+              size="sm"
+              disabled={!canStartFieldWork}
+              onClick={() => updateJob(job.id, { clockStatus: 'on_site', checkInAt: new Date().toISOString(), syncStatus: 'pending' })}
+            >
               Check in
             </Button>
-            <Button size="sm" onClick={() => updateJob(job.id, { clockStatus: 'wrapped', checkOutAt: new Date().toISOString(), syncStatus: 'pending' })}>
+            <Button
+              size="sm"
+              disabled={!canStartFieldWork}
+              onClick={() => updateJob(job.id, { clockStatus: 'wrapped', checkOutAt: new Date().toISOString(), syncStatus: 'pending' })}
+            >
               Wrap day
             </Button>
             <Button size="sm" variant="ghost" onClick={() => updateJob(job.id, { syncStatus: job.syncStatus === 'pending' ? 'synced' : 'pending' })}>
@@ -371,7 +472,12 @@ export function FieldJob() {
               {job.syncStatus === 'pending' ? 'Mark synced' : 'Go offline'}
             </Button>
           </div>
-          <Meter value={job.progress} tone="attention" className="mt-2" />
+          <Meter value={derivedProgress} tone="attention" className="mt-2" />
+          {blockedFieldMessage && (
+            <div className="mt-3 rounded-md border border-(--status-warning) bg-warning-soft px-3 py-2 text-sm text-warning-text">
+              {blockedFieldMessage}
+            </div>
+          )}
         </Card>
 
         <Card className="p-3">
@@ -387,6 +493,7 @@ export function FieldJob() {
           <Button
             className="mt-2 w-full"
             size="sm"
+            disabled={!canStartFieldWork}
             onClick={() => updateJob(job.id, { customerNotifiedAt: new Date().toISOString(), syncStatus: 'pending' })}
           >
             Confirm arrival with customer
@@ -540,9 +647,15 @@ export function FieldJob() {
         <Card className="p-3">
           <p className="text-md font-semibold text-primary">Daily log and sync queue</p>
           <div className="mt-2 flex gap-2">
-            <Input value={logNote} onChange={(e) => setLogNote(e.target.value)} placeholder="What changed on site?" />
+            <Input
+              value={logNote}
+              onChange={(e) => setLogNote(e.target.value)}
+              placeholder="What changed on site?"
+              disabled={!canLogExecution}
+            />
             <Button
               size="sm"
+              disabled={!canLogExecution}
               onClick={() => {
                 if (!logNote.trim()) return
                 addDailyLog(job.id, logNote)
@@ -569,6 +682,7 @@ export function FieldJob() {
           <Button
             variant="attention"
             size="lg"
+            disabled={!canLogExecution}
             onClick={() =>
               addArtifact({
                 opportunityId: opp.id,
@@ -588,6 +702,7 @@ export function FieldJob() {
           <Button
             variant="primary"
             size="lg"
+            disabled={!canLogExecution}
             onClick={() =>
               addArtifact({
                 opportunityId: opp.id,
@@ -604,15 +719,108 @@ export function FieldJob() {
             <Camera size={16} />
             After
           </Button>
-          <Button size="lg" onClick={() => setReporting('issue')}>
+          <Button size="lg" disabled={!canLogExecution} onClick={() => setReporting('issue')}>
             <ShieldAlert size={16} />
             Report issue
           </Button>
-          <Button size="lg" onClick={() => setReporting('change')}>
+          <Button size="lg" disabled={!canLogExecution} onClick={() => setReporting('change')}>
             <Plus size={16} />
             Change order
           </Button>
         </div>
+
+        {(normalizedStatus === 'in_progress' || normalizedStatus === 'completion_review' || normalizedStatus === 'completed') && (
+          <Card className="p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-md font-semibold text-primary">Completion handoff</p>
+              <Badge
+                tone={
+                  normalizedStatus === 'completed'
+                    ? 'success'
+                    : normalizedStatus === 'completion_review'
+                      ? 'attention'
+                      : 'neutral'
+                }
+              >
+                {jobStatusLabel(normalizedStatus)}
+              </Badge>
+            </div>
+
+            {normalizedStatus === 'in_progress' && (
+              <>
+                <p className="mt-1 text-base text-muted">
+                  Wrap the day, finish the install checklist, and upload at least one after photo before sending this job to closeout.
+                </p>
+                <div className="mt-3 space-y-1.5 text-sm text-secondary">
+                  <p className={cn(job.clockStatus === 'wrapped' ? 'text-success-text' : 'text-warning-text')}>
+                    {job.clockStatus === 'wrapped' ? 'Done' : 'Missing'}: wrap day
+                  </p>
+                  <p className={cn(installChecklistComplete ? 'text-success-text' : 'text-warning-text')}>
+                    {installChecklistComplete ? 'Done' : 'Missing'}: installation checklist
+                    {template && ` (${installDoneCount}/${installItemCount})`}
+                  </p>
+                  <p className={cn(afterPhotos.length > 0 ? 'text-success-text' : 'text-warning-text')}>
+                    {afterPhotos.length > 0 ? 'Done' : 'Missing'}: after photos
+                    {afterPhotos.length > 0 && ` (${afterPhotos.length})`}
+                  </p>
+                </div>
+                <Button
+                  className="mt-3 w-full"
+                  variant="primary"
+                  disabled={!canSendToCloseout}
+                  onClick={() => setJobStatus(opp.id, 'completion_review')}
+                >
+                  Send to closeout
+                </Button>
+              </>
+            )}
+
+            {normalizedStatus === 'completion_review' && (
+              <>
+                <p className="mt-1 text-base text-muted">
+                  Finish the closeout checklist and customer sign-off, then mark the job complete.
+                </p>
+                <div className="mt-3 space-y-1.5 text-sm text-secondary">
+                  <p className={cn(closeoutChecklistComplete ? 'text-success-text' : 'text-warning-text')}>
+                    {closeoutChecklistComplete ? 'Done' : 'Missing'}: closeout checklist
+                    {closeoutTemplate && ` (${closeoutDoneCount}/${closeoutItemCount})`}
+                  </p>
+                  {!canCompleteJob && (
+                    <p className="text-warning-text">
+                      A crew leader or PM must mark this job completed.
+                    </p>
+                  )}
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Link to={`/opportunities/${opp.id}?tab=job#closeout`}>
+                    <Button className="w-full" size="sm">
+                      Closeout checklist
+                    </Button>
+                  </Link>
+                  <Link to={`/signoff/${opp.id}`} target="_blank">
+                    <Button className="w-full" size="sm" variant="ghost">
+                      Sign-off link
+                    </Button>
+                  </Link>
+                </div>
+                <Button
+                  className="mt-3 w-full"
+                  variant="primary"
+                  disabled={!canMarkCompleted || !canCompleteJob}
+                  onClick={() => setJobStatus(opp.id, 'completed')}
+                >
+                  Mark job completed
+                </Button>
+              </>
+            )}
+
+            {normalizedStatus === 'completed' && (
+              <p className="mt-1 text-base text-muted">
+                Field work and closeout are complete. Finance can take over invoicing from here.
+              </p>
+            )}
+          </Card>
+        )}
       </div>
 
       <FieldReport kind={reporting} opportunityId={opp.id} onClose={() => setReporting(null)} />

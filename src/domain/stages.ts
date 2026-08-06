@@ -315,6 +315,9 @@ export const JOB_STATUSES: JobStatus[] = [
   'on_hold',
   'completion_review',
   'completed',
+  'ready_to_invoice',
+  'invoiced',
+  'paid',
 ]
 
 export const PHASE_LABEL: Record<Phase, string> = {
@@ -423,14 +426,7 @@ export function nextStage(stage: StageId): StageId | null {
 }
 
 export function normalizeJobStatus(status: JobStatus): JobStatus {
-  switch (status) {
-    case 'ready_to_invoice':
-    case 'invoiced':
-    case 'paid':
-      return 'completed'
-    default:
-      return status
-  }
+  return status
 }
 
 export function jobStatusLabel(status: JobStatus): string {
@@ -453,7 +449,7 @@ export function nextJobStatus(status: JobStatus): JobStatus | null {
 export function jobStatusGroup(status: JobStatus): 'execution' | 'closed' | 'stalled' {
   const current = normalizeJobStatus(status)
   if (current === 'on_hold') return 'stalled'
-  if (current === 'completion_review' || current === 'completed') {
+  if (['completion_review', 'completed', 'ready_to_invoice', 'invoiced', 'paid'].includes(current)) {
     return 'closed'
   }
   return 'execution'

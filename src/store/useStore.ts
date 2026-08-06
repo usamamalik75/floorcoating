@@ -582,6 +582,10 @@ const createState: StateCreator<State> = (set, get) => ({
   setJobStatus: (opportunityId, status) => {
     const job = get().jobs.find((j) => j.opportunityId === opportunityId)
     if (!job) return
+    const viewer = get().users.find((u) => u.id === get().viewerId)
+    if (status === 'completed' && viewer && !['crew_leader', 'pm'].includes(viewer.role)) {
+      return
+    }
     const from = job.status
     set((s) => ({
       jobs: s.jobs.map((j) => (j.opportunityId === opportunityId ? { ...j, status } : j)),

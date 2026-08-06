@@ -1655,7 +1655,8 @@ export const JOBS: Job[] = [
     crewLeaderId: 'u_keith',
     pmId: 'u_dana',
     crewIds: ['u_ray'],
-    progress: 100,
+    // Displayed progress is derived live; keep seed below 100 while in review.
+    progress: 75,
     dailyLogs: [{ id: 'dl_3', date: iso(-1), note: 'Final service pass down, customer walked the site and signed off.', byId: 'u_keith' }],
   },
   {

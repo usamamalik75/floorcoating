@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertTriangle, Boxes, Camera, HardHat } from 'lucide-react'
 import { useStore, money } from '@/store/useStore'
-import { useScopedOpportunities, useLocations, useUserDirectory } from '@/store/selectors'
+import { useScopedOpportunities, useLocations, useUserDirectory, useViewer } from '@/store/selectors'
 import { ACCOUNT_BY_ID } from '@/data/seed'
 import {
   JOB_STATUSES,
@@ -12,7 +12,7 @@ import {
   nextJobStatus,
 } from '@/domain/stages'
 import type { JobStatus, Opportunity } from '@/domain/types'
-import { jobTeam, primaryFieldLead } from '@/domain/jobs'
+import { deriveJobProgress, jobTeam, primaryFieldLead } from '@/domain/jobs'
 import {
   Avatar,
   Badge,
@@ -138,7 +138,6 @@ export function Jobs() {
                       key={opp.id}
                       opp={opp}
                       status={normalizeJobStatus(job!.status)}
-                      progress={job!.progress}
                       onAdvance={() => {
                         const next = nextJobStatus(job!.status)
                         if (next) setJobStatus(opp.id, next)
@@ -242,28 +241,33 @@ function FilterChip({
 function JobCard({
   opp,
   status,
-  progress,
   onAdvance,
 }: {
   opp: Opportunity
   status: JobStatus
-  progress: number
   onAdvance: () => void
 }) {
   const s = useStore()
   const userById = useUserDirectory()
   const locations = useLocations()
+  const viewer = useViewer()
   const job = s.jobs.find((j) => j.opportunityId === opp.id)
   const procurement = s.procurementOrders.find((m) => m.opportunityId === opp.id)
   const issues = s.issues.filter((i) => i.opportunityId === opp.id && i.status === 'open')
   const photos = s.artifacts.filter((a) => a.opportunityId === opp.id && a.kind === 'photo')
   const next = nextJobStatus(status)
+  const canCompleteJob = viewer?.role === 'crew_leader' || viewer?.role === 'pm'
+  const progress = job
+    ? deriveJobProgress(job, s.artifacts, s.checklists, s.checklistTemplates)
+    : 0
 
   return (
     <div className="rounded-md border border-subtle bg-surface-raised p-2.5">
       <Link to={`/opportunities/${opp.id}?tab=job`} className="block">
         <p className="text-base font-medium text-primary leading-tight">{opp.name}</p>
-        <p className="mt-0.5 text-sm text-muted">{ACCOUNT_BY_ID[opp.accountId]?.name}</p>
+        <p className="mt-0.5 text-sm text-muted">
+          {s.accounts.find((a) => a.id === opp.accountId)?.name ?? ACCOUNT_BY_ID[opp.accountId]?.name}
+        </p>
         <div className="mt-2 flex items-center justify-between text-2xs text-muted">
           <span>{locations.find((l) => l.id === opp.locationId)?.name}</span>
           <span className="font-mono">{money(opp.value, true)}</span>
@@ -274,11 +278,13 @@ function JobCard({
             <span className="text-2xs text-muted">{jobTeam(job).length} team members</span>
           </div>
         )}
-        {progress > 0 && (
-          <div className="mt-2">
-            <Meter value={progress} />
+        <div className="mt-2">
+          <div className="mb-1 flex items-center justify-between text-2xs text-muted">
+            <span>Field progress</span>
+            <span className="font-mono">{progress}%</span>
           </div>
-        )}
+          <Meter value={progress} />
+        </div>
         <div className="mt-2 flex flex-wrap gap-1">
           {job?.dispatchState && (
             <Badge tone={job.dispatchState === 'ready' ? 'success' : job.dispatchState === 'at_risk' ? 'warning' : 'neutral'}>
@@ -303,7 +309,7 @@ function JobCard({
           )}
         </div>
       </Link>
-      {next && (
+      {next && (next !== 'completed' || canCompleteJob) && (
         <Button size="sm" variant="secondary" className="mt-2 w-full" onClick={onAdvance}>
           Advance to {jobStatusLabel(next)}
         </Button>

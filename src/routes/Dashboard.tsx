@@ -17,10 +17,10 @@ import {
   Users,
 } from 'lucide-react'
 import { useStore, money, estimateTotal } from '@/store/useStore'
-import { assignedTo } from '@/domain/jobs'
+import { assignedTo, deriveJobProgress } from '@/domain/jobs'
 import { useScopedOpportunities, useLocations, useUserDirectory, useViewer } from '@/store/selectors'
 import { TODAY } from '@/data/seed'
-import { STAGE_BY_ID, normalizeJobStatus, stageLabel } from '@/domain/stages'
+import { STAGE_BY_ID, jobStatusIndex, normalizeJobStatus, stageLabel } from '@/domain/stages'
 import type { Opportunity, StageId } from '@/domain/types'
 import { Badge, Button, Card, CardHeader, EmptyState, StageChip, HorizontalBarChart, TrendMetric } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -197,7 +197,12 @@ function isOpenOpportunity(
       (sum, i) => sum + i.payments.reduce((paid, payment) => paid + payment.amount, 0),
       0,
     )
-    return !(job && normalizeJobStatus(job.status as any) === 'completed' && billed > 0 && received >= billed)
+    return !(
+      job
+      && jobStatusIndex(normalizeJobStatus(job.status as any)) >= jobStatusIndex('completed')
+      && billed > 0
+      && received >= billed
+    )
   }
   return true
 }
@@ -660,6 +665,7 @@ function CrewHome() {
         ) : (
           today.map((j) => {
             const o = s.opportunities.find((x) => x.id === j.opportunityId)!
+            const progress = deriveJobProgress(j, s.artifacts, s.checklists, s.checklistTemplates)
             return (
               <Link
                 key={j.id}
@@ -671,7 +677,7 @@ function CrewHome() {
                   <p className="truncate text-base text-muted">{o.address}</p>
                   <p className="mt-1 text-sm text-muted">
                     Day {Math.max(1, Math.round((TODAY.getTime() - new Date(j.start).getTime()) / 86_400_000) + 1)} ·{' '}
-                    {j.progress}% complete
+                    {progress}% complete
                   </p>
                 </div>
                 <ArrowRight size={16} className="shrink-0 text-muted" />

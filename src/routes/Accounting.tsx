@@ -76,7 +76,9 @@ export function Accounting() {
     return status ? normalizeJobStatus(status) : undefined
   }
   const hasFinalInvoice = (id: string) => mine.some((i) => i.opportunityId === id && i.kind === 'final')
-  const readyToInvoice = awarded.filter((o) => jobStatus(o.id) === 'completed' && !hasFinalInvoice(o.id))
+  const readyToInvoice = awarded.filter(
+    (o) => ['completed', 'ready_to_invoice'].includes(jobStatus(o.id) ?? '') && !hasFinalInvoice(o.id),
+  )
   const inReview = awarded.filter((o) => jobStatus(o.id) === 'completion_review')
 
   const billed = mine.reduce((a, i) => a + i.amount, 0)
