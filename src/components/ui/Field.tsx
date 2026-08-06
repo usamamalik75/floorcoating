@@ -67,7 +67,7 @@ export function Checkbox({
   return (
     <label
       className={cn(
-        'group flex cursor-pointer items-start gap-2.5 select-none',
+        'group relative flex cursor-pointer items-start gap-2.5 select-none',
         disabled && 'cursor-not-allowed opacity-50',
         className,
       )}
@@ -79,15 +79,18 @@ export function Checkbox({
             ? 'border-action bg-action text-action-fg'
             : 'border-strong bg-surface-raised group-hover:border-(--color-steel-400)',
         )}
+        aria-hidden
       >
         {checked && <Check size={11} strokeWidth={3.5} />}
       </span>
       <input
         type="checkbox"
-        className="sr-only"
+        className="absolute opacity-0"
+        style={{ width: 1, height: 1, margin: 0, inset: 0 }}
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
+        onClick={(e) => e.stopPropagation()}
       />
       {(label || description) && (
         <span className="min-w-0 flex-1">

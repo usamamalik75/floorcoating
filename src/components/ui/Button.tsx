@@ -55,6 +55,7 @@ export function Button({
         className,
       )}
       {...props}
+      type={props.type ?? 'button'}
     >
       {icon}
       {children}

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { ACCOUNT_BY_ID, TODAY } from '@/data/seed'
 import { STAGE_BY_ID, stageLabel } from '@/domain/stages'
+import type { ChecklistInstance, ChecklistTemplate } from '@/domain/types'
 import { money, useStore } from '@/store/useStore'
 import { assignedTo } from '@/domain/jobs'
 import { useArtifactsFor, useIssuesFor, useViewer } from '@/store/selectors'
@@ -503,24 +504,12 @@ export function FieldJob() {
         )}
 
         {template && (
-          <Card>
-            <div className="flex items-center justify-between border-b border-subtle px-3 py-2.5">
-              <span className="text-md font-semibold text-primary">{template.name}</span>
-              <Badge tone={(instance?.done.length ?? 0) >= template.items.length ? 'success' : 'warning'}>
-                {instance?.done.length ?? 0} / {template.items.length}
-              </Badge>
-            </div>
-            <div className="space-y-3 p-3">
-              {template.items.map((item) => (
-                <Checkbox
-                  key={item.id}
-                  checked={instance?.done.includes(item.id) ?? false}
-                  onChange={() => toggle(opp.id, 'cl_install', item.id)}
-                  label={item.label}
-                />
-              ))}
-            </div>
-          </Card>
+          <InstallChecklist
+            opportunityId={opp.id}
+            template={template}
+            instance={instance}
+            onToggle={toggle}
+          />
         )}
 
         {issues.length > 0 && (
@@ -632,6 +621,46 @@ export function FieldJob() {
 }
 
 /* ------------------------------------------------------------------------ */
+
+function InstallChecklist({
+  opportunityId,
+  template,
+  instance,
+  onToggle,
+}: {
+  opportunityId: string
+  template: ChecklistTemplate
+  instance: ChecklistInstance | undefined
+  onToggle: (opportunityId: string, templateId: string, itemId: string) => void
+}) {
+  const doneCount = instance?.done.length ?? 0
+  return (
+    <Card>
+      <div className="flex items-center justify-between border-b border-subtle px-3 py-2.5">
+        <span className="text-md font-semibold text-primary">{template.name}</span>
+        <Badge tone={doneCount >= template.items.length ? 'success' : 'warning'}>
+          {doneCount} / {template.items.length}
+        </Badge>
+      </div>
+      <div className="space-y-3 p-3">
+        {template.items.map((item) => {
+          const checked = instance?.done.includes(item.id) ?? false
+          return (
+            <Checkbox
+              key={item.id}
+              checked={checked}
+              onChange={(next) => {
+                if (next === checked) return
+                onToggle(opportunityId, template.id, item.id)
+              }}
+              label={item.label}
+            />
+          )
+        })}
+      </div>
+    </Card>
+  )
+}
 
 function PhotoGrid({ photos }: { photos: { id: string; name: string; photoPhase?: string }[] }) {
   if (photos.length === 0) return null
