@@ -16,7 +16,7 @@ import { JobTeamPanel } from '@/components/domain/JobTeamPanel'
 import { Avatar, Badge, Button, Card, CardHeader, EmptyState, Sheet } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useLocations, useUserDirectory, useUsers } from '@/store/selectors'
-import { primaryFieldLead } from '@/domain/jobs'
+import { membersWithRole, primaryFieldLead } from '@/domain/jobs'
 
 const WEEKS = 3
 
@@ -58,12 +58,17 @@ function ProcurementPanel({ opportunityId }: { opportunityId: string }) {
   )
 }
 
+function formatScheduleWindow(start: string, end: string) {
+  return `${format(new Date(start), 'MMM d')} - ${format(new Date(end), 'MMM d, yyyy')}`
+}
+
 export function Schedule() {
   const jobs = useStore((s) => s.jobs)
   const opportunities = useStore((s) => s.opportunities)
   const locationFilter = useStore((s) => s.locationFilter)
   const updateJob = useStore((s) => s.updateJob)
   const scheduleJob = useStore((s) => s.scheduleJob)
+  const logActivity = useStore((s) => s.logActivity)
   const locations = useLocations()
   const users = useUsers()
   const userById = useUserDirectory()
@@ -96,6 +101,18 @@ export function Schedule() {
   }, [jobs, opportunities, locationFilter])
 
   const selected = rows.find((r) => r.job.id === openJob)
+  const selectedCrewLeadCount = selected ? membersWithRole(selected.job, 'crew_lead').length : 0
+  const selectedInstallerCount = selected ? membersWithRole(selected.job, 'technician').length : 0
+  const selectedHasScheduleWindow = selected
+    ? new Date(selected.job.start).getTime() <= new Date(selected.job.end).getTime()
+    : false
+  const selectedCanConfirmSchedule = Boolean(
+    selected
+      && selected.job.status === 'scheduling_required'
+      && selectedHasScheduleWindow
+      && selectedCrewLeadCount > 0
+      && selectedInstallerCount > 0,
+  )
 
   const unscheduled = opportunities.filter((o) => {
     if (o.stage !== 'awarded') return false
@@ -142,6 +159,16 @@ export function Schedule() {
       dailyLogs: [],
     })
     setPendingOpportunityId(opportunityId)
+  }
+
+  const confirmSchedule = () => {
+    if (!selected || !selectedCanConfirmSchedule) return
+    updateJob(selected.job.id, { status: 'scheduled' })
+    logActivity(
+      selected.opp!.id,
+      'system',
+      `Schedule confirmed for ${formatScheduleWindow(selected.job.start, selected.job.end)}.`,
+    )
   }
 
   return (
@@ -328,6 +355,39 @@ export function Schedule() {
       >
         {selected && (
           <div className='space-y-4'>
+            <div className="rounded-md border border-subtle bg-surface-inset p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-semibold text-primary">Scheduling checklist</p>
+                <Badge tone={selected.job.status === 'scheduled' ? 'success' : 'warning'}>
+                  {selected.job.status === 'scheduled' ? 'Scheduled' : 'Scheduling Required'}
+                </Badge>
+              </div>
+              <div className="mt-3 space-y-1.5 text-sm text-secondary">
+                <p className={cn(selectedHasScheduleWindow ? 'text-success-text' : 'text-warning-text')}>
+                  {selectedHasScheduleWindow ? 'Done' : 'Missing'}: install window
+                </p>
+                <p className={cn(selectedCrewLeadCount > 0 ? 'text-success-text' : 'text-warning-text')}>
+                  {selectedCrewLeadCount > 0 ? 'Done' : 'Missing'}: crew lead
+                </p>
+                <p className={cn(selectedInstallerCount > 0 ? 'text-success-text' : 'text-warning-text')}>
+                  {selectedInstallerCount > 0 ? 'Done' : 'Missing'}: at least one installer
+                </p>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  variant="primary"
+                  disabled={!selectedCanConfirmSchedule}
+                  onClick={confirmSchedule}
+                >
+                  Confirm schedule
+                </Button>
+                {selected.job.status === 'scheduled' && (
+                  <p className="self-center text-sm text-muted">
+                    Confirmed for {formatScheduleWindow(selected.job.start, selected.job.end)}.
+                  </p>
+                )}
+              </div>
+            </div>
             <JobTeamPanel job={selected.job} locationId={selected.opp!.locationId} />
             <div className='hidden'>
 
