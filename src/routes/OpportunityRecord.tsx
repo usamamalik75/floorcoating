@@ -283,20 +283,27 @@ export function OpportunityRecord() {
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col bg-surface-sunken lg:flex-row">
-        <aside className="hidden w-72 shrink-0 border-r border-subtle bg-surface-raised lg:block">
-          <div className="h-full overflow-y-auto p-4 scrollbar-thin">
-            <p className="mb-1 text-2xs font-semibold tracking-wider text-muted uppercase">
-              Sales pipeline
-            </p>
-            <p className="mb-3 text-sm text-secondary">
-              Move left to right through the full sales process.
-            </p>
-            <StageStepper opportunity={opp} onPick={handleStagePick} orientation="vertical" />
-          </div>
-        </aside>
+        {tab !== 'job' && (
+          <aside className="hidden w-72 shrink-0 border-r border-subtle bg-surface-raised lg:block">
+            <div className="h-full overflow-y-auto p-4 scrollbar-thin">
+              <p className="mb-1 text-2xs font-semibold tracking-wider text-muted uppercase">
+                Sales pipeline
+              </p>
+              <p className="mb-3 text-sm text-secondary">
+                Move left to right through the full sales process.
+              </p>
+              <StageStepper opportunity={opp} onPick={handleStagePick} orientation="vertical" />
+            </div>
+          </aside>
+        )}
 
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-        <div className="mx-auto w-full max-w-5xl space-y-5 p-5">
+        <div
+          className={cn(
+            'w-full space-y-5 p-5',
+            tab === 'job' ? 'max-w-none' : 'mx-auto max-w-5xl',
+          )}
+        >
           {showNext && (
             <NextActionPanel
               opportunity={opp}
