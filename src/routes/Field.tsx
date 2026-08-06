@@ -52,7 +52,7 @@ const MATERIAL_LABEL: Record<string, string> = {
 /**
  * The field shell. Not a second application — the same components rendered
  * inside `data-density="field"`, which swaps rows to 48px and controls to a
- * 44px touch target. A tech wearing gloves on a job site and an estimator at
+ * 44px touch target. An installer wearing gloves on a job site and an estimator at
  * a desk are using one codebase.
  */
 function FieldFrame({
@@ -86,7 +86,7 @@ export function FieldToday() {
   const procurementOrders = useStore((s) => s.procurementOrders)
   const viewer = useViewer()
 
-  const isField = viewer?.role === 'tech' || viewer?.role === 'crew_leader'
+  const isField = viewer?.role === 'installer' || viewer?.role === 'crew_leader'
   const myJobs = jobs.filter((j) => (isField ? assignedTo(j, viewerId) : true))
 
   // A rep's day is appointments; a crew's day is jobs. Both land here.

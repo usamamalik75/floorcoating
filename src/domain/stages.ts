@@ -8,7 +8,7 @@ import { JOB_STATUS_LABEL } from './types'
    coordinates the journey.
 
    Opportunity.stage  = sales (lead → awarded / lost)
-   Job.status         = operations (scheduling → paid)
+   Job.status         = operations (scheduling → completed)
    ========================================================================== */
 
 export const STAGES: StageDef[] = [
@@ -246,16 +246,16 @@ export const STAGES: StageDef[] = [
         blocking: true,
       },
     ],
-    notify: [{ role: 'owner', message: 'Project delayed — follow-up scheduled, opportunity retained in nurture' }],
+    notify: [{ role: 'sales', message: 'Project delayed — follow-up scheduled, opportunity retained in nurture' }],
   },
   {
     id: 'awarded',
-    label: 'Awarded',
+    label: 'Sold / Awarded',
     group: 'won',
     phase: 'sales',
     probability: 100,
     purpose:
-      'Proposal accepted and signed. Converts this Contact into a Customer, creates a Job on that customer, and tracks further progress on the Job pipeline.',
+      'Proposal accepted and signed. The work is sold, the Contact converts into a Customer, and delivery progress moves onto the Job pipeline. This does not mean the full job has been paid yet.',
     gates: [
       {
         kind: 'readiness',
@@ -265,9 +265,8 @@ export const STAGES: StageDef[] = [
       },
     ],
     notify: [
-      { role: 'pm', message: 'Project awarded — job created, scheduling required' },
-      { role: 'accounting', message: 'Project awarded — deposit invoice can be raised' },
-      { role: 'admin', message: 'Awarded job recorded in the company dashboard' },
+      { role: 'pm', message: 'Project sold — job created, scheduling required' },
+      { role: 'accounting', message: 'Project sold — deposit invoice can be raised if needed' },
     ],
   },
   {
@@ -310,9 +309,6 @@ export const JOB_STATUSES: JobStatus[] = [
   'on_hold',
   'completion_review',
   'completed',
-  'ready_to_invoice',
-  'invoiced',
-  'paid',
 ]
 
 export const PHASE_LABEL: Record<Phase, string> = {
@@ -420,31 +416,38 @@ export function nextStage(stage: StageId): StageId | null {
   return next
 }
 
+export function normalizeJobStatus(status: JobStatus): JobStatus {
+  switch (status) {
+    case 'ready_to_invoice':
+    case 'invoiced':
+    case 'paid':
+      return 'completed'
+    default:
+      return status
+  }
+}
+
 export function jobStatusLabel(status: JobStatus): string {
-  return JOB_STATUS_LABEL[status]
+  return JOB_STATUS_LABEL[normalizeJobStatus(status)]
 }
 
 export function jobStatusIndex(status: JobStatus): number {
-  return JOB_STATUSES.indexOf(status)
+  return JOB_STATUSES.indexOf(normalizeJobStatus(status))
 }
 
 export function nextJobStatus(status: JobStatus): JobStatus | null {
+  const current = normalizeJobStatus(status)
   const skip: JobStatus[] = ['on_hold']
-  let i = jobStatusIndex(status) + 1
+  let i = jobStatusIndex(current) + 1
   while (i < JOB_STATUSES.length && skip.includes(JOB_STATUSES[i])) i++
   return JOB_STATUSES[i] ?? null
 }
 
 /** Job statuses that map to the execution colour triad. */
 export function jobStatusGroup(status: JobStatus): 'execution' | 'closed' | 'stalled' {
-  if (status === 'on_hold') return 'stalled'
-  if (
-    status === 'completion_review' ||
-    status === 'completed' ||
-    status === 'ready_to_invoice' ||
-    status === 'invoiced' ||
-    status === 'paid'
-  ) {
+  const current = normalizeJobStatus(status)
+  if (current === 'on_hold') return 'stalled'
+  if (current === 'completion_review' || current === 'completed') {
     return 'closed'
   }
   return 'execution'

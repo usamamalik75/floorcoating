@@ -296,9 +296,7 @@ export function Admin() {
               />
               {franchiseDraft.subdomain ? (
                 <p className="text-sm text-muted">{franchiseHost(franchiseDraft.subdomain)}</p>
-              ) : (
-                <p className="text-sm text-muted">Becomes subdomain.floorcoating.com</p>
-              )}
+              ) : null}
             </Field>
           </div>
 
@@ -384,7 +382,7 @@ export function Admin() {
                   id: `u_${Date.now().toString(36)}`,
                   name: franchiseDraft.adminName.trim(),
                   title: `${franchiseDraft.adminTitle.trim() || (isMaster ? 'Regional Admin' : 'Franchise Admin')}${emailNote}`,
-                  role: isMaster ? 'admin' : 'owner',
+                  role: 'pm',
                   orgRole: isMaster ? 'regional_admin' : 'franchise_admin',
                   franchiseId: created.id,
                   locationId: null,

@@ -173,7 +173,7 @@ export function LeadIntake() {
               <FieldRow
                 label="Account"
                 className="sm:col-span-2"
-                hint="Open pipeline work lives on a Contact. Awarded work converts them to a Customer."
+                hint="Open pipeline work lives on a Contact. Sold / awarded work converts them to a Customer."
               >
                 <div className="flex flex-wrap gap-2">
                   {(

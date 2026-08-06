@@ -46,7 +46,9 @@ import {
   STAGE_BY_ID,
   defaultHubTabForStage,
   isVisitFormAvailable,
+  jobStatusLabel,
   jobStatusIndex,
+  normalizeJobStatus,
   stageLabel,
 } from '@/domain/stages'
 import {
@@ -125,6 +127,7 @@ export function OpportunityRecord() {
   const { id = '' } = useParams<{ id: string }>()
   const [params, setParams] = useSearchParams()
   const s = useStore()
+  const setJobStatus = useStore((state) => state.setJobStatus)
   const userById = useUserDirectory()
 
   const [gateTo, setGateTo] = useState<StageId | null>(null)
@@ -251,7 +254,7 @@ export function OpportunityRecord() {
           <StageStepper opportunity={opp} onPick={setGateTo} />
         </div>
 
-        <div className="flex gap-0.5 overflow-x-auto scrollbar-thin border-t border-white/10">
+        <div className="flex flex-wrap gap-0.5 border-t border-white/10">
           {visibleTabs.map((t) => (
             <button
               key={t.id}
@@ -663,6 +666,16 @@ export function OpportunityRecord() {
               title="Job status"
               action={
                 <div className="flex flex-wrap gap-2">
+                  {job?.status === 'ready_to_start' && (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => setJobStatus(opp.id, 'in_progress')}
+                    >
+                      <ArrowRight size={12} />
+                      Start job
+                    </Button>
+                  )}
                   <Link to="/schedule">
                     <Button size="sm">
                       <CalendarDays size={12} />
@@ -697,20 +710,20 @@ export function OpportunityRecord() {
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-subtle bg-surface-inset px-4 py-2.5">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-semibold text-primary">Job status</p>
-                      <Badge tone="brand">{JOB_STATUS_LABEL[job.status]}</Badge>
+                      <Badge tone="brand">{jobStatusLabel(job.status)}</Badge>
                     </div>
                     <p className="text-sm text-muted">
                       Progress <span className="font-mono text-primary">{job.progress}%</span>
                     </p>
                   </div>
 
-                  <div className="flex gap-1 overflow-x-auto border-b border-subtle px-3 py-2 scrollbar-thin">
+                  <div className="flex flex-wrap gap-1 border-b border-subtle px-3 py-2">
                     {JOB_STATUSES.filter((status) => status !== 'on_hold').map((status) => {
                       const idx = jobStatusIndex(status)
                       const current = jobStatusIndex(job.status)
                       const done = current > idx
                       const active =
-                        job.status === status ||
+                        normalizeJobStatus(job.status) === status ||
                         (job.status === 'on_hold' && status === 'in_progress')
                       return (
                         <div
@@ -723,9 +736,9 @@ export function OpportunityRecord() {
                                 ? 'bg-success-soft text-success-text'
                                 : 'bg-surface-inset text-muted',
                           )}
-                          title={JOB_STATUS_LABEL[status]}
+                          title={jobStatusLabel(status)}
                         >
-                          {JOB_STATUS_LABEL[status]}
+                          {jobStatusLabel(status)}
                         </div>
                       )
                     })}
@@ -1173,7 +1186,7 @@ function jobWhatsNext(
     }
   }
 
-  switch (job.status) {
+  switch (normalizeJobStatus(job.status)) {
     case 'scheduling_required':
       return {
         body: 'Pick install dates and assign the crew on Schedule. Crew is set there, not only on this tab.',
@@ -1286,32 +1299,11 @@ function jobWhatsNext(
       }
     case 'completed':
       return {
-        body: 'Work is complete and signed off. Move the job to ready to invoice when finance can bill.',
+        body: 'Work is complete and signed off. This is the end of the job workflow. Finance can now handle invoicing and collection separately.',
         buttons: [
           { label: 'Finance', to: '/finance', primary: true, icon: <Receipt size={12} /> },
           { label: 'Jobs board', to: '/jobs', icon: <HardHat size={12} /> },
         ],
-      }
-    case 'ready_to_invoice':
-      return {
-        body: 'Create and send the invoice from Finance. Approved change orders should already be included.',
-        buttons: [
-          { label: 'Open Finance', to: '/finance', primary: true, icon: <Receipt size={12} /> },
-          { label: 'Invoice section', to: jobTab('invoice') },
-        ],
-      }
-    case 'invoiced':
-      return {
-        body: 'Invoice is out. Track payment from Finance or the payment link below.',
-        buttons: [
-          { label: 'Finance', to: '/finance', primary: true, icon: <Receipt size={12} /> },
-          { label: 'Payment section', to: jobTab('invoice') },
-        ],
-      }
-    case 'paid':
-      return {
-        body: 'Job is paid and closed. No further action on this opportunity.',
-        buttons: [{ label: 'Jobs board', to: '/jobs', icon: <HardHat size={12} /> }],
       }
     default:
       return null

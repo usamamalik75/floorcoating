@@ -17,6 +17,9 @@ export function PurchasingOrders() {
   const advance = useStore((state) => state.advanceProcurementOrder)
   const locationFilter = useStore((state) => state.locationFilter)
   const viewer = useViewer()
+  const canAdvanceOrders = viewer?.orgRole === 'platform_admin'
+    || viewer?.orgRole === 'regional_admin'
+    || viewer?.orgRole === 'franchise_admin'
 
   const visible = orders.filter((order) => {
     const opportunity = opportunities.find((item) => item.id === order.opportunityId)
@@ -71,7 +74,7 @@ export function PurchasingOrders() {
                       {order.trackingRef && <span className='flex items-center gap-1 font-mono text-2xs text-muted'><Truck size={9} />{order.trackingRef}</span>}
                     </Td>
                     <Td align='right'>
-                      {viewer?.role === 'admin' && order.status !== 'delivered' && (
+                      {canAdvanceOrders && order.status !== 'delivered' && (
                         <Button size='sm' onClick={() => advance(order.id)}>Advance</Button>
                       )}
                     </Td>

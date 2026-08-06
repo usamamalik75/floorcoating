@@ -34,7 +34,7 @@ const LEAD_TABS = [
   { value: 'new_lead', label: 'New' },
   { value: 'qualified', label: 'Qualified' },
   { value: 'follow_up', label: 'Follow-up' },
-  { value: 'awarded', label: 'Awarded' },
+  { value: 'awarded', label: 'Sold / Awarded' },
   { value: 'lost', label: 'Lost' },
 ] as const
 
@@ -82,7 +82,7 @@ export function Sales() {
 
   const reps = users.filter(
     (u) =>
-      (u.role === 'sales' || u.role === 'owner') &&
+      u.role === 'sales' &&
       (locationFilter === 'all' || u.locationId === locationFilter),
   )
 

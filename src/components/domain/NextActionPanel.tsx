@@ -175,8 +175,8 @@ function actionsFor(
       }
     case 'awarded':
       return {
-        title: 'Proposal accepted — job created',
-        body: 'Sales history stays on this opportunity. Operational work continues in the Job module.',
+        title: 'Proposal accepted — work sold and job created',
+        body: 'Sales history stays on this opportunity. Delivery continues in the Job module, and finance can handle deposit collection separately if your process needs it.',
         buttons: [
           {
             kind: 'link',

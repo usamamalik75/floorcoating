@@ -84,7 +84,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="fixed inset-0 flex overflow-hidden">
       <aside className="hidden w-64 shrink-0 flex-col overflow-y-auto border-r border-subtle bg-white text-primary md:flex scrollbar-thin z-10">
         <div className="border-b border-subtle px-3 py-4">
           <Logo size={52} variant="red" />

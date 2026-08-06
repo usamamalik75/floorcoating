@@ -58,7 +58,7 @@ export function userBranchIds(user: User): string[] {
   return []
 }
 
-/** Map ops role → default org access when seeding / migrating. */
+/** Map legacy ops role → default org access when migrating old demo state. */
 export function defaultOrgRoleFromRole(role: string): OrgRole | null {
   if (role === 'admin') return 'platform_admin'
   if (role === 'owner') return 'manager'

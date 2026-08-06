@@ -35,7 +35,7 @@ import type {
   StageId,
   ScopeExtraction,
 } from '@/domain/types'
-import { ROLE_LABEL, visitVocab, withVisitVocab } from '@/domain/types'
+import { normalizeRole, ROLE_LABEL, visitVocab, withVisitVocab } from '@/domain/types'
 import { defaultOrgRoleFromRole, normalizeOrgRole } from '@/domain/org'
 import { WORKSPACE_TEMPLATE, type WorkspaceTemplate } from '@/config/workspace'
 import { CHECKLIST_TEMPLATES, templateForStage } from '@/data/checklists'
@@ -391,7 +391,7 @@ const initial = () => ({
  * seed invalidates it and "Reset demo" always returns to the story's start.
  */
 const STORAGE_KEY = 'fcg-prototype'
-const STORAGE_VERSION = 22
+const STORAGE_VERSION = 24
 
 const createState: StateCreator<State> = (set, get) => ({
   ...initial(),
@@ -406,7 +406,6 @@ const createState: StateCreator<State> = (set, get) => ({
       user.orgRole === 'platform_admin'
       || user.orgRole === 'regional_admin'
       || user.orgRole === 'franchise_admin'
-      || user.role === 'admin'
     set({
       viewerId: id,
       activeFranchiseId: user.franchiseId,
@@ -421,7 +420,6 @@ const createState: StateCreator<State> = (set, get) => ({
       user?.orgRole === 'platform_admin'
       || user?.orgRole === 'regional_admin'
       || user?.orgRole === 'franchise_admin'
-      || user?.role === 'admin'
     set({
       activeFranchiseId: id,
       locationFilter: canSeeAll ? 'all' : (user?.locationId && branches.some((b) => b.id === user.locationId) ? user.locationId : (branches[0]?.id ?? 'all')),
@@ -1588,7 +1586,7 @@ export const useStore = create<State>()(
               ...user,
               name: seeded?.name ?? user.name,
               title: seeded?.title ?? user.title,
-              role: seeded?.role ?? user.role,
+              role: normalizeRole(seeded?.role ?? user.role),
               locationId: user.locationId ?? seeded?.locationId ?? null,
               franchiseId:
                 seeded?.franchiseId

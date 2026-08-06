@@ -86,13 +86,12 @@ editor is available from the Schedule job drawer.
 
 ## Primary roles
 
-- Platform administrator
 - Business owner
 - Sales representative
 - Estimator
 - Project manager
 - Crew leader
-- Field technician
+- Installer
 - Accounting
 
 Roles control the user's workspace lens. Job responsibilities separately

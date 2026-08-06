@@ -339,8 +339,8 @@ export function Prospecting() {
             <p className="mt-1 font-display text-2xl text-primary">{importedProspects.length}</p>
           </Card>
           <Card className="p-4">
-            <p className="text-2xs font-semibold tracking-wider text-muted uppercase">Owner</p>
-            <p className="mt-1 text-base text-primary">{viewer?.name ?? 'Platform owner'}</p>
+            <p className="text-2xs font-semibold tracking-wider text-muted uppercase">Viewer</p>
+            <p className="mt-1 text-base text-primary">{viewer?.name ?? 'Platform admin'}</p>
           </Card>
         </div>
 

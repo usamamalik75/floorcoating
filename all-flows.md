@@ -210,7 +210,7 @@ Use these labels when speaking about the platform as a generic product:
 
 ### 4.5 Run field execution
 
-1. Crew lead or technician goes to `Field Operations`.
+1. Crew lead or installer goes to `Field Operations`.
 2. User opens today’s visit or job.
 3. User clocks travel/on-site/wrap states, records daily updates, and completes mobile work tasks.
 
@@ -281,37 +281,37 @@ This section explains each page by role: who uses it, why they open it, and what
 
 ### 8.1 `Dashboard`
 
-- **Primary roles:** admin, owner, sales, estimator, PM, accounting. Crew leader and technician are redirected into `Field Operations`.
+- **Primary roles:** owner, sales, estimator, PM, accounting. Crew leader and installer are redirected into `Field Operations`.
 - **Journey:** the user lands here first, reviews work queues, and clicks into the next operational page that needs attention.
 
 ### 8.2 `Sales`
 
-- **Primary roles:** admin, owner, sales, estimator, PM, accounting.
+- **Primary roles:** owner, sales, estimator, PM, accounting.
 - **Journey:** sales rep goes to `Sales`, clicks `New lead` or opens a board card, then qualifies and advances the opportunity.
 
 ### 8.3 `Prospecting`
 
-- **Primary roles:** admin, owner, sales.
+- **Primary roles:** owner, sales.
 - **Journey:** platform owner or sales user goes to `Prospecting`, clicks `Import prospects`, confirms the sheet import, reviews imported companies, then clicks `Create lead` to push a prospect into the sales flow.
 
 ### 8.4 `Customers`
 
-- **Primary roles:** admin, owner, sales, estimator, PM, accounting.
+- **Primary roles:** owner, sales, estimator, PM, accounting.
 - **Journey:** platform owner goes to `Customers`, clicks `New customer` for an account-first journey, or clicks `New lead / customer` for a lead-first journey, then edits customer details from the same workspace.
 
 ### 8.5 `Lead Intake`
 
-- **Primary roles:** admin, owner, sales.
+- **Primary roles:** owner, sales.
 - **Journey:** platform owner or sales user goes to `Lead Intake`, fills the inbound request form, lets the platform route by ZIP, and assigns the lead after creation.
 
 ### 8.6 `Communications`
 
-- **Primary roles:** admin, owner, sales, estimator, PM, accounting.
+- **Primary roles:** owner, sales, estimator, PM, accounting.
 - **Journey:** sales rep or coordinator goes to `Communications`, clicks `Start conversation`, drafts the first message, and keeps follow-up threads tied to the opportunity.
 
 ### 8.7 `Assessments`
 
-- **Primary roles:** admin, owner, sales, estimator, PM, accounting, crew leader.
+- **Primary roles:** owner, sales, estimator, PM, accounting, crew leader.
 - **Journey:** sales rep or estimator goes to `Assessments`, clicks `New assessment`, selects the eligible opportunity, and opens the site visit flow.
 
 ### 8.8 `Site Visit`
@@ -321,7 +321,7 @@ This section explains each page by role: who uses it, why they open it, and what
 
 ### 8.9 `Quotes`
 
-- **Primary roles:** admin, owner, sales, estimator, PM.
+- **Primary roles:** owner, sales, estimator, PM.
 - **Journey:** estimator goes to `Quotes`, clicks `New estimate`, selects an opportunity, and opens the estimate builder.
 
 ### 8.10 `Estimate Builder`
@@ -331,52 +331,52 @@ This section explains each page by role: who uses it, why they open it, and what
 
 ### 8.11 `Proposals`
 
-- **Primary roles:** admin, owner, sales, estimator.
+- **Primary roles:** owner, sales, estimator.
 - **Journey:** estimator or sales rep goes to `Proposals`, clicks `New proposal`, opens the approved estimate, and sends the customer-facing document.
 
 ### 8.12 `Jobs`
 
-- **Primary roles:** admin, owner, PM, estimator, crew leader, accounting.
+- **Primary roles:** owner, PM, estimator, crew leader, accounting.
 - **Journey:** operations manager goes to `Jobs`, clicks `New job` for awarded work if needed, then advances the job through delivery states.
 
 ### 8.13 `Schedule`
 
-- **Primary roles:** admin, owner, sales, estimator, PM, accounting, crew leader.
+- **Primary roles:** owner, sales, estimator, PM, accounting, crew leader.
 - **Journey:** operations manager goes to `Schedule`, clicks `Schedule next job` or `Schedule`, assigns the team, and manages rescheduling and dispatch readiness.
 
 ### 8.14 `Procurement`
 
-- **Primary roles:** admin, owner, PM, accounting.
+- **Primary roles:** owner, PM, accounting.
 - **Journey:** operations manager goes to `Procurement`, clicks `Prepare order`, opens the derived resource list, and moves the order through fulfilment.
 
 ### 8.15 `Field Operations`
 
-- **Primary roles:** crew leader, technician.
+- **Primary roles:** crew leader, installer.
 - **Journey:** field user goes to `Field Operations`, opens today’s visit or job, clocks activity, updates execution, and completes mobile-first work tasks.
 
 ### 8.16 `Catalogue`
 
-- **Primary roles:** admin, owner, sales, estimator, PM, accounting.
+- **Primary roles:** owner, sales, estimator, PM, accounting.
 - **Journey:** platform owner or estimator goes to `Catalogue`, clicks `New product / service`, and extends the catalogue used by quoting and delivery.
 
 ### 8.17 `Finance`
 
-- **Primary roles:** admin, owner, accounting, PM.
+- **Primary roles:** owner, accounting, PM.
 - **Journey:** accounting goes to `Finance`, raises queue-based invoices, creates manual invoices, sends payment links, and records payments.
 
 ### 8.18 `Reports`
 
-- **Primary roles:** admin, owner.
+- **Primary roles:** owner.
 - **Journey:** platform owner goes to `Reports` to review company performance, location performance, job counts, and collection metrics. This is intentionally read-only.
 
 ### 8.19 `Settings`
 
-- **Primary roles:** admin, owner.
+- **Primary roles:** owner.
 - **Journey:** platform owner goes to `Settings` to jump into admin builder, communications, or finance setup surfaces.
 
 ### 8.20 `Admin`
 
-- **Primary roles:** admin, owner.
+- **Primary roles:** owner.
 - **Journey:** platform owner goes to `Admin`, uses `Team` to add people, `Locations` to review routing, and `Setup` to open one company configuration area at a time.
 
 ### 8.21 `Opportunity Record`
@@ -386,7 +386,7 @@ This section explains each page by role: who uses it, why they open it, and what
 
 ### 8.22 `Procurement Order`
 
-- **Primary roles:** PM, admin, owner, accounting.
+- **Primary roles:** PM, owner, accounting.
 - **Journey:** the user opens the job-specific procurement record, reviews derived resource lines, creates the order, and advances the fulfilment tracker.
 
 ### 8.23 `Customer Proposal`

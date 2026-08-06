@@ -17,6 +17,7 @@ import { useStore, money, estimateTotal } from '@/store/useStore'
 import { useScopedOpportunities, useLocations, useViewer } from '@/store/selectors'
 import { ACCOUNT_BY_ID, iso } from '@/data/seed'
 import type { Invoice, InvoiceKind, Opportunity } from '@/domain/types'
+import { normalizeJobStatus } from '@/domain/stages'
 import {
   Badge,
   Button,
@@ -57,7 +58,6 @@ export function Accounting() {
   const locations = useLocations()
   const createInvoice = useStore((st) => st.createInvoice)
   const recordPayment = useStore((st) => st.recordPayment)
-  const setJobStatus = useStore((st) => st.setJobStatus)
   const paymentRequests = useStore((st) => st.paymentRequests)
   const createPaymentRequest = useStore((st) => st.createPaymentRequest)
   const updatePaymentRequestStatus = useStore((st) => st.updatePaymentRequestStatus)
@@ -71,15 +71,50 @@ export function Accounting() {
 
   const mine = s.invoices.filter((i) => opps.some((o) => o.id === i.opportunityId))
   const awarded = opps.filter((o) => o.stage === 'awarded')
-  const jobStatus = (id: string) => s.jobs.find((j) => j.opportunityId === id)?.status
-  const readyToInvoice = awarded.filter((o) => jobStatus(o.id) === 'ready_to_invoice')
+  const jobStatus = (id: string) => {
+    const status = s.jobs.find((j) => j.opportunityId === id)?.status
+    return status ? normalizeJobStatus(status) : undefined
+  }
+  const hasFinalInvoice = (id: string) => mine.some((i) => i.opportunityId === id && i.kind === 'final')
+  const readyToInvoice = awarded.filter((o) => jobStatus(o.id) === 'completed' && !hasFinalInvoice(o.id))
   const inReview = awarded.filter((o) => jobStatus(o.id) === 'completion_review')
 
   const billed = mine.reduce((a, i) => a + i.amount, 0)
   const received = mine.reduce((a, i) => a + i.payments.reduce((p, x) => p + x.amount, 0), 0)
   const activeRequests = paymentRequests.filter((request) => mine.some((invoice) => invoice.id === request.invoiceId))
+  const franchiseWideView = viewer?.orgRole === 'platform_admin'
+    || viewer?.orgRole === 'regional_admin'
+    || viewer?.orgRole === 'franchise_admin'
 
   const paid = (i: Invoice) => i.payments.reduce((a, p) => a + p.amount, 0)
+  const raiseFinalInvoice = (opportunity: Opportunity) => {
+    const est = s.estimates.find((e) => e.opportunityId === opportunity.id)
+    const contract = est ? estimateTotal(est) : opportunity.value
+    const approvedCo = s.changeOrders
+      .filter((c) => c.opportunityId === opportunity.id && c.status === 'customer_approved')
+      .reduce((sum, c) => sum + c.amount, 0)
+    const deposits = s.invoices
+      .filter((i) => i.opportunityId === opportunity.id && i.kind === 'deposit')
+      .reduce((sum, i) => sum + i.amount, 0)
+    const due = contract + approvedCo - deposits
+
+    createInvoice({
+      opportunityId: opportunity.id,
+      number: `JOB-INV-${2100 + s.invoices.length}`,
+      kind: 'final',
+      amount: due,
+      status: 'sent',
+      issuedAt: new Date().toISOString(),
+      dueAt: iso(30),
+      quickbooksId: `QB-${9000 + s.invoices.length}`,
+      payments: [],
+    })
+    s.logActivity(
+      opportunity.id,
+      'money',
+      `Final invoice synced to QuickBooks — contract plus ${approvedCo > 0 ? 'approved change orders ' : ''}less deposit.`,
+    )
+  }
 
   return (
     <div className="h-full overflow-y-auto scrollbar-thin">
@@ -90,7 +125,7 @@ export function Accounting() {
               <h1 className="font-display text-2xl text-primary">Accounting</h1>
               <p className="mt-0.5 text-base text-muted">
                 Invoicing, QuickBooks synchronisation and payment status across{' '}
-                {viewer?.role === 'admin' ? 'the company' : 'this location'}.
+                {franchiseWideView ? 'all visible branches' : 'this location'}.
               </p>
             </div>
             <Button
@@ -99,10 +134,10 @@ export function Accounting() {
               variant="primary"
               disabled={!readyToInvoice[0] && !inReview[0]}
               onClick={() => {
-                const target = inReview[0] ?? readyToInvoice[0]
+                const target = readyToInvoice[0] ?? inReview[0]
                 if (!target) return
-                if (jobStatus(target.id) === 'ready_to_invoice') {
-                  setJobStatus(target.id, 'invoiced')
+                if (jobStatus(target.id) === 'completed') {
+                  raiseFinalInvoice(target)
                 } else {
                   setRaising(target)
                 }
@@ -174,8 +209,8 @@ export function Accounting() {
                         </span>
                       </Td>
                       <Td>
-                        {jobStatus(o.id) === 'ready_to_invoice' ? (
-                          <Badge tone="success">Ready to invoice</Badge>
+                        {jobStatus(o.id) === 'completed' ? (
+                          <Badge tone="success">Ready for final invoice</Badge>
                         ) : (
                           <Badge tone="warning">In completion review</Badge>
                         )}
@@ -201,8 +236,8 @@ export function Accounting() {
                         {money(deposits)}
                       </Td>
                       <Td align="right">
-                        {jobStatus(o.id) === 'ready_to_invoice' ? (
-                          <Button size="sm" variant="primary" onClick={() => setJobStatus(o.id, 'invoiced')}>
+                        {jobStatus(o.id) === 'completed' ? (
+                          <Button size="sm" variant="primary" onClick={() => raiseFinalInvoice(o)}>
                             <FileCheck2 size={12} />
                             Raise final invoice
                           </Button>
@@ -393,13 +428,6 @@ export function Accounting() {
         onSubmit={(amount, method) => {
           if (!paying) return
           recordPayment(paying.id, amount, method)
-          const inv = s.invoices.find((x) => x.id === paying.id)
-          const job = s.jobs.find((j) => j.opportunityId === paying.opportunityId)
-          // Settling the last balance closes the project without anyone
-          // marking it by hand.
-          if (inv && job?.status === 'invoiced' && paid(inv) + amount >= inv.amount) {
-            setJobStatus(paying.opportunityId, 'paid')
-          }
           setPaying(null)
         }}
       />

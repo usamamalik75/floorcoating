@@ -130,7 +130,7 @@ export const USERS: User[] = [
   {
     id: 'u_nic',
     name: 'Nic Ugolini',
-    role: 'admin',
+    role: 'pm',
     title: 'Platform Administrator',
     locationId: null,
     franchiseId: 'co_platform',
@@ -139,7 +139,7 @@ export const USERS: User[] = [
   {
     id: 'u_maria',
     name: 'Maria Chen',
-    role: 'admin',
+    role: 'pm',
     title: 'Regional Administrator — Southeast',
     locationId: null,
     franchiseId: 'co_se',
@@ -148,7 +148,7 @@ export const USERS: User[] = [
   {
     id: 'u_jordan',
     name: 'Jordan Blake',
-    role: 'owner',
+    role: 'pm',
     title: 'Franchise Admin — Floor Coatings Group',
     locationId: null,
     franchiseId: 'co_fcg',
@@ -158,7 +158,7 @@ export const USERS: User[] = [
   {
     id: 'u_dennis',
     name: 'Dennis Frost',
-    role: 'owner',
+    role: 'pm',
     title: 'Manager — Chicago',
     locationId: 'loc_chi',
     franchiseId: 'co_fcg',
@@ -170,14 +170,14 @@ export const USERS: User[] = [
   { id: 'u_carla', name: 'Carla Nyx', role: 'sales', title: 'Sales Representative', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
   { id: 'u_dana', name: 'Dana Cole', role: 'pm', title: 'Project Manager', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
   { id: 'u_keith', name: 'Keith Alvarez', role: 'crew_leader', title: 'Crew Leader', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
-  { id: 'u_luis', name: 'Luis Ortega', role: 'tech', title: 'Installer', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
-  { id: 'u_ray', name: 'Ray Bunting', role: 'tech', title: 'Installer', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
+  { id: 'u_luis', name: 'Luis Ortega', role: 'installer', title: 'Installer', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
+  { id: 'u_ray', name: 'Ray Bunting', role: 'installer', title: 'Installer', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
   { id: 'u_gina', name: 'Gina Petrov', role: 'accounting', title: 'Accounting Manager', locationId: 'loc_chi', franchiseId: 'co_fcg', orgRole: null },
 
   {
     id: 'u_tanya',
     name: 'Tanya Brooks',
-    role: 'owner',
+    role: 'pm',
     title: 'Manager — Atlanta',
     locationId: 'loc_atl',
     franchiseId: 'co_atl',
@@ -188,13 +188,13 @@ export const USERS: User[] = [
   { id: 'u_devin', name: 'Devin Hall', role: 'sales', title: 'Sales Representative', locationId: 'loc_atl', franchiseId: 'co_atl', orgRole: null },
   { id: 'u_omar', name: 'Omar Reyes', role: 'pm', title: 'Project Manager', locationId: 'loc_atl', franchiseId: 'co_atl', orgRole: null },
   { id: 'u_terrell', name: 'Terrell Woods', role: 'crew_leader', title: 'Crew Leader', locationId: 'loc_atl', franchiseId: 'co_atl', orgRole: null },
-  { id: 'u_ana', name: 'Ana Duarte', role: 'tech', title: 'Installer', locationId: 'loc_atl', franchiseId: 'co_atl', orgRole: null },
+  { id: 'u_ana', name: 'Ana Duarte', role: 'installer', title: 'Installer', locationId: 'loc_atl', franchiseId: 'co_atl', orgRole: null },
   { id: 'u_bea', name: 'Bea Lomax', role: 'accounting', title: 'Accounting', locationId: 'loc_atl', franchiseId: 'co_atl', orgRole: null },
 
   {
     id: 'u_sam',
     name: 'Sam Kessler',
-    role: 'owner',
+    role: 'pm',
     title: 'Manager — Denver',
     locationId: 'loc_den',
     franchiseId: 'co_fcg',

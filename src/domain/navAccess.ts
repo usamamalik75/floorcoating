@@ -9,7 +9,7 @@ import { canAccessAdmin } from './org'
  * They need ops pages to oversee a franchise after switching into it —
  * Admin-only menus made the switcher useless.
  *
- * Field execution stays crew-only (crew leader / tech).
+ * Field execution stays crew-only (crew leader / installer).
  */
 
 export type NavKey =
@@ -84,10 +84,6 @@ const MANAGER_PAGES: NavKey[] = [...OFFICE_SUITE]
 
 /** Ops specialists — only modules for their job. */
 const OPS_PAGES: Record<Role, NavKey[]> = {
-  // Fallback if someone has role=admin without orgRole
-  admin: ORG_ADMIN_PAGES,
-  // Fallback if owner without orgRole (treat like manager)
-  owner: MANAGER_PAGES,
   sales: [
     'dashboard',
     'prospecting',
@@ -137,7 +133,7 @@ const OPS_PAGES: Record<Role, NavKey[]> = {
     'communications',
     'customers', // job site / contact lookup
   ],
-  tech: [
+  installer: [
     'field',
     'jobs',
     'schedule',
@@ -189,6 +185,10 @@ export function navKeyForPath(pathname: string): NavKey | null {
 export function canAccessPath(user: User | null | undefined, pathname: string): boolean {
   if (!user) return false
 
+  if (pathname.startsWith('/opportunities/') && pathname.endsWith('/visit')) {
+    return canAccessNavKey(user, 'site_visits')
+  }
+
   if (pathname.startsWith('/opportunities/')) {
     return canAccessNavKey(user, 'sales')
       || canAccessNavKey(user, 'jobs')
@@ -213,7 +213,7 @@ export function homePathForUser(user: User | null | undefined): string {
   if (!user) return '/'
   if (canAccessAdmin(user)) return '/admin'
   if (user.orgRole === 'manager') return '/'
-  if (canAccessNavKey(user, 'field') && (user.role === 'tech' || user.role === 'crew_leader')) return '/field'
+  if (canAccessNavKey(user, 'field') && (user.role === 'installer' || user.role === 'crew_leader')) return '/field'
   if (canAccessNavKey(user, 'finance') && user.role === 'accounting') return '/finance'
   if (canAccessNavKey(user, 'estimates') && user.role === 'estimator') return '/estimates'
   if (canAccessNavKey(user, 'jobs') && user.role === 'pm') return '/jobs'

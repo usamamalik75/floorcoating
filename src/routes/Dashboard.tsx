@@ -20,7 +20,7 @@ import { useStore, money, estimateTotal } from '@/store/useStore'
 import { assignedTo } from '@/domain/jobs'
 import { useScopedOpportunities, useLocations, useUserDirectory, useViewer } from '@/store/selectors'
 import { TODAY } from '@/data/seed'
-import { STAGE_BY_ID, stageLabel } from '@/domain/stages'
+import { STAGE_BY_ID, normalizeJobStatus, stageLabel } from '@/domain/stages'
 import type { Opportunity, StageId } from '@/domain/types'
 import { Badge, Button, Card, CardHeader, EmptyState, StageChip, HorizontalBarChart, TrendMetric } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -38,10 +38,11 @@ export function Dashboard() {
   const viewer = useViewer()
   const locations = useLocations()
   if (!viewer) return null
+  const isLeadership = Boolean(viewer.orgRole)
 
-  // A crew leader or technician has no use for a desktop workspace. Their home
+  // A crew leader or installer has no use for a desktop workspace. Their home
   // is the job sheet, so signing in as one lands there.
-  if (viewer.role === 'crew_leader' || viewer.role === 'tech') {
+  if (viewer.role === 'crew_leader' || viewer.role === 'installer') {
     return <Navigate to="/field" replace />
   }
 
@@ -50,13 +51,11 @@ export function Dashboard() {
     : undefined
 
   const common = {
-    admin: <CompanyHome />,
-    owner: <OwnerHome />,
     sales: <SalesHome />,
     estimator: <EstimatorHome />,
     pm: <PmHome />,
     crew_leader: <CrewHome />,
-    tech: <CrewHome />,
+    installer: <CrewHome />,
     accounting: <AccountingHome />,
   }
 
@@ -75,7 +74,7 @@ export function Dashboard() {
                 {locationName && ` · ${locationName}`}
               </p>
             </div>
-            {['admin', 'owner', 'sales'].includes(viewer.role) && (
+            {(isLeadership || viewer.role === 'sales') && (
               <Link to="/intake" className="ml-auto">
                 <Button size="sm" variant="primary">
                   <Plus size={12} />
@@ -85,7 +84,7 @@ export function Dashboard() {
             )}
           </div>
         </header>
-        {common[viewer.role]}
+        {isLeadership ? <LeadershipHome /> : common[viewer.role]}
       </div>
     </div>
   )
@@ -181,28 +180,31 @@ function List({
   )
 }
 
-/* ---------- 1. Company administrator ------------------------------------------------ */
+/* ---------- 1. Leadership --------------------------------------------------- */
 
 function isOpenOpportunity(
   o: Opportunity,
   jobs: { opportunityId: string; status: string }[],
+  invoices: { opportunityId: string; amount: number; payments: { amount: number }[] }[],
 ) {
   if (o.stage === 'lost') return false
   if (STAGE_BY_ID[o.stage]?.phase === 'pre') return false
   if (o.stage === 'awarded') {
     const job = jobs.find((j) => j.opportunityId === o.id)
-    return job?.status !== 'paid'
+    const relatedInvoices = invoices.filter((i) => i.opportunityId === o.id)
+    const billed = relatedInvoices.reduce((sum, i) => sum + i.amount, 0)
+    const received = relatedInvoices.reduce(
+      (sum, i) => sum + i.payments.reduce((paid, payment) => paid + payment.amount, 0),
+      0,
+    )
+    return !(job && normalizeJobStatus(job.status as any) === 'completed' && billed > 0 && received >= billed)
   }
   return true
 }
 
-function CompanyHome() {
-  return <OwnerHome />
-}
+/* ---------- 2. Leadership dashboard ------------------------------------- */
 
-/* ---------- 2. Location owner ------------------------------------------- */
-
-function OwnerHome() {
+function LeadershipHome() {
   const s = useStore()
   const opps = useScopedOpportunities()
   const unassigned = opps.filter((o) => o.stage === 'new_lead' && !o.ownerId)
@@ -214,7 +216,7 @@ function OwnerHome() {
   const awaitingApproval = s.estimates.filter(
     (e) => e.status === 'pending_approval' && opps.some((o) => o.id === e.opportunityId),
   )
-  const open = opps.filter((o) => isOpenOpportunity(o, s.jobs))
+  const open = opps.filter((o) => isOpenOpportunity(o, s.jobs, s.invoices))
   const outstanding = s.invoices
     .filter((i) => opps.some((o) => o.id === i.opportunityId) && i.status !== 'paid')
     .reduce((a, i) => a + (i.amount - i.payments.reduce((p, x) => p + x.amount, 0)), 0)
@@ -252,7 +254,7 @@ function OwnerHome() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <List
-          title="Leads needing an owner"
+          title="Leads needing assignment"
           subtitle="Nobody has been assigned yet"
           icon={<Users size={14} />}
           empty="Every lead has a rep."
@@ -518,7 +520,8 @@ function jobStatusOf(
   opportunityId: string,
   jobs: { opportunityId: string; status: string }[],
 ) {
-  return jobs.find((j) => j.opportunityId === opportunityId)?.status
+  const status = jobs.find((j) => j.opportunityId === opportunityId)?.status
+  return status ? normalizeJobStatus(status as any) : undefined
 }
 
 function PmHome() {
@@ -545,10 +548,10 @@ function PmHome() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <List
-          title="Awarded, not yet scheduled"
+          title="Sold / awarded, not yet scheduled"
           subtitle="Signed work with no dates against it"
           icon={<CalendarClock size={14} />}
-          empty="Everything awarded is scheduled."
+          empty="Everything sold is scheduled."
           items={toSchedule.map((o) => (
             <div key={o.id} className="flex items-center gap-3 border-b border-subtle px-4 py-2.5 last:border-0">
               <div className="min-w-0 flex-1">
@@ -637,7 +640,7 @@ function PmHome() {
   )
 }
 
-/* ---------- 6. Crew leader / technician ---------------------------------- */
+/* ---------- 6. Crew leader / installer ----------------------------------- */
 
 function CrewHome() {
   const s = useStore()
@@ -715,7 +718,10 @@ function AccountingHome() {
   const scoped = useScopedOpportunities()
   const opps = scoped.filter((o) => o.stage === 'awarded')
   const mineInv = s.invoices.filter((i) => scoped.some((o) => o.id === i.opportunityId))
-  const readyToInvoice = opps.filter((o) => jobStatusOf(o.id, s.jobs) === 'ready_to_invoice')
+  const readyToInvoice = opps.filter((o) => {
+    if (jobStatusOf(o.id, s.jobs) !== 'completed') return false
+    return !mineInv.some((i) => i.opportunityId === o.id && i.kind === 'final')
+  })
   const inCompletion = opps.filter((o) => jobStatusOf(o.id, s.jobs) === 'completion_review')
   const outstanding = mineInv
     .filter((i) => i.status !== 'paid')
@@ -727,7 +733,7 @@ function AccountingHome() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Ready to invoice" value={readyToInvoice.length} tone={readyToInvoice.length ? 'warning' : undefined} icon={<Receipt size={12} />} to="/finance" />
+        <Stat label="Ready for final invoice" value={readyToInvoice.length} tone={readyToInvoice.length ? 'warning' : undefined} icon={<Receipt size={12} />} to="/finance" />
         <Stat label="In completion review" value={inCompletion.length} sub="Sign-off and change orders pending" />
         <Stat label="Outstanding balance" value={money(outstanding, true)} sub={`${mineInv.filter((i) => i.status !== 'paid').length} open invoices`} to="/finance" />
         <Stat label="Change orders to confirm" value={pendingCo.length} tone={pendingCo.length ? 'warning' : undefined} />
@@ -735,7 +741,7 @@ function AccountingHome() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <List
-          title="Ready to invoice"
+          title="Ready for final invoice"
         subtitle="Closeout complete, quantities confirmed"
         icon={<CheckCircle2 size={14} />}
         empty="Nothing waiting."

@@ -5,7 +5,7 @@ import { FileText, MapPin, Ruler } from 'lucide-react'
 import { useStore, money, estimateTotal } from '@/store/useStore'
 import { useScopedOpportunities, useChecklistTemplates, useLocations, usePriceBookItems, useProposalTemplates, useUserDirectory } from '@/store/selectors'
 import { ACCOUNT_BY_ID } from '@/data/seed'
-import { STAGE_BY_ID, isVisitFormAvailable, stageLabel, JOB_STATUSES, jobStatusLabel } from '@/domain/stages'
+import { STAGE_BY_ID, isVisitFormAvailable, stageLabel, JOB_STATUSES, jobStatusLabel, normalizeJobStatus } from '@/domain/stages'
 import { VISIT_MODULE_LABEL, visitVocab } from '@/domain/types'
 import { Customers as CustomerWorkspace } from '@/routes/Customers'
 import { Accounting } from '@/routes/Accounting'
@@ -484,7 +484,7 @@ export function Reports() {
 
         <div className="mb-5 grid gap-3 sm:grid-cols-4">
           <Stat label="Open sales" value={String(sales.filter((o) => !['awarded', 'lost'].includes(o.stage)).length)} />
-          <Stat label="Awarded" value={String(awarded.length)} />
+          <Stat label="Sold / Awarded" value={String(awarded.length)} />
           <Stat label="Win rate" value={`${sales.length ? Math.round((awarded.length / (awarded.length + lost.length || 1)) * 100) : 0}%`} />
           <Stat label="Collected" value={money(paid, true)} helper={`of ${money(billed, true)} billed`} />
         </div>
@@ -531,7 +531,7 @@ export function Reports() {
             <Card key={st} className="p-3">
               <p className="text-2xs tracking-wide text-muted uppercase">{jobStatusLabel(st)}</p>
               <p className="mt-1 font-display text-xl text-primary">
-                {jobs.filter((j) => j.status === st).length}
+                {jobs.filter((j) => normalizeJobStatus(j.status) === st).length}
               </p>
             </Card>
           ))}

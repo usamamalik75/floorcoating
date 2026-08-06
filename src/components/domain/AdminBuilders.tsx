@@ -544,7 +544,12 @@ export function LocationsBuilder() {
   const owners = users.filter(
     (user) =>
       user.franchiseId === scopedFranchiseId
-      && (user.role === 'owner' || user.role === 'admin' || user.orgRole === 'manager' || user.orgRole === 'franchise_admin'),
+      && (
+        user.orgRole === 'manager'
+        || user.orgRole === 'franchise_admin'
+        || user.orgRole === 'regional_admin'
+        || user.orgRole === 'platform_admin'
+      ),
   )
   const activeFranchise = franchises.find((f) => f.id === scopedFranchiseId)
 
@@ -593,7 +598,7 @@ export function LocationsBuilder() {
         id: managerId,
         name: branchDraft.managerName.trim(),
         title: `Manager — ${created.name}`,
-        role: 'owner',
+        role: 'pm',
         orgRole: 'manager',
         franchiseId,
         locationId: created.id,

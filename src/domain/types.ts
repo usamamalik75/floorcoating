@@ -16,24 +16,39 @@
    ========================================================================== */
 
 export type Role =
-  | 'admin'
-  | 'owner'
   | 'sales'
   | 'estimator'
   | 'pm'
   | 'crew_leader'
-  | 'tech'
+  | 'installer'
   | 'accounting'
 
 export const ROLE_LABEL: Record<Role, string> = {
-  admin: 'Platform Admin',
-  owner: 'Business Owner',
   sales: 'Sales Rep',
   estimator: 'Estimator / Head of Projects',
   pm: 'Project Manager',
   crew_leader: 'Crew Leader',
-  tech: 'Installer',
+  installer: 'Installer',
   accounting: 'Accounting',
+}
+
+/** Normalize legacy persisted ops roles into the current two-layer model. */
+export function normalizeRole(value: string | null | undefined): Role {
+  // Leadership scope now lives on orgRole, so legacy owner/admin users fall back
+  // to a normal office role after migration.
+  if (value === 'admin' || value === 'owner') return 'pm'
+  if (value === 'tech') return 'installer'
+  if (
+    value === 'sales'
+    || value === 'estimator'
+    || value === 'pm'
+    || value === 'crew_leader'
+    || value === 'installer'
+    || value === 'accounting'
+  ) {
+    return value
+  }
+  return 'sales'
 }
 
 export type Category = 'residential' | 'commercial' | 'industrial'
@@ -179,10 +194,10 @@ export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
   in_progress: 'In Progress',
   on_hold: 'On Hold',
   completion_review: 'Completion Review',
-  completed: 'Completed',
-  ready_to_invoice: 'Ready to Invoice',
+  completed: 'Work Completed',
+  ready_to_invoice: 'Ready for Final Invoice',
   invoiced: 'Invoiced',
-  paid: 'Paid',
+  paid: 'Fully Paid',
 }
 
 /** A requirement that must be satisfied to ENTER a stage. */

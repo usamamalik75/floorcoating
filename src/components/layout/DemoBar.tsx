@@ -56,7 +56,6 @@ export function DemoBar() {
     viewer?.orgRole === 'platform_admin'
     || viewer?.orgRole === 'regional_admin'
     || viewer?.orgRole === 'franchise_admin'
-    || viewer?.role === 'admin'
 
   const personaGroups = useMemo(() => {
     const byName = (a: User, b: User) => a.name.localeCompare(b.name)

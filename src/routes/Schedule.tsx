@@ -176,7 +176,7 @@ export function Schedule() {
         {unscheduled.length > 0 && (
           <Card className="mb-3 border-(--status-warning)">
             <CardHeader
-              title="Awarded work not yet on the schedule"
+              title="Sold / awarded work not yet on the schedule"
               subtitle="Signed jobs sitting unscheduled is the most common failure point in the current process"
               icon={<HardHat size={14} className="text-warning-text" />}
             />
@@ -377,7 +377,7 @@ export function Schedule() {
               </p>
               <div className="space-y-1.5">
                 {users.filter(
-                  (u) => u.role === 'tech' && u.locationId === selected.opp!.locationId,
+                  (u) => u.role === 'installer' && u.locationId === selected.opp!.locationId,
                 ).map((u) => {
                   const on = selected.job.crewIds.includes(u.id)
                   return (

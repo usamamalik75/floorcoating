@@ -7,6 +7,7 @@ import { ACCOUNT_BY_ID } from '@/data/seed'
 import {
   JOB_STATUSES,
   jobStatusLabel,
+  normalizeJobStatus,
   jobStatusVar,
   nextJobStatus,
 } from '@/domain/stages'
@@ -44,7 +45,7 @@ export function Jobs() {
         job: s.jobs.find((j) => j.opportunityId === o.id),
       }))
       .filter((r) => r.job)
-      .filter((r) => filter === 'all' || r.job!.status === filter)
+      .filter((r) => filter === 'all' || normalizeJobStatus(r.job!.status) === filter)
   }, [opps, s.jobs, filter])
   const available = opps.filter((opp) => !s.jobs.some((job) => job.opportunityId === opp.id))
 
@@ -86,7 +87,7 @@ export function Jobs() {
           <div>
             <h1 className="font-display text-2xl text-primary">Jobs</h1>
             <p className="mt-0.5 text-base text-muted">
-              Awarded work managed on the job pipeline — not the sales board.
+              Sold work managed on the job pipeline — not the sales board.
             </p>
           </div>
           <Button className="ml-auto" size="sm" variant="primary" onClick={() => setCreating(true)}>
@@ -101,7 +102,7 @@ export function Jobs() {
               active={filter === st}
               onClick={() => setFilter(st)}
               label={jobStatusLabel(st)}
-              count={s.jobs.filter((j) => j.status === st && opps.some((o) => o.id === j.opportunityId)).length}
+              count={s.jobs.filter((j) => normalizeJobStatus(j.status) === st && opps.some((o) => o.id === j.opportunityId)).length}
             />
           ))}
         </div>
@@ -110,7 +111,7 @@ export function Jobs() {
       <div className="min-h-0 flex-1 overflow-x-auto scrollbar-thin">
         <div className="flex h-full min-w-max gap-2 p-3">
           {JOB_STATUSES.filter((st) => filter === 'all' || filter === st).map((status) => {
-            const items = rows.filter((r) => r.job!.status === status)
+            const items = rows.filter((r) => normalizeJobStatus(r.job!.status) === status)
             return (
               <section
                 key={status}
@@ -136,7 +137,7 @@ export function Jobs() {
                     <JobCard
                       key={opp.id}
                       opp={opp}
-                      status={job!.status}
+                      status={normalizeJobStatus(job!.status)}
                       progress={job!.progress}
                       onAdvance={() => {
                         const next = nextJobStatus(job!.status)

@@ -113,11 +113,9 @@ export function EstimateBuilder() {
 
   if (!opp) return <EmptyState title="Opportunity not found" className="h-full" />
 
-  const estimators = users.filter(
-    (u) => u.role === 'estimator' || u.role === 'owner' || u.role === 'admin',
-  )
+  const estimators = users.filter((u) => u.role === 'estimator')
   const estimatorMissing = !opp.estimatorId
-  const canApprove = viewer?.role === 'estimator' || viewer?.role === 'owner' || viewer?.role === 'admin'
+  const canApprove = viewer?.role === 'estimator' || Boolean(viewer?.orgRole)
   /** Approve only needs estimate completeness — visit gaps stay visible as advisory. */
   const requiredApprovalIds = new Set(['estimate', 'margin', 'terms', 'estimator', 'estimation_request'])
   const requiredChecks = checks.filter((c) => requiredApprovalIds.has(c.id))
@@ -446,7 +444,7 @@ export function EstimateBuilder() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-        <div className="mx-auto w-full max-w-6xl space-y-4 p-4 md:p-5">
+        <div className="w-full space-y-4 p-4 md:p-5">
           {!est ? (
             <Card className="border-strong">
               <EmptyState
@@ -756,7 +754,7 @@ export function EstimateBuilder() {
                               </div>
                             </div>
                             <div className="mt-2 grid grid-cols-12 gap-2">
-                              <div className="col-span-12 sm:col-span-5">
+                              <div className="col-span-12">
                                 <label className="mb-1 block text-2xs font-semibold tracking-wider text-muted uppercase">
                                   Description
                                 </label>
